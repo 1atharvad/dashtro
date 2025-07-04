@@ -1,9 +1,11 @@
+import { Component } from 'react'
 import './App.scss'
-function App() {
-  return (
-    <>
-    </>
-  )
-}
 
-export default App
+export class App extends Component {
+  render() {
+    return (
+      <>
+      </>
+    )
+  }
+}
