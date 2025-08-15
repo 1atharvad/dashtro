@@ -1,0 +1,49 @@
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: cms_backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./cms_backend:/app
+    env_file: .env
+    environment:
+      # Overrides .env so the backend talks to the local postgres container.
+      # Remove this line if you want to use a remote postgres (set DB_HOST in .env instead).
+      DB_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./cms-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./cms-frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

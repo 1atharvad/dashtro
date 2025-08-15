@@ -1,0 +1,10 @@
+{
+  "name": "cms_backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "run-app": "python3.11 manage.py runserver",
+    "dev": "export DJANGO_DEBUG=True && npm run run-app"
+  }
+}

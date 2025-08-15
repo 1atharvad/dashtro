@@ -1,0 +1,201 @@
+@use './global/global-colors' as colors;
+@use './global/global-mixins' as mixins;
+@use './global/global-vars' as vars;
+
+.schema,
+.collection,
+.document,
+.settings {
+  display: flex;
+
+  .MuiDrawer-paper {
+    width: 300px;
+  }
+
+  &-content {
+    flex-grow: 1;
+  }
+
+  & &-component {
+    margin: 16px;
+
+    &-nav-string {
+      // color: rgba(colors.$black, 0.6);
+      font-size: 14px;
+      font-weight: 300;
+
+      .navigation-link {
+        color: inherit;
+      }
+    }
+
+    &-title {
+      font-size: 20px;
+      font-weight: 300;
+
+      &-bar {
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      &-wrapper {
+        align-items: center;
+      }
+    }
+
+    &-skeleton {
+      margin: 16px;
+
+      &-text {
+        font-size: 48px;
+      }
+
+      &-box {
+        height: 200px;
+        width: 100%;
+      }
+    }
+
+    .add-new-btn {
+      margin: 20px 2% 0;
+    }
+  }
+
+  & &-drawer {
+    @include mixins.bp(tab) {
+      @include mixins.bp-height(ml) {
+        flex-shrink: 0;
+        width: 300px;
+
+        &-moving {
+          display: none;
+        }
+      }
+    }
+
+    &-fixed {
+      display: none;
+
+      @include mixins.bp(tab) {
+        @include mixins.bp-height(ml) {
+          display: block;
+        }
+      }
+    }
+  }
+
+  & &-view-hamburger-menu {
+    @include mixins.bp(tab) {
+      @include mixins.bp-height(ml) {
+        display: none;
+      }
+    }
+  }
+}
+
+.schema-component .empty-container {
+  @include mixins.flex-center($direction: column);
+
+  background: colors.$white;
+  border-radius: 4px;
+  box-shadow: 0px 2px 1px -1px rgba(colors.$black, 0.2), 0px 1px 1px 0px rgba(colors.$black, 0.14), 0px 1px 3px 0px rgba(colors.$black, 0.12);
+  gap: 16px;
+  padding: 56px 0;
+}
+
+.schema,
+.collection,
+.settings {
+  & &-list,
+  &-drawer-moving &-list {
+    flex-grow: 1;
+    margin-top: 64px;
+    width: 300px;
+
+    @include mixins.bp(tab) {
+      @include mixins.bp-height(ml) {
+        margin: 0;
+      }
+    }
+
+    &-title {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding-left: 3px;
+      text-transform: capitalize;
+
+      &-link {
+        @include mixins.flex-center;
+
+        color: inherit;
+        justify-content: flex-start;
+        min-height: 64px;
+        padding: 12px 21px;
+        text-decoration: none;
+        width: 100%;
+
+        &.Mui-disabled {
+          color: inherit;
+        }
+      }
+
+      &-logo {
+        margin: 0 6px 0 -6px;
+      }
+
+      &-text {
+        @include mixins.flex-center($justify-content: space-between);
+
+        display: flex;
+        flex-grow: 1;
+      }
+    }
+  }
+}
+
+.schema,
+.collection,
+.settings {
+  & .settings-link,
+  &-drawer-moving .settings-link {
+    color: inherit;
+    flex-grow: 0;
+    justify-content: flex-start;
+    min-height: 64px;
+    padding: 12px 21px;
+    text-decoration: none;
+
+    &.Mui-disabled {
+      color: inherit;
+    }
+
+    &-title {
+      font-size: 16px;
+      font-weight: 400;
+      letter-spacing: 0.5px;
+      padding-left: 3px;
+      text-transform: capitalize;
+    }
+  }
+}
+
+.settings .settings-list-title {
+  font-size: 16px;
+  font-weight: 400;
+
+  &-link {
+    min-height: 48px;
+    padding: 0 21px;
+  }
+}
+
+.modal .new-schema-model {
+  &-save-btn {
+    left: 100%;
+    margin-top: 15px;
+    right: 0;
+    transform: translateX(-100%);
+  }
+}

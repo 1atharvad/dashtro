@@ -1,0 +1,125 @@
+@use './global/global-colors' as colors;
+@use './global/global-mixins' as mixins;
+@use './global/global-vars' as vars;
+
+.collection-content,
+.document-content {
+  min-height: 100vh;
+
+  .collection-component {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 16px;
+
+    &-title {
+      margin-left: 20px;
+    }
+
+    &-nav-string {
+      margin: 0 0 5px 20px;
+    }
+
+    .collection-document {
+      color: inherit;
+      border-radius: 0;
+      display: flex;
+      padding: 0;
+      width: 100%;
+
+      &-container {
+        border-radius: 4px;
+
+        .document-container {
+          justify-content: space-between;
+          padding: 6px 12px;
+          width: 100%;
+
+          &:hover .document-icon-bar .delete-btn {
+            opacity: 1;
+          }
+
+          .document-title {
+            align-items: center;
+            text-transform: capitalize;
+
+            .drag-icon {
+              display: flex;
+            }
+          }
+
+          .document-icon-bar {
+            align-items: center;
+
+            .delete-btn {
+              opacity: 0;
+              transition: opacity 0.1s;
+
+              &:hover {
+                color: #b00020;
+              }
+            }
+          }
+
+          .navigation-icon {
+            display: flex;
+          }
+        }
+
+        .empty-container {
+          @include mixins.flex-center($direction: column);
+
+          gap: 16px;
+          margin: 56px 0;
+        }
+      }
+    }
+  }
+
+  .nested-document-variable,
+  .document-variable {
+    &-container {
+      --Grid-rowSpacing: 12px;
+
+      // background: colors.$white;
+      border-radius: 5px;
+      box-shadow: 0 0 1px -1px rgba(var(--border-color), 0.2),
+        0 0 1px 0 rgba(var(--border-color), 0.14),
+        0 0 3px 0 rgba(var(--border-color), 0.12);
+      flex-direction: column;
+      padding: 10px 20px;
+    }
+
+    .variable-helper-text {
+      // color: rgba(colors.$black, 0.6);
+      font-size: 0.75rem;
+      line-height: 1.66;
+      letter-spacing: 0.03333em;
+      margin: 4px 0 0;
+    }
+
+    .variable-input {
+      width: 40%;
+
+      &-wrapper {
+        width: 100%;
+        margin: 10px 0;
+      }
+    }
+
+    .variable-label {
+      position: relative;
+      transform: translate(0, -4px);
+    }
+
+    .nested-variable-label {
+      margin-bottom: 10px;
+    }
+  }
+
+  .nested-document-variable-container {
+    border: 1px solid rgba(var(--border-color), 0.1);
+    box-shadow: none;
+    margin-top: 5px;
+  }
+}

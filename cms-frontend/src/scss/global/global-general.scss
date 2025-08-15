@@ -1,0 +1,41 @@
+@use 'global-colors' as colors;
+@use 'global-mixins' as mixins;
+@use 'global-vars' as vars;
+
+.page-content {
+  background: colors.$page_bk_color;
+  min-height: 100vh;
+
+  .header-logo {
+    align-items: center;
+    display: flex;
+    height: 64px;
+    width: 100%;
+
+    .header-logo-link {
+      align-items: center;
+      color: colors.$product-title-color;
+      display: flex;
+      height: 48px;
+      margin-left: 7px;
+      text-decoration: none;
+      width: fit-content;
+
+      .header-logo-container {
+        align-items: center;
+        column-gap: 9px;
+        display: flex;
+        padding: 0 7px;
+
+        .logo-image {
+          height: 28px;
+        }
+
+        .logo-name {
+          font: 700 24px/20px vars.$font-slackey;
+          padding-top: 3px;
+        }
+      }
+    }
+  }
+}

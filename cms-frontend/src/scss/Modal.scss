@@ -1,0 +1,27 @@
+@use './global/global-colors' as colors;
+@use './global/global-mixins' as mixins;
+
+.modal {
+  background: colors.$white;
+  border-radius: 4px;
+  left: 50%;
+  min-width: 60%;
+  padding: 20px;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+
+  & &-heading {
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  & &-title {
+    font-size: 18px;
+    margin-top: 0;
+  }
+
+  & &-divider {
+    margin: 15px 0;
+  }
+}
