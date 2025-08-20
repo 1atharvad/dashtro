@@ -26,3 +26,6 @@ service-key.json
 __pycache__
 **/**.pyc
 .env
+*.egg-info/
+cms_backend/db.sqlite3
+backup/
