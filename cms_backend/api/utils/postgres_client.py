@@ -1,10 +1,10 @@
 import uuid
 import json
 import jwt
+import hashlib
+import os
 import psycopg2
 import psycopg2.extras
-from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
 from decouple import config
 from datetime import datetime, timedelta, timezone
 from api.utils.schema import Schema
@@ -40,10 +40,45 @@ class PostgresClient:
 class PostgresAuth(PostgresClient):
     def __init__(self):
         super().__init__()
+        self._ensure_users_table()
+
+    def _ensure_users_table(self):
+        cursor = self.get_cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS cms_users (
+                id VARCHAR(255) PRIMARY KEY,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL
+            );
+        """)
+        self.connection.commit()
+        cursor.close()
+
+    @staticmethod
+    def _hash_password(password: str) -> str:
+        salt = os.urandom(16).hex()
+        dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+        return f"pbkdf2:{salt}:{dk.hex()}"
+
+    @staticmethod
+    def _verify_password(password: str, hashed: str) -> bool:
+        try:
+            _, salt, dk_hex = hashed.split(':')
+            dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+            return dk.hex() == dk_hex
+        except Exception:
+            return False
 
     def create_user(self, email: str, password: str):
-        user = User.objects.create_user(username=email, email=email, password=password)
-        return str(user.id)
+        user_id = str(uuid.uuid4().hex)
+        cursor = self.get_cursor()
+        cursor.execute(
+            "INSERT INTO cms_users (id, email, password) VALUES (%s, %s, %s)",
+            (user_id, email, self._hash_password(password))
+        )
+        self.connection.commit()
+        cursor.close()
+        return user_id
 
     def verify_id_token(self, id_token):
         secret = config('DJANGO_SECRET_KEY')
@@ -60,15 +95,19 @@ class PostgresAuth(PostgresClient):
             raise Exception(f"Token verification failed: {str(e)}")
 
     def login_user(self, email: str, password: str):
-        user = authenticate(username=email, password=password)
-        if not user:
+        cursor = self.get_cursor()
+        cursor.execute("SELECT id, email, password FROM cms_users WHERE email=%s", (email,))
+        user = cursor.fetchone()
+        cursor.close()
+
+        if not user or not self._verify_password(password, user['password']):
             raise Exception("Login failed: INVALID_CREDENTIALS")
 
         secret = config('DJANGO_SECRET_KEY')
         now = datetime.now(tz=timezone.utc)
         payload = {
-            'uid': str(user.id),
-            'email': user.email,
+            'uid': str(user['id']),
+            'email': user['email'],
             'email_verified': True,
             'exp': now + timedelta(hours=1),
             'iat': now,
@@ -80,8 +119,23 @@ class PostgresAuth(PostgresClient):
         return {
             'idToken': id_token,
             'refreshToken': refresh_token,
-            'localId': str(user.id),
+            'localId': str(user['id']),
         }
+
+    def refresh_tokens(self, uid: str, email: str):
+        secret = config('DJANGO_SECRET_KEY')
+        now = datetime.now(tz=timezone.utc)
+        payload = {
+            'uid': uid,
+            'email': email,
+            'email_verified': True,
+            'exp': now + timedelta(hours=1),
+            'iat': now,
+        }
+        id_token = jwt.encode(payload, secret, algorithm='HS256')
+        refresh_payload = {**payload, 'exp': now + timedelta(days=30)}
+        refresh_token = jwt.encode(refresh_payload, secret, algorithm='HS256')
+        return {'idToken': id_token, 'refreshToken': refresh_token}
 
     def get_admin_token_id(self):
         admin_email = config('ADMIN_EMAIL')

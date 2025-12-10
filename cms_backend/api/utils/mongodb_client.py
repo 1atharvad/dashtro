@@ -1,8 +1,9 @@
 import uuid
 import jwt
+import hashlib
+import os
 import certifi
 from pymongo import MongoClient
-from django.contrib.auth.hashers import make_password, check_password
 from decouple import config
 from datetime import datetime, timedelta, timezone
 from api.utils.schema import Schema
@@ -27,10 +28,12 @@ class MongoDBAuth(MongoDBClient):
 
     def create_user(self, email: str, password: str):
         user_id = str(uuid.uuid4().hex)
+        salt = os.urandom(16).hex()
+        hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 260000).hex()
         self.db['cms_users'].insert_one({
             '_id': user_id,
             'email': email,
-            'password': make_password(password),
+            'password': f"{salt}${hashed}",
         })
         return user_id
 
@@ -50,7 +53,10 @@ class MongoDBAuth(MongoDBClient):
 
     def login_user(self, email: str, password: str):
         user = self.db['cms_users'].find_one({'email': email})
-        if not user or not check_password(password, user['password']):
+        stored = user.get('password', '')
+        salt, _, hashed = stored.partition('$')
+        check = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 260000).hex()
+        if not user or check != hashed:
             raise Exception("Login failed: INVALID_CREDENTIALS")
 
         secret = config('DJANGO_SECRET_KEY')
