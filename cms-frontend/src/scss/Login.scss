@@ -1,0 +1,47 @@
+@use './global/global-colors' as colors;
+@use './global/global-vars' as vars;
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: colors.$page_bk_color;
+
+  html.dark & {
+    background: var(--cms-bg);
+  }
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--cms-surface);
+  border: 1px solid var(--cms-border);
+  border-radius: 14px;
+  padding: 36px 32px;
+  box-shadow: var(--cms-surface-shadow);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.login-logo {
+  width: 32px;
+  height: 32px;
+}
+
+.login-brand-name {
+  font-family: vars.$font-slackey !important;
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  color: colors.$chrome-bg !important;
+
+  html.dark & {
+    color: var(--cms-text) !important;
+  }
+}
