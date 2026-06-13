@@ -1,0 +1,142 @@
+@use './global/global-colors' as colors;
+
+.project-page {
+  min-height: 100vh;
+  background: colors.$page_bk_color;
+
+  html.dark & {
+    background: var(--cms-bg);
+  }
+
+  &-body {
+    padding: 40px 48px;
+    padding-top: calc(40px + 64px);
+    max-width: 1920px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  &-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  &-cards {
+    margin-bottom: 36px;
+  }
+}
+
+// ── Info cards ──────────────────────────────────────────────────────────────
+
+.pp-card {
+  border: 1px solid var(--cms-border);
+  border-radius: 10px;
+  height: 100%;
+  min-height: 180px;
+  background: var(--cms-surface);
+
+  &-content {
+    padding: 22px !important;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  &-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 28px;
+  }
+
+  &--production {
+    border-color: rgba(colors.$production-green, 0.4);
+    background: colors.$production-light-bg;
+
+    html.dark & {
+      background: rgba(colors.$production-green, 0.08);
+      border-color: rgba(colors.$production-green, 0.3);
+    }
+  }
+}
+
+// ── Workspaces section ──────────────────────────────────────────────────────
+
+.project-workspaces {
+  &-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+}
+
+
+.workspace-empty {
+  padding: 32px;
+  border: 1px solid var(--cms-border);
+  border-radius: 8px;
+  text-align: center;
+  background: colors.$workspace-empty-bg;
+
+  html.dark & {
+    background: rgba(colors.$white, 0.03);
+  }
+}
+
+// ── Workspace list ───────────────────────────────────────────────────────────
+
+.workspace-list {
+  border: 1px solid var(--cms-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--cms-surface);
+}
+
+.workspace-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--cms-border);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: colors.$workspace-hover-bg;
+
+    html.dark & {
+      background: rgba(colors.$white, 0.04);
+    }
+  }
+
+  &-link {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 14px 20px;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  &-name {
+    min-width: 160px;
+    color: colors.$product-title-color;
+
+    html.dark & {
+      color: colors.$workspace-name-dk;
+    }
+  }
+
+  &-menu-btn {
+    margin-left: 8px;
+    margin-right: 16px;
+    flex-shrink: 0;
+    border-radius: 6px !important;
+  }
+}

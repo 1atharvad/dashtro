@@ -3,7 +3,10 @@ import rootPathReducer from "@/redux/rootPathSlice";
 import schemaReducer from "@/redux/schemaSlice";
 import schemaPresetReducer from "@/redux/schemaPresetSlice";
 import collectionReducer from "@/redux/collectionSlice";
-import documentSlice from "@/redux/documentSlice";
+import documentReducer from "@/redux/documentSlice";
+import projectReducer from "@/redux/projectSlice";
+import workspaceReducer from "@/redux/workspaceSlice";
+import categoryReducer from "@/redux/categorySlice";
 
 export const store = configureStore({
   reducer: {
@@ -11,7 +14,10 @@ export const store = configureStore({
     schema_preset: schemaPresetReducer,
     schema: schemaReducer,
     collections: collectionReducer,
-    documents: documentSlice
+    documents: documentReducer,
+    projects: projectReducer,
+    workspaces: workspaceReducer,
+    categories: categoryReducer,
   },
 });
 
