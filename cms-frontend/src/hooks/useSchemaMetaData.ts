@@ -1,45 +1,37 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchSchema } from '@/redux/schemaPresetSlice';
-import { updateSchemaNames } from '@/redux/schemaPresetSlice';
+import { fetchSchema, updateSchemaNames } from '@/redux/schemaPresetSlice';
 import { RootState, AppDispatch } from '@/redux/store';
 
-export const useSchemaMetaData = () => {
+export const useSchemaMetaData = (projectId: string) => {
   const dispatch = useDispatch<AppDispatch>();
-  const { schemaData, loading, error } = useSelector((state: RootState) => state.schema_preset);
+  const { byProject, loading, error } = useSelector((state: RootState) => state.schema_preset);
+  const projectData = byProject[projectId];
 
-  const [schemaNames, setSchemaNames] = useState<string[]>([]);
-  const [schemaVariables, setSchemaVariables] = useState<Record<string, any>>({});
-  const _loading = loading || schemaNames.length == 0 || Object.keys(schemaVariables).length == 0;
-
-  useEffect(() => {
-    if (!Object.keys(schemaData).length && loading) {
-      dispatch(fetchSchema());
-    }
-  }, [dispatch, schemaData, loading]);
+  // Derive directly from Redux so all hook instances stay in sync immediately —
+  // no local state copy that lags by a render cycle on add/remove.
+  const schemaNames: string[] = projectData?._schema_names ?? [];
+  const schemaVariables: Record<string, any> = projectData?._schema_variables ?? {};
 
   useEffect(() => {
-    if (error) {
-      console.error("Error fetching data:", error);
-    } else if (!loading && schemaData && Object.keys(schemaData).length > 0) {
-      const { _schema_names, _schema_variables } = schemaData;
-      setSchemaNames(_schema_names);
-      setSchemaVariables(_schema_variables);
+    if (projectId && !projectData) {
+      dispatch(fetchSchema(projectId));
     }
-  }, [loading, schemaData, error]);
+  }, [dispatch, projectId, projectData]);
+
+  useEffect(() => {
+    if (error) console.error("Error fetching schema metadata:", error);
+  }, [error]);
 
   const addNewSchemeName = (schemaName: string) => {
     if (!schemaNames.includes(schemaName)) {
-      setSchemaNames([...schemaNames, schemaName]);
-      dispatch(updateSchemaNames([...schemaNames, schemaName]));
-    } 
-  }
+      dispatch(updateSchemaNames({ projectId, names: [...schemaNames, schemaName] }));
+    }
+  };
 
   const removeSchemaName = (schemaName: string) => {
-    const updatedSchemaNames = schemaNames.filter((name: string) => name !== schemaName);
-    setSchemaNames(updatedSchemaNames);
-    dispatch(updateSchemaNames(updatedSchemaNames))
-  }
+    dispatch(updateSchemaNames({ projectId, names: schemaNames.filter(n => n !== schemaName) }));
+  };
 
-  return { schemaNames, addNewSchemeName, removeSchemaName, schemaVariables, loading: _loading };
+  return { schemaNames, addNewSchemeName, removeSchemaName, schemaVariables, loading: loading || !projectData };
 };

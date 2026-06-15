@@ -1,121 +1,114 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { API_BASE_URL } from "@ts/config";
+import { authFetch } from "@ts/utils/auth";
 
-export const fetchCollections = createAsyncThunk("schema/fetchCollection", async () => {
-  const response = await fetch(`${API_BASE_URL}/collections/`);
-  return await response.json();
+export const fetchCollections = createAsyncThunk("collections/fetchCollections", async (
+  projectId: string
+) => {
+  const response = await fetch(`${API_BASE_URL}/projects/${projectId}/collections/`);
+  if (!response.ok) throw new Error(`Failed to fetch collections: ${response.status}`);
+  return { projectId, data: await response.json() };
 });
 
-export const createCollection = createAsyncThunk("schema/createCollection", async (
-  newSchema: {[key: string]: any}
+export const createCollection = createAsyncThunk("collections/createCollection", async (
+  { projectId, newCollection }: { projectId: string; newCollection: Record<string, any> }
 ) => {
-  const response = await fetch(`${API_BASE_URL}/collections/`, {
+  const response = await authFetch(`${API_BASE_URL}/projects/${projectId}/collections/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(Object.entries(newSchema)
-      .reduce((acc: {[key: string]: string}, [key, value]) => {
+    body: JSON.stringify(
+      Object.entries(newCollection).reduce((acc: Record<string, string>, [key, value]) => {
         if (value !== '') acc[key] = value;
         return acc;
-      }, {})),
+      }, {})
+    ),
   });
-  return await response.json();
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.detail ?? "Failed to create collection");
+  }
+  return { projectId, data: await response.json() };
 });
 
-export const updateCollection = createAsyncThunk("schema/updateCollection", async (
-  {
-    collectionId,
-    updatedCollection
-  }: {
-    collectionId: string,
-    updatedCollection: {[key: string]: any}
+export const updateCollection = createAsyncThunk("collections/updateCollection", async (
+  { projectId, collectionId, updatedCollection }: {
+    projectId: string;
+    collectionId: string;
+    updatedCollection: Record<string, any>;
   }
 ) => {
-  const response = await fetch(`${API_BASE_URL}/collections/${collectionId}/`, {
+  const response = await authFetch(`${API_BASE_URL}/projects/${projectId}/collections/${collectionId}/`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updatedCollection),
   });
-  return await response.json();
+  return { projectId, data: await response.json() };
 });
 
-export const deleteCollection = createAsyncThunk("schema/deleteCollection", async (
-  collectionId: string
+export const deleteCollection = createAsyncThunk("collections/deleteCollection", async (
+  { projectId, collectionId }: { projectId: string; collectionId: string }
 ) => {
-  const response = await fetch(`${API_BASE_URL}/collections/${collectionId}/`, {
+  const response = await authFetch(`${API_BASE_URL}/projects/${projectId}/collections/${collectionId}/`, {
     method: "DELETE",
   });
-
   if (!response.ok) throw new Error("Failed to delete");
-  return {'_id': collectionId};
+  return { projectId, _id: collectionId };
 });
 
+type CollectionState = {
+  byProject: Record<string, { _schema_collections: any[]; _collection_schema_variables: any }>;
+  loading: boolean;
+  error: string | null;
+};
+
 const collectionSlice = createSlice({
-  name: "schema",
+  name: "collections",
   initialState: {
-    collectionData: {} as {[key: string]: any},
+    byProject: {},
     loading: true,
     error: null as string | null,
-  },
+  } as CollectionState,
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(fetchCollections.pending, (state) => {
-        state.loading = true;
-      })
+      .addCase(fetchCollections.pending, (state) => { state.loading = true; })
       .addCase(fetchCollections.fulfilled, (state, action) => {
         state.loading = false;
-        state.collectionData = { ...state.collectionData, ...action.payload };
-        state.collectionData['_schema_collections'] = state.collectionData['_schema_collections']
-          .sort((a: {[key: string]: any}, b: {[key: string]: any}) => {
-            const nameA = a['_collection_name']?.toLowerCase() || '';
-            const nameB = b['_collection_name']?.toLowerCase() || '';
-            return nameA.localeCompare(nameB);
-          })
-          .map((schemaEntry: {[key: string]: any}, index:  number) => {
-            schemaEntry['_index'] = index + 1;
-            return schemaEntry;
-          });
+        const { projectId, data } = action.payload;
+        state.byProject[projectId] = data;
       })
       .addCase(fetchCollections.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message!;
       })
-      .addCase(updateCollection.fulfilled, (state, action) => {
-        const id = action.payload['_id'];
-
-        state.collectionData['_schema_collections'] = [...Array.from(state.collectionData['_schema_collections'])
-          .filter((entry: any) => entry['_id'] !== id), action.payload]
-          .sort((a, b) => a['_index'] - b['_index']);
+      .addCase(createCollection.fulfilled, (state, action) => {
+        const { projectId, data } = action.payload;
+        state.byProject[projectId] = data;
         state.loading = false;
       })
-      .addCase(createCollection.fulfilled, (state, action) => {
-        state.collectionData['_schema_collections'] = (Object.values(action.payload) as [{[key: string]: any}])
-          .sort((a: {[key: string]: any}, b: {[key: string]: any}) => {
-            const nameA = a['_collection_name']?.toLowerCase() || '';
-            const nameB = b['_collection_name']?.toLowerCase() || '';
-            return nameA.localeCompare(nameB);
-          })
-          .map((schemaEntry: {[key: string]: any}, index:  number) => {
-            schemaEntry['_index'] = index + 1;
-            return schemaEntry;
-          });
+      .addCase(createCollection.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message ?? "Failed to create collection";
+      })
+      .addCase(updateCollection.fulfilled, (state, action) => {
+        const { projectId, data } = action.payload;
+        const existing = state.byProject[projectId];
+        if (!existing) return;
+        existing._schema_collections = [
+          ...existing._schema_collections.filter((c: any) => c._id !== data._id),
+          data,
+        ].sort((a, b) => a._index - b._index);
         state.loading = false;
       })
       .addCase(deleteCollection.fulfilled, (state, action) => {
-        const id = action.payload['_id'];
-        const index = state.collectionData['_schema_collections']
-          .reduce((acc: number, schemaEntry: {[key: string]: any}) => 
-              schemaEntry['_id'] === id ? schemaEntry['_index'] : acc, -1);
-
-        state.collectionData['_schema_collections'] = state.collectionData['_schema_collections']
-          .filter((schemaEntry: {[key: string]: any}) =>
-              schemaEntry['_id'] !== id)
-          .map((schemaEntry: {[key: string]: any}) => {
-            console.log(id, schemaEntry['_index'], index)
-            if (schemaEntry['_index'] > index) schemaEntry['_index'] -= 1;
-            console.log(schemaEntry['_index'])
-            return schemaEntry;
-          });
+        const { projectId, _id: id } = action.payload;
+        const existing = state.byProject[projectId];
+        if (!existing) return;
+        const index = existing._schema_collections
+          .find((c: any) => c._id === id)?._index ?? -1;
+        existing._schema_collections = existing._schema_collections
+          .filter((c: any) => c._id !== id)
+          .map((c: any) => ({ ...c, _index: c._index > index ? c._index - 1 : c._index }));
       });
   },
 });

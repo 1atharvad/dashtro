@@ -1,69 +1,48 @@
 import { useState, ReactNode, useEffect } from 'react';
-import { Box, Divider, Fab, Grid, Modal, Typography } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import '@/scss/Modal.scss';
+import { Dialog, DialogContent, DialogTitle, Divider, IconButton } from '@mui/material';
+import { X as CloseIcon } from 'lucide-react';
 
 export const ModalContentBtn = ({
-  id,
   modalBtn,
   modalTitle,
   closeModal,
   onClose,
-  noCloseBtn = false,
   children
 }: {
-  id: string,
+  id?: string,
   modalBtn: (handleClick: () => void) => ReactNode,
   modalTitle: string,
   closeModal?: boolean,
-  onClose?: Function,
-  noCloseBtn?: Boolean
+  onClose?: () => void,
+  noCloseBtn?: boolean,
   children: ReactNode
 }) => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (closeModal) setOpen(false);
-  }, [closeModal])
-
-  const handleBtnClick = () => {
-    setOpen(true);
-  };
+  }, [closeModal]);
 
   const handleClose = () => {
     setOpen(false);
-
     if (onClose) onClose();
   };
 
   return (
-    <Box>
-      {modalBtn(handleBtnClick)}
-      <Modal
-          id={`${id}-model`}
-          open={open}
-          onClose={handleClose}
-          aria-labelledby='modal-title'
-          aria-describedby='modal-content'>
-        <Box className='modal'>
-          <Grid container spacing={!noCloseBtn ? 2 : 0} className='modal-heading'>
-            <Grid>
-              <Typography component='h2' id={`${id}-model-title`} className='modal-title'>
-                {modalTitle}
-              </Typography>
-            </Grid>
-            {!noCloseBtn && <Grid>
-              <Fab size='medium' color='primary' aria-label='add' onClick={handleClose}>
-                <CloseIcon/>
-              </Fab>
-            </Grid>}
-          </Grid>
-          <Divider className='modal-divider'/>
-          <Box id={`${id}-model-content`}>
-            {children}
-          </Box>
-        </Box>
-      </Modal>
-    </Box>
-  )
+    <>
+      {modalBtn(() => setOpen(true))}
+      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+          {modalTitle}
+          <IconButton size="small" onClick={handleClose}>
+            <CloseIcon className="h-4 w-4"/>
+          </IconButton>
+        </DialogTitle>
+        <Divider/>
+        <DialogContent sx={{ pt: 2 }}>
+          {children}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }

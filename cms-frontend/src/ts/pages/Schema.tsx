@@ -1,70 +1,90 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, Link as BrowserLink } from "react-router-dom";
-import { Box, Button, Divider, List, ListItem, ListItemButton, ListItemText, Typography } from '@mui/material';
-import { Schema as SchemaIcon } from '@mui/icons-material';
+import { useParams, useNavigate } from "react-router-dom";
+import { LayoutTemplate, FolderOpen } from 'lucide-react';
+import { AsideItem } from 'advi-ui';
+import { Box } from '@mui/material';
 
 import { SchemaComponent } from "@ts/components/SchemaComponent";
 import { CollectionComponent } from '@ts/components/CollectionComponent';
 import { LinkDrawer } from '@ts/components/LinkDrawer';
 import { HamburgerMenu } from '@ts/components/HamburgerMenu';
+import { ManageFoldersModal } from '@ts/components/ManageFoldersModal';
+import { ProjectSwitcher } from '@ts/components/ProjectSwitcher';
 
 import { useSchemaMetaData } from "@/hooks/useSchemaMetaData";
 
 import '@/scss/Schema.scss';
 
 export const Schema = () => {
-  const {schemaNames, loading} = useSchemaMetaData();
-  const [currentSchemaName, setCurrentSchemaName] = useState<string>('');
-  const {schema_name} = useParams();
+  const navigate = useNavigate();
+  const { project_id, schema_name } = useParams<{ project_id: string; schema_name: string }>();
+  const { schemaNames, loading } = useSchemaMetaData(project_id ?? '');
+  const [currentSchemaName, setCurrentSchemaName] = useState('');
+  const [manageFoldersOpen, setManageFoldersOpen] = useState(false);
   const drawerRef = useRef<{ handleDrawerToggle: () => void }>(null);
 
   useEffect(() => {
     setCurrentSchemaName(schema_name || '');
   }, [schema_name]);
 
+  const items: AsideItem[] = [
+    {
+      icon: <FolderOpen className="h-4 w-4" />,
+      label: 'Manage Folders',
+      onClick: () => setManageFoldersOpen(true),
+    },
+    {
+      icon: <LayoutTemplate className="h-4 w-4" />,
+      label: 'Schemas',
+      onClick: () => navigate(`/projects/${project_id}/schema/`),
+      active: !currentSchemaName,
+    },
+  ];
+
+  const schemaSubItems: AsideItem[] = schemaNames.map(name => ({
+    icon: <Box sx={{ width: 20 }} />,
+    label: name,
+    onClick: () => navigate(`/projects/${project_id}/schema/${name}/`),
+    active: name === currentSchemaName,
+  }));
+
   return (
     <>
-      {!loading && <Box className='schema'>
-        <LinkDrawer className='schema-drawer' LinkList={() => (
-          <Box className='schema-list'>
-            <Divider/>
-            <Button
-                component={BrowserLink}
-                to='/schema/'
-                className='schema-list-title-link'
-                startIcon={<SchemaIcon />}>
-              <Typography className='schema-list-title' component="h2">Schema</Typography>
-            </Button>
-            <Divider/>
-            <Box component="nav" aria-label="schema names">
-              <List>
-                {schemaNames.map((schemaName, index: number) => (
-                  <ListItem key={`schema-name-${index}`} disablePadding>
-                    <ListItemButton component={BrowserLink} to={`/schema/${schemaName}/`} selected={schemaName === currentSchemaName}>
-                      <ListItemText primary={schemaName}/>
-                    </ListItemButton>
-                  </ListItem>
-                ))}
-              </List>
-            </Box>
+      {!loading && (
+        <Box className="schema">
+          <ManageFoldersModal
+            projectId={project_id ?? ''}
+            open={manageFoldersOpen}
+            onClose={() => setManageFoldersOpen(false)}
+            schemaNames={schemaNames}
+          />
+          <LinkDrawer className="schema-drawer" items={items} subItems={schemaSubItems} ref={drawerRef} />
+          <Box className="schema-content">
+            <ProjectSwitcher />
+            {currentSchemaName ? (
+              <SchemaComponent
+                componentName={currentSchemaName}
+                newSchema={!schemaNames.includes(currentSchemaName)}
+                MenuIcon={() => (
+                  <HamburgerMenu
+                    className="schema-view-hamburger-menu"
+                    handleDrawerToggle={drawerRef.current?.handleDrawerToggle || (() => {})}
+                  />
+                )}
+              />
+            ) : (
+              <CollectionComponent
+                MenuIcon={() => (
+                  <HamburgerMenu
+                    className="schema-view-hamburger-menu"
+                    handleDrawerToggle={drawerRef.current?.handleDrawerToggle || (() => {})}
+                  />
+                )}
+              />
+            )}
           </Box>
-        )} ref={drawerRef}/>
-        <Box className='schema-content'>
-          {currentSchemaName ? (
-            <SchemaComponent componentName={currentSchemaName} newSchema={!schemaNames.includes(currentSchemaName)} MenuIcon={() => (
-              <HamburgerMenu
-                  className='schema-view-hamburger-menu'
-                  handleDrawerToggle={drawerRef.current?.handleDrawerToggle || (() => {})}/>
-            )}/>
-          ) : (
-            <CollectionComponent MenuIcon={() => (
-              <HamburgerMenu
-                  className='schema-view-hamburger-menu'
-                  handleDrawerToggle={drawerRef.current?.handleDrawerToggle || (() => {})}/>
-            )}/>
-          )}
         </Box>
-      </Box>}
+      )}
     </>
-  )
-}
+  );
+};

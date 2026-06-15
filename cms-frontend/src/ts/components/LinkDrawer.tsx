@@ -1,129 +1,72 @@
-import { forwardRef, useImperativeHandle, useState } from 'react';
-import { Link as BrowserLink } from "react-router-dom";
-import { Link } from '@ts/components/Link';
-import { Box, Button, Drawer, Typography, useTheme } from '@mui/material';
-import { SettingsOutlined as SettingsIcon } from '@mui/icons-material';
+import { forwardRef, ReactNode, useImperativeHandle, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Avatar } from '@mui/material';
+import { PageAside, AsideItem, AsideBtn, LogoLink } from 'advi-ui';
+import { useUser } from '@ts/context/UserContext';
 import dashtroLogo from '@/assets/images/favicon-96x96.png';
-import { RootState } from '@/redux/store';
-import { useSelector } from "react-redux";
 
-const header = {
-  logo: {
-    name: 'DashTro!',
-    link: {
-      text: '',
-      url: '/',
-      is_external_link: false
-    },
-    image: {
-      url: dashtroLogo,
-      alt_text: 'Dashtro Logo'
-    }
-  }
-};
-
-const HeaderLogo = ({logo}: {logo: {[key: string]: any}}) => {
-  const theme = useTheme();
-
-  return (
-    <Box className="header-logo">
-      <Link
-          link={logo.link}
-          className='header-logo-link'>
-        <Box className="header-logo-container">
-          <img className="logo-image" src={logo.image.url} alt={logo.image.alt_text}/>
-          <Typography className="logo-name"
-              component="span"
-              sx={{color: theme.palette.appTextColor}}>
-            {logo.name}
-          </Typography>
-        </Box>
-      </Link>
-    </Box>
-  );
+export interface DrawerFooterSlotProps {
+  isOpen: boolean;
 }
 
-export const LinkDrawer = forwardRef(({className, LinkList}: {className: string, LinkList: () => JSX.Element}, ref) => {
-  const theme = useTheme();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
+interface LinkDrawerProps {
+  className?: string;
+  items: AsideItem[];
+  subItems?: AsideItem[];
+  /** Rendered below the built-in settings button. Receives sidebar open state. */
+  settingsFooter?: (props: DrawerFooterSlotProps) => ReactNode;
+  /** Generic footer slot rendered after settingsFooter. */
+  footer?: (isOpen: boolean) => ReactNode;
+}
 
-  const handleDrawerClose = () => {
-    setIsClosing(true);
-    setMobileOpen(false);
-  };
+export const LinkDrawer = forwardRef(({
+  className, items, subItems,
+  settingsFooter, footer,
+}: LinkDrawerProps, ref) => {
+  const navigate = useNavigate();
+  const { user } = useUser();
+  const { project_id } = useParams<{ project_id?: string }>();
+  const logoUrl = project_id ? `/projects/${project_id}/` : '/';
+  const [open, setOpen] = useState(() => localStorage.getItem('sidebarCollapsed') !== 'true');
 
-  const handleDrawerTransitionEnd = () => {
-    setIsClosing(false);
+  const handleToggle = () => {
+    const next = !open;
+    setOpen(next);
+    localStorage.setItem('sidebarCollapsed', String(!next));
   };
 
   useImperativeHandle(ref, () => ({
-    handleDrawerToggle() {
-      if (!isClosing) {
-        setMobileOpen(!mobileOpen);
-      }
-    }
-  }), [isClosing]);
+    handleDrawerToggle: handleToggle,
+  }), [open]);
+
+  const drawerFooter = (isOpen: boolean): ReactNode => (
+    <>
+      {settingsFooter?.({ isOpen })}
+      {footer?.(isOpen)}
+      <AsideBtn
+        className='avatar-profile-btn'
+        icon={<Avatar src={user?.avatarUrl} sx={{ width: 28, height: 28, fontSize: '0.75rem' }}>{user?.initials}</Avatar>}
+        label={user?.displayName ?? 'Profile'}
+        onClick={() => navigate('/settings/profile/')}
+      />
+    </>
+  );
 
   return (
-    <Box component="nav"
-        className={className}
-        aria-label="mailbox folders">
-      <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onTransitionEnd={handleDrawerTransitionEnd}
-          onClose={handleDrawerClose}
-          ModalProps={{
-            keepMounted: true,
-          }}
-          className={`${className}-moving`}
-          slotProps={{
-            paper: {
-              sx: {
-                backgroundColor: theme.palette.asideBkColor,
-              },
-            },
-          }}>
-        <HeaderLogo logo={header.logo} />
-        <LinkList/>
-        <Button
-            component={BrowserLink}
-            to={`/settings/profile/`}
-            className='settings-link'
-            startIcon={<SettingsIcon />}>
-          <Typography className='settings-link-title'
-              component="h2"
-              sx={{color: theme.palette.asideTextColor}}>
-            Settings
-          </Typography>
-        </Button>
-      </Drawer>
-      <Drawer
-          variant="permanent"
-          className={`${className}-fixed`}
-          slotProps={{
-            paper: {
-              sx: {
-                background: theme.palette.asideBkColor,
-              },
-            },
-          }}
-          open>
-        <HeaderLogo logo={header.logo} />
-        <LinkList/>
-        <Button
-            component={BrowserLink}
-            to={`/settings/profile/`}
-            className='settings-link'
-            startIcon={<SettingsIcon />}>
-          <Typography className='settings-link-title'
-              component="h2"
-              sx={{color: theme.palette.asideTextColor}}>
-            Settings
-          </Typography>
-        </Button>
-      </Drawer>
-    </Box>
-  )
+    <PageAside
+      className={className}
+      items={open && subItems ? [...items, ...subItems] : items}
+      open={open}
+      onToggle={handleToggle}
+      openWidth="w-72"
+      title={
+        <LogoLink
+          name={open ? 'DashTro!' : ''}
+          image={{ url: dashtroLogo, alt: 'DashTro Logo' }}
+          link={{ url: logoUrl, isExternal: false }}
+        />
+      }
+      footer={drawerFooter}
+    />
+  );
 });

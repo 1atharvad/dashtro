@@ -1,4 +1,5 @@
-import { Box, Button, Grid, Typography, useTheme } from "@mui/material";
+import { Box, Grid, Typography, useTheme } from "@mui/material";
+import { Button } from 'advi-ui';
 import { Dispatch, FormEvent, ReactNode, SetStateAction, useRef, KeyboardEvent } from "react";
 
 export const PageForm = ({
@@ -10,6 +11,9 @@ export const PageForm = ({
   onSubmit,
   setOpenedPanel,
   extraButtons,
+  afterSubmitButtons,
+  titleBadge,
+  readOnly,
   children
 }: {
   formType: string,
@@ -19,7 +23,10 @@ export const PageForm = ({
   submitBtnText: string,
   onSubmit: (event: FormEvent) => void,
   setOpenedPanel?: Dispatch<SetStateAction<string[]>>
-  extraButtons?: (() => JSX.Element)[]
+  extraButtons?: ReactNode[]
+  afterSubmitButtons?: ReactNode[]
+  titleBadge?: ReactNode
+  readOnly?: boolean
   children: ReactNode
 }) => {
   const theme = useTheme();
@@ -37,11 +44,12 @@ export const PageForm = ({
   }
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Enter") {
+    const target = event.target as HTMLElement;
+    if (event.key === "Enter" && target.tagName !== "TEXTAREA") {
       event.preventDefault();
     }
   };
-  
+
   return (
     <Box
         ref={formRef}
@@ -59,19 +67,23 @@ export const PageForm = ({
                 sx={{color: `rgba(${theme.palette.modeComplementColor}, 0.6)`}}>
               {pageNavigation}
             </Typography>}
-            <Typography component="h2" noWrap className={`${formType}-component-title`}>
-              {formTitle}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Typography component="h2" noWrap className={`${formType}-component-title`}>
+                {formTitle}
+              </Typography>
+              {titleBadge}
+            </Box>
           </Grid>
         </Grid>
-        <Grid container columnSpacing={extraButtons ? 2 : 0}>
-          {extraButtons && extraButtons.map((Btn, index) => <Grid key={`button-${index}`}><Btn/></Grid>)}
-          <Grid>
-            <Button type="submit" variant="contained" color="success" onClick={handleValidation}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {extraButtons && extraButtons.map((btn, index) => <Box key={`button-${index}`}>{btn}</Box>)}
+          {!readOnly && (
+            <Button type="submit" variant="default" onClick={handleValidation} className="border-current">
               {submitBtnText}
             </Button>
-          </Grid>
-        </Grid>
+          )}
+          {afterSubmitButtons && afterSubmitButtons.map((btn, index) => <Box key={`after-${index}`}>{btn}</Box>)}
+        </Box>
       </Grid>
       {children}
     </Box>
@@ -88,7 +100,7 @@ export const PageWrapper = ({
   wrapperType: string,
   wrapperTitle: string,
   MenuIcon: () => JSX.Element,
-  extraButtons?: (() => JSX.Element)[]
+  extraButtons?: ReactNode[]
   children: ReactNode
 }) => {
   return (
@@ -102,9 +114,9 @@ export const PageWrapper = ({
             </Typography>
           </Grid>
         </Grid>
-        <Grid container columnSpacing={extraButtons && extraButtons.length > 0 ? 2 : 0}>
-          {extraButtons && extraButtons.map((Btn, index) => <Grid key={`button-${index}`}><Btn/></Grid>)}
-        </Grid>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {extraButtons && extraButtons.map((btn, index) => <Box key={`button-${index}`}>{btn}</Box>)}
+        </Box>
       </Grid>
       {children}
     </Box>

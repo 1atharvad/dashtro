@@ -1,46 +1,48 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { createCollection, fetchCollections, updateCollection, deleteCollection } from '@/redux/collectionSlice';
 import { RootState, AppDispatch } from '@/redux/store';
+import { toast } from 'advi-ui';
 
-export const useCollectionData = () => {
+export const useCollectionData = (projectId: string) => {
   const dispatch = useDispatch<AppDispatch>();
-  const {collectionData, loading, error} = useSelector((state: RootState) => state.collections);
-  const [collections, setCollections] = useState<{[key: string]: any}[]>([]);
-  const [collectionStructure, setCollectionStructure] = useState<any>({});
+  const { byProject, loading, error } = useSelector((state: RootState) => state.collections);
+  const projectData = byProject[projectId];
+
+  const collections: Record<string, any>[] = projectData?._schema_collections ?? [];
+  const collectionStructure: any = projectData?._collection_schema_variables ?? {};
 
   useEffect(() => {
-    dispatch(fetchCollections());
-  }, [dispatch]);
+    if (projectId) dispatch(fetchCollections(projectId));
+  }, [dispatch, projectId]);
 
   useEffect(() => {
-    if (error) {
-      console.error("Error fetching data:", error);
-    } else if (!loading && collectionData) {
-      const { _schema_collections, _collection_schema_variables } = collectionData;
-      setCollections(_schema_collections);
-      setCollectionStructure(_collection_schema_variables);
-    }
-  }, [collectionData, error]);
+    if (error) console.error("Error fetching collections:", error);
+  }, [error]);
 
-  const addCollectionData = (newCollectionDetails: {[key: string]: any}[]) => {
-    Promise.all(newCollectionDetails.map(newCollection =>
-      dispatch(createCollection(newCollection))
-        .catch(error => console.error("Error creating data:", error))
-    ));
-  }
+  const addCollectionData = (newCollectionDetails: Record<string, any>[]) => {
+    Promise.all(
+      newCollectionDetails.map(newCollection =>
+        dispatch(createCollection({ projectId, newCollection }))
+          .catch(err => { console.error(err); toast.error('Failed to create collection'); })
+      )
+    ).then(() => toast.success('Collection created'));
+  };
 
-  const updateCollectionData = (updatedCollectionDetails: {[key: string]: any}) => {
-    Promise.all(Object.entries(updatedCollectionDetails).map(([collectionId, updatedCollection]) =>
-      dispatch(updateCollection({collectionId, updatedCollection}))
-        .catch(error => console.error("Error updating data:", error))
-    ));
-  }
+  const updateCollectionData = (updatedCollectionDetails: Record<string, any>) => {
+    Promise.all(
+      Object.entries(updatedCollectionDetails).map(([collectionId, updatedCollection]) =>
+        dispatch(updateCollection({ projectId, collectionId, updatedCollection }))
+          .catch(err => { console.error(err); toast.error('Failed to update collection'); })
+      )
+    ).then(() => toast.success('Collection saved'));
+  };
 
   const deleteCollectionData = (collectionId: string) => {
-    dispatch(deleteCollection(collectionId))
-      .catch(error => console.error("Error deleting data:", error));
-  }
+    dispatch(deleteCollection({ projectId, collectionId }))
+      .then(() => toast.success('Collection deleted'))
+      .catch(err => { console.error(err); toast.error('Failed to delete collection'); });
+  };
 
-  return {collections, collectionStructure, loading, addCollectionData, updateCollectionData, deleteCollectionData};
+  return { collections, collectionStructure, loading, addCollectionData, updateCollectionData, deleteCollectionData };
 };
