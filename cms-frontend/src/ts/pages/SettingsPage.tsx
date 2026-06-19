@@ -1,136 +1,69 @@
-import { ChangeEvent, useRef, useState } from 'react';
-import { useParams, Link as BrowserLink } from "react-router-dom";
-import { Box, Button, Divider, Paper, Switch, Typography, useTheme } from '@mui/material';
-import {
-  LightMode as LightModeIcon,
-  DarkMode as DarkModeIcon,
-  Extension as ExtensionIcon,
-  Api as ApiIcon,
-  Group as GroupIcon,
-  AccountCircle as AccountIcon
-} from '@mui/icons-material';
+import { useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Box } from '@mui/material';
+import { UserCircle, Lock, Users, Code2, Puzzle, ClipboardList } from 'lucide-react';
+import { AsideItem, AsideText, Switch } from 'advi-ui';
 import { LinkDrawer } from '@ts/components/LinkDrawer';
+import { useColorMode } from '@ts/theme/ThemeProvider';
+import { SettingsProfile } from '@ts/components/settings/SettingsProfile';
+import { SettingsSecurity } from '@ts/components/settings/SettingsSecurity';
+import { SettingsUsers } from '@ts/components/settings/SettingsUsers';
+import { SettingsAPI } from '@ts/components/settings/SettingsAPI';
+import { SettingsIntegrations } from '@ts/components/settings/SettingsIntegrations';
+import { SettingsAuditLog } from '@ts/components/settings/SettingsAuditLog';
 
 import '@/scss/DocCollection.scss';
-import { PageTabs } from '@ts/components/PageTabs';
-import { SettingsProfile } from '@ts/components/SettingsProfile';
-import { useColorMode } from '@ts/theme/ThemeProvider';
-
-const ProfilePage = () => {
-  return (
-    <Box className='settings-content'>
-      <Paper elevation={3} sx={{ p: 3, m: 3 }}>
-        <Typography variant="h4" component="h2" fontWeight="bold" color="text.primary">
-          My Profile
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-          Manage your account settings and preferences
-        </Typography>
-        <PageTabs tab={[
-          {
-            tabName: 'Profile',
-            tabContent: (
-              <SettingsProfile/>
-            )
-          },
-          {
-            tabName: 'Security',
-            tabContent: (
-              <></>
-            )
-          }
-        ]}/>
-      </Paper>
-    </Box>
-  );
-}
+import '@/scss/Settings.scss';
 
 export const SettingsPage = () => {
-  const theme = useTheme();
-  const {setting_type} = useParams();
-  const [checked, setChecked] = useState(localStorage.getItem('theme') === 'dark');
+  const navigate = useNavigate();
+  const { setting_type } = useParams();
   const drawerRef = useRef<{ handleDrawerToggle: () => void }>(null);
-  const { toggleColorMode } = useColorMode();
+  const { mode, toggleColorMode } = useColorMode();
+  const checked = mode === 'dark';
 
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    event.preventDefault();
-    setChecked(event.target.checked);
-    toggleColorMode();
-  }
+  const navItems: AsideItem[] = [
+    { icon: <UserCircle className="h-4 w-4" />,    label: 'Profile',      onClick: () => navigate('/settings/profile/'),      active: setting_type === 'profile' },
+    { icon: <Lock className="h-4 w-4" />,          label: 'Security',     onClick: () => navigate('/settings/security/'),     active: setting_type === 'security' },
+    { icon: <Users className="h-4 w-4" />,         label: 'Users',        onClick: () => navigate('/settings/users/'),        active: setting_type === 'users' },
+    { icon: <Code2 className="h-4 w-4" />,         label: 'API',          onClick: () => navigate('/settings/api/'),          active: setting_type === 'api' },
+    { icon: <Puzzle className="h-4 w-4" />,        label: 'Integrations', onClick: () => navigate('/settings/integrations/'), active: setting_type === 'integrations' },
+    { icon: <ClipboardList className="h-4 w-4" />, label: 'Audit Log',    onClick: () => navigate('/settings/audit-log/'),    active: setting_type === 'audit-log' },
+  ];
 
-  const settingLinkDetails = [
-    {
-      url: 'profile/',
-      icon: <AccountIcon/>,
-      name: 'My Profile',
-      isModeSwitch: false
-    },
-    {
-      url: 'users/',
-      icon: <GroupIcon/>,
-      name: 'Users',
-      isModeSwitch: false
-    },
-    {
-      url: 'api/',
-      icon: <ApiIcon/>,
-      name: 'API',
-      isModeSwitch: false
-    },
-    {
-      url: 'integrations/',
-      icon: <ExtensionIcon/>,
-      name: 'Integrations',
-      isModeSwitch: false
-    },
-    {
-      url: '',
-      icon: null,
-      name: 'Dark Mode',
-      isModeSwitch: true
-    },
-  ]
+  const renderContent = () => {
+    switch (setting_type) {
+      case 'profile':      return <SettingsProfile />;
+      case 'security':     return <SettingsSecurity />;
+      case 'users':        return <SettingsUsers />;
+      case 'api':          return <SettingsAPI />;
+      case 'integrations': return <SettingsIntegrations />;
+      case 'audit-log':    return <SettingsAuditLog />;
+      default:             return <SettingsProfile />;
+    }
+  };
 
   return (
-    <Box className='settings'>
-      <LinkDrawer className='settings-drawer' LinkList={() => (
-        <Box className='settings-list'>
-          <Divider/>
-          {settingLinkDetails.map((linkDetail, index) =>
-            !linkDetail.isModeSwitch ? (
-              <Button
-                  key={`settings-link-${index}`}
-                  component={BrowserLink}
-                  to={`/settings/${linkDetail.url}`}
-                  className='settings-list-title-link'
-                  startIcon={linkDetail.icon}>
-                <Typography className='settings-list-title'
-                    component="h2"
-                    sx={{color: theme.palette.asideTextColor}}>
-                  {linkDetail.name}
-                </Typography>
-              </Button>
-            ) : (
-              <Box className='settings-list-title-link' key={`settings-link-${index}`}>
-                {checked ? (
-                  <DarkModeIcon className='settings-list-title-logo'/>
-                ) : (
-                  <LightModeIcon className='settings-list-title-logo'/>
-                )}
-                <Box className='settings-list-title-text'>
-                  <Typography className='settings-list-title'
-                      component="h2"
-                      sx={{color: theme.palette.asideTextColor}}>
-                    {linkDetail.name}
-                  </Typography>
-                  <Switch color="secondary" checked={checked} onChange={handleChange}/>
-                </Box>
-              </Box>
-            )
-          )}
-        </Box>
-      )} ref={drawerRef}/>
-      {setting_type === 'profile' && <ProfilePage/>}
+    <Box className="settings">
+      <LinkDrawer
+        className="settings-drawer"
+        items={navItems}
+        ref={drawerRef}
+
+        footer={(isOpen) => isOpen ? (
+          <AsideText
+            label="Dark Mode"
+            icon={<Switch
+              labelPosition="right"
+              checked={checked}
+              onChange={toggleColorMode}
+            />}
+          />
+        ) : null}
+      />
+      <Box className="settings-content">
+        {renderContent()}
+      </Box>
     </Box>
-  )
-}
+  );
+};
