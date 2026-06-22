@@ -4,30 +4,30 @@ export const getDesignTokens = (mode: 'light' | 'dark') => ({
     ...(mode === 'light'
       ? {
           background: {
-            default: '#f5f5f5',
-            paper: '#fff',
-            paperLight: '#fff',
+            default: '#f4f7f6',
+            paper: '#ffffff',
+            paperLight: '#ffffff',
           },
-          pageBkColor: '#fff2e0',
-          asideBkColor: '#ead8a4',
-          asideTextColor: '#212529',
-          appTextColor: '#0a4641',
-          helperTextColor: 'rgba(0, 0, 0, 0.6)',
+          pageBkColor: '#dbdbdb',
+          asideBkColor: '#0f3d38',
+          asideTextColor: '#e8f5f3',
+          appTextColor: '#1c2b29',
+          helperTextColor: 'rgba(0, 0, 0, 0.5)',
           modeComplementColor: '0, 0, 0',
-          borderColor: '0, 0, 0'
+          borderColor: '28, 43, 41'
         }
       : {
           background: {
-            default: '#2f3136',
-            paper: '#0d1117',
-            paperLight: '#1e2022',
+            default: '#121212',
+            paper: '#212121',
+            paperLight: '#2a2a2a',
           },
-          pageBkColor: '#2f3136',
-          asideBkColor: '#1e1e2e',
-          asideTextColor: '#e1e1e6',
-          asideSecondaryColor: '#cccccc',
-          appTextColor: '#666666',
-          helperTextColor: 'rgba(255, 255, 255, 0.6)',
+          pageBkColor: '#121212',
+          asideBkColor: '#1a1a1a',
+          asideTextColor: '#e6edf3',
+          asideSecondaryColor: '#8b949e',
+          appTextColor: '#8b949e',
+          helperTextColor: 'rgba(255, 255, 255, 0.5)',
           modeComplementColor: '255, 255, 255',
           borderColor: '255, 255, 255'
         }),
@@ -35,5 +35,14 @@ export const getDesignTokens = (mode: 'light' | 'dark') => ({
   typography: {
     fontFamily: `'Raleway', 'Roboto', 'Arial', sans-serif`,
     fontWeightMedium: 700,
+  },
+  components: {
+    MuiDialog: {
+      defaultProps: {
+        TransitionProps: {
+          onEnter: () => { (document.activeElement as HTMLElement)?.blur?.(); },
+        },
+      },
+    },
   },
 });

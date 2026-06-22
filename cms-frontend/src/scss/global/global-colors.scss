@@ -2,14 +2,70 @@
 $black: #000;
 $white: #fff;
 
-// Header & Footer
-$header-bk-color: #caa425;
-$footer-bk-color: #bea58f;
-$product-title-color: #213052;
-$controller-color: #7b5c3f;
-$controller-bg-color: #f1dcc4;
-$controller-hover-color: #dcc9b3;
-$menu-header-bg-color: #2a2b2a;
+// Chrome — dark teal
+$chrome-bg:           #0f3d38;   // aside + header
+$chrome-bg-raised:    #155450;   // slightly lighter chrome surface
+$chrome-border:       rgba($white, 0.08);
+$chrome-text:         #e8f5f3;   // primary text on chrome
+$chrome-text-muted:   #9dc4be;   // muted text on chrome
 
-$page_bk_color: #fff2e0;
-$page_aside_bk_color: #ead8a4;
+// Gold accent — complementary to teal
+$gold:                #e9a800;
+$gold-light:          #f5c842;
+$gold-muted:          rgba($gold, 0.15);
+
+// Action teal (lighter, for buttons in content area)
+$header-bk-color:     #0d9488;
+$header-bk-color-dark: #0f766e;
+
+// Content
+$product-title-color: #1c2b29;
+$page_bk_color:       #f0f4f3;   // page body background
+$page_aside_bk_color: #ffffff;   // cards/panels
+
+$footer-bk-color: #e0e8e6;
+$controller-color: #0f766e;
+$controller-bg-color: #e6f4f2;
+$controller-hover-color: #ccebe7;
+$menu-header-bg-color: #0f3d38;
+
+// ── Semantic UI colors ────────────────────────────────────────────────────────
+
+// Status
+$danger:              #b00020;   // error / destructive actions
+
+// Page header (not chrome)
+$page-header-bg:      #ffffff;
+$page-header-border:  #e0e0e0;
+$breadcrumb-sep:      #bdbdbd;   // chevron separator tint
+$breadcrumb-link:     #5f6368;   // ancestor crumbs
+$breadcrumb-active:   #202124;   // current page crumb
+// CTA nav links (legacy app-header)
+$cta-link:            #494949;
+$cta-hover-text:      #2a362e;
+$cta-hover-bg-base:   #9e9e9e;   // base for rgba hover bg
+
+// Image preview checkerboard tiles
+$checker-light:       #e0e0e0;
+$checker-dark-tile:   #21262d;
+
+// Workspace / project-page
+$workspace-empty-bg:  #f8fafb;
+$workspace-hover-bg:  #f5f5f5;
+$workspace-name-dk:   #e1e1e6;   // dark mode workspace name text
+
+// Production workspace indicator
+$production-green:    #2e7d32;
+$production-light-bg: #f3faf9;   // precomputed color.mix(#e0f2f1, #fff, 40%)
+
+// Project "add" card icon ring
+$add-btn-border:      #d1d5db;
+$add-btn-border-dk:   #5a5a7c;
+
+// Dark aside sidebar
+$aside-dk:            #1a1a1a;
+$teal-active:         #5eead4;   // active item text on dark aside
+
+// Project-switcher dropdown dark
+$switcher-menu-dk:    #1c1c1c;
+$switcher-menu-bdr-dk:#2a2a2a;

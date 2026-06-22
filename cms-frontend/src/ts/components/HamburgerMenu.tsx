@@ -1,5 +1,5 @@
 import { IconButton } from '@mui/material';
-import { Menu as MenuIcon} from '@mui/icons-material';
+import { Menu as MenuIcon } from 'lucide-react';
 
 export const HamburgerMenu = ({
   className='',
@@ -16,7 +16,7 @@ export const HamburgerMenu = ({
         color="inherit"
         aria-label={ariaLabel}
         onClick={handleDrawerToggle}>
-      <MenuIcon />
+      <MenuIcon className="h-4 w-4" />
     </IconButton>
   )
 }

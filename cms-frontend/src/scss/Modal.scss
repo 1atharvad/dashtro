@@ -1,27 +1,38 @@
 @use './global/global-colors' as colors;
-@use './global/global-mixins' as mixins;
 
-.modal {
-  background: colors.$white;
-  border-radius: 4px;
-  left: 50%;
-  min-width: 60%;
-  padding: 20px;
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
+.MuiDialog-paper {
+  border-radius: 14px !important;
+  background: var(--cms-surface) !important;
+  border: 1px solid var(--cms-border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08) !important;
 
-  & &-heading {
-    align-items: center;
-    justify-content: space-between;
+  html.dark & {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3) !important;
   }
+}
 
-  & &-title {
-    font-size: 18px;
-    margin-top: 0;
-  }
+.MuiDialogTitle-root {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  padding: 20px 24px !important;
+  color: var(--cms-text) !important;
+  border-bottom: 1px solid var(--cms-border) !important;
+}
 
-  & &-divider {
-    margin: 15px 0;
+.MuiDialogContent-root {
+  padding: 16px 24px !important;
+  color: var(--cms-text) !important;
+}
+
+.MuiDialogActions-root {
+  padding: 12px 24px 20px !important;
+  gap: 8px;
+}
+
+.MuiBackdrop-root {
+  background: rgba(0, 0, 0, 0.4) !important;
+
+  html.dark & {
+    background: rgba(0, 0, 0, 0.6) !important;
   }
 }
