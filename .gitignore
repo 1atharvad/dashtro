@@ -23,6 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 service-key.json
+cloudflared/credentials.json
 __pycache__
 **/**.pyc
 .env

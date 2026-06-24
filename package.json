@@ -1,0 +1,30 @@
+{
+  "name": "dashtro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dashtro: a self-hosted CMS with a project/workspace/collection/document model, FastAPI backend, and React frontend.",
+  "keywords": [
+    "cms",
+    "dashtro",
+    "fastapi",
+    "react",
+    "docker",
+    "sqlite",
+    "postgres"
+  ],
+  "license": "ISC",
+  "author": "Atharva Devasthali",
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1atharvad/dashro.git"
+  },
+  "scripts": {
+    "dev": "docker compose -f docker-compose.dev.yml up --build",
+    "dev:down": "docker compose -f docker-compose.dev.yml down",
+    "prod": "docker compose -f docker-compose.prod.yml up -d",
+    "prod:build": "docker compose -f docker-compose.prod.yml build",
+    "prod:down": "docker compose -f docker-compose.prod.yml down",
+    "prod:logs": "docker compose -f docker-compose.prod.yml logs -f"
+  }
+}

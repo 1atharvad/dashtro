@@ -1,0 +1,94 @@
+services:
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "7312:7312"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - public
+      - internal
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - nginx
+    restart: unless-stopped
+    networks:
+      - public
+
+  backend:
+    build:
+      context: ./cms_backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./cms_backend:/app
+      - uploads_data:/app/uploads
+      # Lets the backup CLI (scripts/cms_schema.py) run directly inside the
+      # container against the repo's backup/ dir — no docker cp needed. Pass
+      # --backup-dir /app/backup when invoking via `docker compose exec`.
+      - ./backup:/app/backup
+    env_file: .env
+    environment:
+      # DB_TYPE: sqlite or postgres, set via .env (defaults to sqlite). mongodb
+      # is not yet migrated to the FastAPI API and is rejected at startup.
+      # DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD (only used when
+      # DB_TYPE=postgres) come from .env via env_file above.
+      DB_TYPE: ${DB_TYPE:-sqlite}
+      CMS_PUBLIC_URL: https://local.atharvadevasthali.com
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ./cms-frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./cms-frontend/src:/app/src
+      - ./cms-frontend/public:/app/public
+      - ./cms-frontend/index.html:/app/index.html
+      - ./cms-frontend/vite.config.ts:/app/vite.config.ts
+      - ./cms-frontend/tailwind.config.cjs:/app/tailwind.config.cjs
+      - ./cms-frontend/postcss.config.cjs:/app/postcss.config.cjs
+      - ./cms-frontend/tsconfig.json:/app/tsconfig.json
+      - ./cms-frontend/tsconfig.app.json:/app/tsconfig.app.json
+    env_file: .env
+    environment:
+      VITE_DEV_ALLOWED_HOST: ${VITE_DEV_ALLOWED_HOST:-local.atharvadevasthali.com}
+    networks:
+      - internal
+
+  # Optional: only needed if DB_TYPE=postgres and you want a local Postgres
+  # instead of pointing DB_HOST at an external one. Not started by default —
+  # bring it up explicitly with `docker compose --profile postgres up`.
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+networks:
+  public:
+  internal:
+
+volumes:
+  uploads_data:
+  postgres_data:

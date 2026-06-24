@@ -1,7 +1,9 @@
-cms-frontend/
+cms-frontend/node_modules
+cms-frontend/dist
 .git
 .env
 **/__pycache__
 **/*.pyc
 **/*.pyo
 *.sqlite3
+cms_backend/service-key.json

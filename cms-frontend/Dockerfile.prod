@@ -1,0 +1,19 @@
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+# --legacy-peer-deps: @vitejs/plugin-react@4.3.4's peerDependencies range
+# predates vite 7 (this repo's version) even though it works fine with it;
+# `npm ci` enforces strict peer resolution where `npm install` doesn't.
+RUN npm ci --legacy-peer-deps
+
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+
+EXPOSE 80

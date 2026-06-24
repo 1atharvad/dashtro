@@ -1,0 +1,28 @@
+# Combined DashTro image: builds the frontend, then serves it (as static
+# files) and the API from a single FastAPI/uvicorn process. Build from the
+# repo root: `docker build -f Dockerfile.dashtro -t dashtro .`
+
+FROM node:20-alpine AS frontend-build
+
+WORKDIR /frontend
+COPY cms-frontend/package.json cms-frontend/package-lock.json ./
+# --legacy-peer-deps: @vitejs/plugin-react@4.3.4's peerDependencies range
+# predates vite 7 (this repo's version) even though it works fine with it;
+# `npm ci` enforces strict peer resolution where `npm install` doesn't.
+RUN npm ci --legacy-peer-deps
+COPY cms-frontend/ .
+RUN npm run build
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY cms_backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY cms_backend/ .
+COPY --from=frontend-build /frontend/dist ./static
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

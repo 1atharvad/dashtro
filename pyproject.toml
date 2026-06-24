@@ -10,7 +10,34 @@ description = "DashTro CMS CLI tools"
 
 [project.scripts]
 dashtro = "cms_backend.scripts.cms_schema:main"
+dashtro-mcp = "cms_mcp.server:mcp.run"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["cms_backend*"]
+include = ["cms_backend*", "cms_mcp*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501", "B008", "E402", "UP038"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cms_backend", "cms_mcp"]
+
+# `pythonpath` puts cms_backend/ itself on sys.path (mirroring the Docker
+# WORKDIR=/app layout) so that main.py's bare `from config import ...` /
+# `from routers import ...` imports resolve the same way in tests as in prod.
+[tool.pytest.ini_options]
+pythonpath = ["cms_backend"]
+testpaths = ["cms_backend/tests"]

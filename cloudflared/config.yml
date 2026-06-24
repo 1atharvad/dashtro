@@ -1,0 +1,7 @@
+tunnel: cn8n-tunnel
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: local.atharvadevasthali.com
+    service: http://nginx:7312
+  - service: http_status:404
