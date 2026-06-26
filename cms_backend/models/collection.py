@@ -1,5 +1,6 @@
 import re
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SchemaCollectionIn(BaseModel):
@@ -12,7 +13,7 @@ class SchemaCollectionIn(BaseModel):
     @field_validator("schema_name", mode="before")
     @classmethod
     def validate_schema_name(cls, v):
-        if not re.match(r'^[A-Z][a-zA-Z]*$', str(v)):
+        if not re.match(r"^[A-Z][a-zA-Z]*$", str(v)):
             raise ValueError("Must be PascalCase without numbers (e.g. 'BlogPost')")
         return v
 
@@ -23,7 +24,25 @@ class SchemaCollectionIn(BaseModel):
 def get_collection_ui_schema(schema_names: list[str]) -> dict:
     """Returns the UI form schema consumed by the frontend Collections page."""
     return {
-        "_index": {"type": "index", "required": True, "default": None, "choices": None, "hide_field_for": {"_type": "all"}},
-        "_collection_name": {"type": "input", "required": True, "default": None, "choices": None, "hide_field_for": None},
-        "_schema_name": {"type": "select", "required": True, "default": None, "choices": schema_names, "hide_field_for": None},
+        "_index": {
+            "type": "index",
+            "required": True,
+            "default": None,
+            "choices": None,
+            "hide_field_for": {"_type": "all"},
+        },
+        "_collection_name": {
+            "type": "input",
+            "required": True,
+            "default": None,
+            "choices": None,
+            "hide_field_for": None,
+        },
+        "_schema_name": {
+            "type": "select",
+            "required": True,
+            "default": None,
+            "choices": schema_names,
+            "hide_field_for": None,
+        },
     }

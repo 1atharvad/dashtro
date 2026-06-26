@@ -1,4 +1,5 @@
 import re
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -13,10 +14,10 @@ class WorkspaceIn(BaseModel):
     @field_validator("workspace_name", mode="before")
     @classmethod
     def validate_workspace_name(cls, v):
-        if not re.match(r'^[a-z][a-z0-9_-]*$', str(v)):
+        if not re.match(r"^[a-z][a-z0-9_-]*$", str(v)):
             raise ValueError(
                 "Must be lowercase, start with a letter, and contain only letters, numbers, hyphens, or underscores."
             )
-        if v == 'production':
+        if v == "production":
             raise ValueError("'production' is reserved and cannot be used as a workspace name.")
         return v
