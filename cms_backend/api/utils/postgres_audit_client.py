@@ -1,46 +1,22 @@
-import json
-import sqlite3
-import threading
+import calendar as cal
+import datetime
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC
 
-from decouple import config
+import psycopg2
+import psycopg2.extras
+
+from api.utils.postgres_client import PostgresClient
 
 
-class SqliteAuditClient:
+class PostgresAuditClient(PostgresClient):
     _instance = None
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
-            cls._instance = super().__new__(cls)
-            cls._instance._local = threading.local()
+            cls._instance = super().__new__(cls, *args, **kwargs)
             cls._instance._ensure_table()
         return cls._instance
-
-    @staticmethod
-    def _create_connection():
-        db_path = config("SQLITE_DB_PATH", default="db.sqlite3")
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    @property
-    def connection(self):
-        local = self._local
-        if not hasattr(local, "conn") or local.conn is None:
-            local.conn = self._create_connection()
-        return local.conn
-
-    @connection.setter
-    def connection(self, value):
-        self._local.conn = value
-
-    def get_cursor(self):
-        try:
-            self.connection.execute("SELECT 1")
-        except (sqlite3.ProgrammingError, sqlite3.InterfaceError):
-            self.connection = self._create_connection()
-        return self.connection.cursor()
 
     def _ensure_table(self):
         cursor = self.get_cursor()
@@ -55,9 +31,9 @@ class SqliteAuditClient:
                 resource_name TEXT DEFAULT '',
                 project_id TEXT DEFAULT '',
                 workspace_name TEXT DEFAULT '',
-                details TEXT DEFAULT '{}',
+                details JSONB DEFAULT '{}'::jsonb,
                 ip_address TEXT DEFAULT '',
-                created_at TEXT NOT NULL
+                created_at TIMESTAMPTZ NOT NULL
             );
         """)
         cursor.execute(
@@ -84,14 +60,13 @@ class SqliteAuditClient:
         ip_address: str = "",
     ):
         log_id = str(uuid.uuid4().hex)
-        created_at = datetime.now(tz=UTC).isoformat()
-        details_json = json.dumps(details or {})
+        created_at = datetime.datetime.now(tz=UTC)
         cursor = self.get_cursor()
         cursor.execute(
             """INSERT INTO cms_audit_logs
                (id, user_id, user_email, action, resource_type, resource_id, resource_name,
                 project_id, workspace_name, details, ip_address, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 log_id,
                 user_id,
@@ -102,7 +77,7 @@ class SqliteAuditClient:
                 resource_name,
                 project_id,
                 workspace_name,
-                details_json,
+                psycopg2.extras.Json(details or {}),
                 ip_address,
                 created_at,
             ),
@@ -125,32 +100,32 @@ class SqliteAuditClient:
         params = []
 
         if action:
-            where_clauses.append("action = ?")
+            where_clauses.append("action = %s")
             params.append(action)
         if resource_type:
-            where_clauses.append("resource_type = ?")
+            where_clauses.append("resource_type = %s")
             params.append(resource_type)
         if project_id:
-            where_clauses.append("project_id = ?")
+            where_clauses.append("project_id = %s")
             params.append(project_id)
         if user_id:
-            where_clauses.append("user_id = ?")
+            where_clauses.append("user_id = %s")
             params.append(user_id)
         if from_date:
-            where_clauses.append("created_at >= ?")
+            where_clauses.append("created_at >= %s")
             params.append(from_date)
         if to_date:
-            where_clauses.append("created_at <= ?")
+            where_clauses.append("created_at <= %s")
             params.append(to_date)
 
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT COUNT(*) FROM cms_audit_logs {where_sql}", params)
-        total = cursor.fetchone()[0]
+        cursor.execute(f"SELECT COUNT(*) AS count FROM cms_audit_logs {where_sql}", params)
+        total = cursor.fetchone()["count"]
 
         cursor.execute(
-            f"SELECT * FROM cms_audit_logs {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            f"SELECT * FROM cms_audit_logs {where_sql} ORDER BY created_at DESC LIMIT %s OFFSET %s",
             [*params, limit, offset],
         )
         rows = cursor.fetchall()
@@ -169,9 +144,9 @@ class SqliteAuditClient:
                     "resource_name": r["resource_name"],
                     "project_id": r["project_id"],
                     "workspace_name": r["workspace_name"],
-                    "details": json.loads(r["details"] or "{}"),
+                    "details": r["details"] or {},
                     "ip_address": r["ip_address"],
-                    "created_at": r["created_at"],
+                    "created_at": r["created_at"].isoformat() if r["created_at"] else None,
                 }
             )
 
@@ -179,8 +154,6 @@ class SqliteAuditClient:
 
     def get_heatmap_data(self, year: int, month: int | None = None) -> list[dict]:
         """Return per-day operation counts and top action for a year or a single month."""
-        import calendar as cal
-
         if month:
             days_in_month = cal.monthrange(year, month)[1]
             start = f"{year:04d}-{month:02d}-01"
@@ -192,9 +165,9 @@ class SqliteAuditClient:
         cursor = self.get_cursor()
         cursor.execute(
             """
-            SELECT date(created_at) AS day, action, COUNT(*) AS cnt
+            SELECT created_at::date AS day, action, COUNT(*) AS cnt
             FROM cms_audit_logs
-            WHERE date(created_at) BETWEEN ? AND ?
+            WHERE created_at::date BETWEEN %s AND %s
             GROUP BY day, action
             ORDER BY day, cnt DESC
             """,
@@ -206,7 +179,7 @@ class SqliteAuditClient:
         # Aggregate: total count per day + top action
         day_map: dict[str, dict] = {}
         for r in rows:
-            day = r["day"]
+            day = r["day"].isoformat()
             if day not in day_map:
                 day_map[day] = {"count": 0, "top_action": r["action"]}
             day_map[day]["count"] += r["cnt"]
@@ -222,8 +195,6 @@ class SqliteAuditClient:
                     {"date": day_str, "count": entry["count"], "top_action": entry["top_action"]}
                 )
         else:
-            import datetime
-
             current = datetime.date(year, 1, 1)
             end_date = datetime.date(year, 12, 31)
             while current <= end_date:

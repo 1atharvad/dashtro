@@ -1,9 +1,10 @@
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+from api.utils import get_audit_client
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from api.utils import get_audit_client
 from routers.auth import _get_user
 
 router = APIRouter()
@@ -21,9 +22,9 @@ def get_heatmap(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail=str(e)) from e
 
-    resolved_year = year or datetime.now(tz=timezone.utc).year
+    resolved_year = year or datetime.now(tz=UTC).year
     return db_audit.get_heatmap_data(year=resolved_year, month=month)
 
 
@@ -42,25 +43,41 @@ def export_audit_logs(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail=str(e)) from e
 
     result = db_audit.get_logs(
-        action=action, resource_type=resource_type, project_id=project_id,
-        user_id=user_id, from_date=from_date, to_date=to_date,
-        limit=10000, offset=0,
+        action=action,
+        resource_type=resource_type,
+        project_id=project_id,
+        user_id=user_id,
+        from_date=from_date,
+        to_date=to_date,
+        limit=10000,
+        offset=0,
     )
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=[
-        'created_at', 'user_email', 'user_id', 'action', 'resource_type',
-        'resource_id', 'resource_name', 'project_id', 'workspace_name', 'ip_address',
-    ])
+    writer = csv.DictWriter(
+        output,
+        fieldnames=[
+            "created_at",
+            "user_email",
+            "user_id",
+            "action",
+            "resource_type",
+            "resource_id",
+            "resource_name",
+            "project_id",
+            "workspace_name",
+            "ip_address",
+        ],
+    )
     writer.writeheader()
-    for log in result['logs']:
-        writer.writerow({k: log.get(k, '') for k in writer.fieldnames})
+    for log in result["logs"]:
+        writer.writerow({k: log.get(k, "") for k in writer.fieldnames})
 
     output.seek(0)
-    filename = f"audit-log-{datetime.now(tz=timezone.utc).strftime('%Y%m%d-%H%M%S')}.csv"
+    filename = f"audit-log-{datetime.now(tz=UTC).strftime('%Y%m%d-%H%M%S')}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -85,7 +102,7 @@ def list_audit_logs(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail=str(e)) from e
 
     return db_audit.get_logs(
         action=action,
