@@ -6,7 +6,6 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
-  DragStartEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -26,8 +25,9 @@ import {
 } from '@mui/material';
 import { Plus as AddIcon, Trash2 as DeleteIcon, GripVertical as DragIcon, ChevronDown as ExpandMoreIcon } from 'lucide-react';
 import { DocumentEntry } from '@ts/components/DocumentEntry';
+import type { SchemaFieldItem, DocumentData } from '@ts/types/constants';
 
-type Item = Record<string, any>;
+type Item = DocumentData;
 
 const SortableAccordion = ({
   id,
@@ -46,8 +46,8 @@ const SortableAccordion = ({
   id: string;
   index: number;
   item: Item;
-  schema: any[];
-  schemaDetails: Record<string, any>;
+  schema: SchemaFieldItem[];
+  schemaDetails: Record<string, SchemaFieldItem[]>;
   expanded: boolean;
   onToggle: () => void;
   onRemove: () => void;
@@ -108,7 +108,7 @@ const SortableAccordion = ({
         </AccordionSummary>
         <AccordionDetails className="nested-array-accordion-details">
           <Box className="nested-document-variable-container">
-            {schema.map((entry: any, fi: number) => (
+            {schema.map((entry, fi: number) => (
               <Box key={fi} className="nested-document-variable">
                 <DocumentEntry
                   id={`${fieldName}-${index}-${entry['_index'] ?? fi}`}
@@ -147,8 +147,8 @@ export const NestedDocumentArrayField = ({
 }: {
   label: string;
   fieldName: string;
-  schema: any[];
-  schemaDetails: Record<string, any>;
+  schema: SchemaFieldItem[];
+  schemaDetails: Record<string, SchemaFieldItem[]>;
   value: Item[];
   onChange: (value: Item[]) => void;
   onImmediateSave?: (value: Item[]) => void;
@@ -169,7 +169,7 @@ export const NestedDocumentArrayField = ({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleDragStart = (_event: DragStartEvent) => setExpanded(false);
+  const handleDragStart = () => setExpanded(false);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;

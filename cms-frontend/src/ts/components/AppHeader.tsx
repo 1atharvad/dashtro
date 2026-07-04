@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { Avatar, Box, IconButton, Tooltip } from '@mui/material';
 import { LogoLink } from 'advi-ui';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useUser } from '@ts/context/UserContext';
+import { useUser } from '@ts/context/userContextValue';
 import dashtroLogo from '@/assets/images/favicon-96x96.png';
 
 interface AppHeaderProps {

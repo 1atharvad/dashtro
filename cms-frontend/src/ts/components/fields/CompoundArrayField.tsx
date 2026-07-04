@@ -1,7 +1,7 @@
 import { MouseEvent, useCallback, useRef, useState } from 'react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
-  DragEndEvent, DragStartEvent,
+  DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -10,28 +10,31 @@ import {
   Box, IconButton, Tooltip, Typography,
 } from '@mui/material';
 import { Plus as AddIcon, Trash2 as DeleteIcon, GripVertical as DragIcon, ChevronDown as ExpandIcon } from 'lucide-react';
+import { FileField } from '@ts/components/fields/FileField';
 import { ImageField } from '@ts/components/fields/ImageField';
 import { LinkField } from '@ts/components/fields/LinkField';
 import { CompoundField } from '@ts/components/fields/CompoundField';
 import { getCompoundDef, getCompoundDefault } from '@ts/config/fieldRegistry';
 
-type Item = Record<string, any>;
+type Item = Record<string, unknown>;
 
 const itemLabel = (fieldType: string, item: Item, index: number): string => {
-  if (fieldType === 'URL')   return item?.name  || item?.url        || `Link ${index + 1}`;
-  if (fieldType === 'Image') return item?.alt   || item?.url        || `Image ${index + 1}`;
+  if (fieldType === 'URL')   return String(item?.name  || item?.url        || `Link ${index + 1}`);
+  if (fieldType === 'Image') return String(item?.alt_text || item?.url      || `Image ${index + 1}`);
+  if (fieldType === 'File')  return String(item?.text  || item?.url        || `File ${index + 1}`);
   const def = getCompoundDef(fieldType);
   const first = def?.subfields[0];
-  return (first && item?.[first.name]) || `Item ${index + 1}`;
+  return String((first && item?.[first.name]) || `Item ${index + 1}`);
 };
 
 const ItemRenderer = ({
   fieldType, value, onChange, disabled,
 }: {
-  fieldType: string; value: any; onChange: (v: any) => void; disabled: boolean;
+  fieldType: string; value: Item; onChange: (v: Item) => void; disabled: boolean;
 }) => {
   if (fieldType === 'URL')   return <LinkField   label="" value={value} onChange={onChange} disabled={disabled} />;
   if (fieldType === 'Image') return <ImageField  label="" value={value} onChange={onChange} disabled={disabled} />;
+  if (fieldType === 'File')  return <FileField   label="" value={value} onChange={onChange} disabled={disabled} />;
   return <CompoundField fieldType={fieldType} label="" value={value} onChange={onChange} disabled={disabled} />;
 };
 
@@ -88,7 +91,7 @@ export const CompoundArrayField = ({
   const onChangeRef = useRef(onChange); onChangeRef.current = onChange;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleDragStart = (_e: DragStartEvent) => setExpanded(false);
+  const handleDragStart = () => setExpanded(false);
   const handleDragEnd = useCallback((e: DragEndEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;

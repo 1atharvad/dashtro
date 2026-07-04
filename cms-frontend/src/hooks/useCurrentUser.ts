@@ -1,1 +1,1 @@
-export { useUser as useCurrentUser } from '@ts/context/UserContext';
+export { useUser as useCurrentUser } from '@ts/context/userContextValue';

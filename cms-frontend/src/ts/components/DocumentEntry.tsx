@@ -1,7 +1,8 @@
-import { FormControlLabel, Grid, Switch, TextField } from '@mui/material';
-import { Dispatch, SetStateAction, useMemo, useRef } from 'react';
+import { FormControlLabel, Grid, Skeleton, Switch, TextField } from '@mui/material';
+import { Dispatch, SetStateAction, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { ColorPickerField } from '@ts/components/fields/ColorPickerField';
-import { RichTextModal } from '@ts/components/fields/RichTextModal';
+
+const RichTextModal = lazy(() => import('@ts/components/fields/RichTextModal').then(m => ({ default: m.RichTextModal })));
 import { FileField } from '@ts/components/fields/FileField';
 import { ImageField } from '@ts/components/fields/ImageField';
 import { LinkField } from '@ts/components/fields/LinkField';
@@ -10,9 +11,8 @@ import { CompoundArrayField } from '@ts/components/fields/CompoundArrayField';
 import { NestedDocumentArrayField } from '@ts/components/fields/NestedDocumentArrayField';
 import { ReferenceDocumentField } from '@ts/components/fields/ReferenceDocumentField';
 import { SimpleArrayField } from '@ts/components/fields/SimpleArrayField';
-import { getCompoundDef, getCompoundDefault, getRegistry, isCompoundField } from '@ts/config/fieldRegistry';
-
-type SchemaVariableData = {[key: string]: any}
+import { getCompoundDef, getCompoundDefault, getRegistry, isCompoundField, onRegistryReady } from '@ts/config/fieldRegistry';
+import type { SchemaFieldItem, DocumentData } from '@ts/types/constants';
 
 export const DocumentEntry = ({
   id,
@@ -24,13 +24,16 @@ export const DocumentEntry = ({
   onImmediateSave,
 }: {
   id: string,
-  variableSchema: {[key: string]: any}
-  variableEntryState: [SchemaVariableData, Dispatch<SetStateAction<SchemaVariableData>>]
-  schemaDetails: {[key: string]: any}
+  variableSchema: SchemaFieldItem
+  variableEntryState: [DocumentData, Dispatch<SetStateAction<DocumentData>>]
+  schemaDetails: Record<string, SchemaFieldItem[]>
   readOnly?: boolean
   excludeValues?: string[]
-  onImmediateSave?: (fieldName: string, value: any) => void
+  onImmediateSave?: (fieldName: string, value: unknown) => void
 }) => {
+  const [, forceUpdate] = useState(0);
+  useEffect(() => onRegistryReady(() => forceUpdate(n => n + 1)), []);
+
   const variableType = variableSchema['_type'];
   const fieldName = variableSchema['_name'] as string;
   const labelName = fieldName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -40,6 +43,7 @@ export const DocumentEntry = ({
   const required = variableSchema['_required'] as boolean | undefined;
   const nestedSchemaName = variableSchema['_nested_schema'];
   const nestedRelation = variableSchema['_relation'] ?? 'OneToOne';
+  const richTextWrapper = variableSchema['_rich_text_wrapper'] as string | undefined;
   const referenceCollections: string[] = variableSchema['_reference_schema']?.filter(Boolean) ?? [];
   const nestedSchema = nestedSchemaName && variableType === 'NestedDocument'
     ? schemaDetails[nestedSchemaName]
@@ -56,19 +60,7 @@ export const DocumentEntry = ({
   const setVariableEntryRef = useRef(setVariableEntry);
   setVariableEntryRef.current = setVariableEntry;
 
-  const RichTextField = useMemo(() => (
-    <RichTextModal
-      label={labelName}
-      value={labelValue}
-      onChange={(val: any) => {
-        setVariableEntryRef.current(prev => ({ ...prev, [fieldName]: val }));
-        onImmediateSaveRef.current?.(fieldName, val);
-      }}
-      disabled={readOnly}
-    />
-  ), [labelName, labelValue, readOnly]);
-
-const textFieldProps = {
+  const textFieldProps = {
     fullWidth: true,
     label: labelName,
     value: labelValue,
@@ -82,7 +74,7 @@ const textFieldProps = {
   };
 
   // Defaults for all types — compound type defaults come from the registry
-  const defaultItemForType: Record<string, any> = {
+  const defaultItemForType: Record<string, unknown> = {
     String: '', Number: '', Email: '', Date: '', DateTime: '',
     RichText: '', Textarea: '', File: '', ReferenceDocument: '',
     Boolean: 'false',
@@ -169,7 +161,20 @@ const textFieldProps = {
           <TextField {...textFieldProps} type="datetime-local" name={fieldName} id={id} />
         )}
 
-        {variableType === 'RichText' && RichTextField}
+        {variableType === 'RichText' && (
+          <Suspense fallback={<Skeleton variant="rectangular" height={120} sx={{ borderRadius: 1 }} />}>
+            <RichTextModal
+              label={labelName}
+              value={labelValue}
+              onChange={(val: string) => {
+                setVariableEntryRef.current(prev => ({ ...prev, [fieldName]: val }));
+                onImmediateSaveRef.current?.(fieldName, val);
+              }}
+              disabled={readOnly}
+              wrapperKey={richTextWrapper}
+            />
+          </Suspense>
+        )}
 
         {variableType === 'Textarea' && (
           <TextField
@@ -204,7 +209,7 @@ const textFieldProps = {
           <ColorPickerField
             name={fieldName}
             label={labelName}
-            value={labelValue || '#000000'}
+            value={String(labelValue || '#000000')}
             onChange={(_name, val) => setVariableEntry(prev => ({ ...prev, [fieldName]: val }))}
           />
         )}
@@ -227,7 +232,9 @@ const textFieldProps = {
         {variableType === 'ReferenceDocument' && (
           <ReferenceDocumentField
             label={labelName}
-            value={labelValue}
+            value={typeof labelValue === 'object' && labelValue !== null
+              ? ((labelValue as { _document_id?: string })._document_id ?? '')
+              : String(labelValue ?? '')}
             onChange={val => setVariableEntry(prev => ({ ...prev, [fieldName]: val }))}
             referenceCollections={referenceCollections}
             disabled={readOnly}
@@ -263,14 +270,14 @@ const textFieldProps = {
           <>
             <label className='nested-variable-label'>{labelName}</label>
             <Grid container spacing={2} id={id} className="nested-document-variable-container">
-              {nestedSchema && nestedSchema.map((entry: any, index: number) => (
+              {nestedSchema && nestedSchema.map((entry, index: number) => (
                 <Grid key={index} className='nested-document-variable'>
                   <DocumentEntry
                     id={`${id}-${entry['_index']}`}
                     variableSchema={entry}
-                    variableEntryState={[variableEntry[fieldName] ?? {}, (updatedValueOrFn) => {
+                    variableEntryState={[(variableEntry[fieldName] ?? {}) as DocumentData, (updatedValueOrFn) => {
                       setVariableEntry(prev => {
-                        const currentNested = prev[fieldName] ?? {};
+                        const currentNested = (prev[fieldName] ?? {}) as DocumentData;
                         const newValue = typeof updatedValueOrFn === 'function'
                           ? updatedValueOrFn(currentNested)
                           : updatedValueOrFn;
@@ -281,7 +288,7 @@ const textFieldProps = {
                     schemaDetails={schemaDetails}
                     readOnly={readOnly}
                     onImmediateSave={onImmediateSave ? (nestedFieldName, val) => {
-                      const currentNested = variableEntry[fieldName] ?? {};
+                      const currentNested = (variableEntry[fieldName] ?? {}) as DocumentData;
                       onImmediateSave(fieldName, { ...currentNested, [nestedFieldName]: val });
                     } : undefined}
                   />

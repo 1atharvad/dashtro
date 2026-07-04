@@ -1,38 +1,35 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { Box, CircularProgress } from '@mui/material';
 import { getToken, isTokenExpired, refreshTokens } from '@ts/utils/auth';
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-  const [checking, setChecking] = useState(true);
-  const [allowed, setAllowed] = useState(false);
+
+  // Synchronously determine initial state from localStorage — no render delay
+  // for the common case where the token is still valid.
+  const [checking, setChecking] = useState<boolean>(() => {
+    const token = getToken();
+    return !!token && isTokenExpired(token);
+  });
+  const [allowed, setAllowed] = useState<boolean>(() => {
+    const token = getToken();
+    return !!token && !isTokenExpired(token);
+  });
 
   useEffect(() => {
-    const check = async () => {
-      const token = getToken();
-      if (!token) {
-        setAllowed(false);
-        setChecking(false);
-        return;
-      }
-      if (!isTokenExpired(token)) {
-        setAllowed(true);
-        setChecking(false);
-        return;
-      }
-      const ok = await refreshTokens();
-      if (!ok) {
-        setAllowed(false);
-        setChecking(false);
-        return;
-      }
-      setAllowed(true);
+    if (!checking) return;
+    refreshTokens().then(ok => {
+      setAllowed(ok);
       setChecking(false);
-    };
-    check();
-  }, []);
+    });
+  }, [checking]);
 
-  if (checking) return null;
+  if (checking) return (
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+      <CircularProgress size={32} />
+    </Box>
+  );
   if (!allowed) return <Navigate to="/login/" state={{ from: location }} replace />;
   return <>{children}</>;
 };

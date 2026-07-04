@@ -1,50 +1,55 @@
-# React + TypeScript + Vite
+# Dashtro Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite frontend for Dashtro.
 
-Currently, two official plugins are available:
+## Structure
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- `src/ts/pages/` — top-level routed pages (`ProjectPage`, `Schema`,
+  `CollectionContent`, `DocumentContent`, `SettingsPage`, `RealtimeDatabase`,
+  `RichTextComponentEditor`, `RichTextComponentsList`, `Login`).
+- `src/ts/components/` — reusable components, including `fields/` (one
+  component per schema field type, registered via `src/ts/config/fieldRegistry.ts`)
+  and `settings/` (users, API keys, audit log/heatmap).
+- `src/redux/` — Redux Toolkit slices, one per resource (`projectSlice`,
+  `workspaceSlice`, `collectionSlice`, `documentSlice`, `schemaSlice`,
+  `schemaPresetSlice`, `categorySlice`, `realtimeDbSlice`,
+  `richTextComponentSlice`).
+- `src/hooks/` — data-fetching hooks wrapping the Redux slices
+  (`useProject`, `useWorkspace`, `useCollection`, `useDocument`, `useSchema`,
+  `useCurrentUser`, etc).
+- `src/ts/context/` — React contexts (`UserContext`, theme's `colorModeContext`).
+- `src/ts/theme/` — MUI theme provider and dark/light mode.
 
-## Expanding the ESLint configuration
+## Running
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+Via the root compose files (recommended — see root [README](../README.md)),
+or directly:
 
-- Configure the top-level `parserOptions` property like this:
-
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+npm install
+npm run dev       # Vite dev server
+npm run build     # tsc -b && vite build — production build (also validates types)
+npm run lint
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+## Build notes
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+- `vite.config.ts`'s `manualChunks` deliberately does **not** split
+  `@mui/*`/`@emotion/*`/`react`/`react-redux` into separate chunks — MUI's
+  internal circular references cause a `Cannot access X before initialization`
+  crash at chunk-load time if they're split apart. Only genuinely standalone
+  packages (`monaco-editor`, `mermaid`, the markdown editor, `react-live`) are
+  isolated into their own vendor chunks.
+- `allowedHosts` in `vite.config.ts` always includes
+  `local.atharvadevasthali.com` and appends `VITE_DEV_ALLOWED_HOST` (from
+  `.env`) if set to something different — it's additive, not a replacement.
+- `npm run build` is the only way to catch some errors (e.g. Rollup chunking
+  issues) that `tsc` alone won't — always run a real build before considering
+  a frontend change verified.
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
+## Tests
+
+```bash
+npm test         # vitest run
+npm run test:watch
 ```

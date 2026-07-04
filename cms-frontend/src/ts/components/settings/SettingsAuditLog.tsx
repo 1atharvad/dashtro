@@ -129,7 +129,7 @@ export const SettingsAuditLog = () => {
           <Typography variant="body2" color="text.secondary">Operations performed over time</Typography>
         </Box>
         <Box className="settings-section-body">
-          <AuditHeatmap totalOps={total} />
+          <AuditHeatmap />
         </Box>
       </Box>
 

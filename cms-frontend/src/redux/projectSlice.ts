@@ -3,7 +3,7 @@ import { API_BASE_URL } from "@ts/config";
 import { authFetch } from "@ts/utils/auth";
 
 export const fetchProjects = createAsyncThunk("projects/fetchProjects", async () => {
-  const response = await fetch(`${API_BASE_URL}/projects/`);
+  const response = await authFetch(`${API_BASE_URL}/projects/`);
   if (!response.ok) throw new Error(`Failed to fetch projects: ${response.status}`);
   return await response.json();
 });

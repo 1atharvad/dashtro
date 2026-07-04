@@ -1,8 +1,24 @@
 import { useRef, useState } from 'react';
-import { Box, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, CircularProgress, IconButton, TextField, Tooltip, Typography } from '@mui/material';
 import { RefreshCw as ReplaceIcon, X as CloseIcon, File as FileIcon, ExternalLink as OpenInNewIcon, Upload as UploadIcon } from 'lucide-react';
 import { API_BASE_URL } from '@ts/config';
 import { authFetch } from '@ts/utils/auth';
+
+type FileValue = {
+  url: string;
+  text: string;
+  classes: string;
+  icon_id: string;
+  is_external_link: true;
+};
+
+const DEFAULT: FileValue = { url: '', text: '', classes: '', icon_id: '', is_external_link: true };
+
+const parseValue = (raw: unknown): FileValue => {
+  if (typeof raw === 'string') return { ...DEFAULT, url: raw };
+  if (raw && typeof raw === 'object') return { ...DEFAULT, ...raw, is_external_link: true };
+  return DEFAULT;
+};
 
 export const FileField = ({
   label,
@@ -11,16 +27,19 @@ export const FileField = ({
   disabled = false,
 }: {
   label: string;
-  value: any;
-  onChange: (value: string) => void;
+  value: unknown;
+  onChange: (value: FileValue) => void;
   disabled?: boolean;
 }) => {
-  const url: string = typeof value === 'string' ? value : '';
+  const val = parseValue(value);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
 
-  const filename = url ? url.split('/').pop() || url : '';
+  const filename = val.url ? val.url.split('/').pop() || val.url : '';
+
+  const set = (key: keyof Omit<FileValue, 'is_external_link'>) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...val, [key]: e.target.value });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -36,75 +55,77 @@ export const FileField = ({
         throw new Error(err.detail ?? 'Upload failed');
       }
       const data = await res.json();
-      onChange(data.url);
-    } catch (err: any) {
-      setError(err.message ?? 'Upload failed');
+      onChange({ ...val, url:data.url });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const fields = (
-    <Box className="image-field-upload">
-          <input
-            ref={fileInputRef}
-            type="file"
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-            disabled={disabled || uploading}
-          />
+  const sharedProps = { disabled, slotProps: { inputLabel: { shrink: true } }, fullWidth: true };
 
-          {url ? (
-            <Box className="file-field-preview">
-              <FileIcon className="file-field-preview-icon" />
-              <Typography className="file-field-preview-name" title={filename}>
-                {filename}
-              </Typography>
-              <Box className="file-field-preview-actions">
-                <Tooltip title="Open file in new tab">
-                  <IconButton size="small" href={url} target="_blank" rel="noopener noreferrer">
-                    <OpenInNewIcon className="h-4 w-4" />
-                  </IconButton>
-                </Tooltip>
-                {!disabled && (
-                  <>
-                    <Tooltip title="Replace file">
-                      <IconButton size="small" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                        <ReplaceIcon className="h-4 w-4" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Remove file">
-                      <IconButton size="small" onClick={() => onChange('')}>
-                        <CloseIcon className="h-4 w-4" />
-                      </IconButton>
-                    </Tooltip>
-                  </>
-                )}
-              </Box>
-            </Box>
-          ) : (
-            <Box
-              className={`image-field-dropzone${disabled ? ' image-field-dropzone--disabled' : ''}`}
-              onClick={() => !disabled && fileInputRef.current?.click()}
-            >
-              {uploading ? (
-                <CircularProgress size={24} />
-              ) : (
+  const fields = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box className="image-field-upload">
+        <input
+          ref={fileInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+          disabled={disabled || uploading}
+        />
+        {val.url ? (
+          <Box className="file-field-preview">
+            <FileIcon className="file-field-preview-icon" />
+            <Typography className="file-field-preview-name" title={filename}>{filename}</Typography>
+            <Box className="file-field-preview-actions">
+              <Tooltip title="Open file in new tab">
+                <IconButton size="small" href={val.url} target="_blank" rel="noopener noreferrer">
+                  <OpenInNewIcon className="h-4 w-4" />
+                </IconButton>
+              </Tooltip>
+              {!disabled && (
                 <>
-                  <UploadIcon className="h-4 w-4" style={{ opacity: 0.5 }} />
-                  <Typography variant="body2" sx={{ opacity: 0.6 }}>Click to upload file</Typography>
-                  <Typography variant="caption" sx={{ opacity: 0.4 }}>PDF, DOCX, ZIP, etc. — max 10 MB</Typography>
+                  <Tooltip title="Replace file">
+                    <IconButton size="small" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                      <ReplaceIcon className="h-4 w-4" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Remove file">
+                    <IconButton size="small" onClick={() => onChange({ ...val, url:'' })}>
+                      <CloseIcon className="h-4 w-4" />
+                    </IconButton>
+                  </Tooltip>
                 </>
               )}
             </Box>
-          )}
+          </Box>
+        ) : (
+          <Box
+            className={`image-field-dropzone${disabled ? ' image-field-dropzone--disabled' : ''}`}
+            onClick={() => !disabled && fileInputRef.current?.click()}
+          >
+            {uploading ? (
+              <CircularProgress size={24} />
+            ) : (
+              <>
+                <UploadIcon className="h-4 w-4" style={{ opacity: 0.5 }} />
+                <Typography variant="body2" sx={{ opacity: 0.6 }}>Click to upload file</Typography>
+                <Typography variant="caption" sx={{ opacity: 0.4 }}>PDF, DOCX, ZIP, etc. — max 10 MB</Typography>
+              </>
+            )}
+          </Box>
+        )}
+        {error && (
+          <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>{error}</Typography>
+        )}
+      </Box>
 
-          {error && (
-            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
-              {error}
-            </Typography>
-          )}
+      <TextField {...sharedProps} label="Link Text" value={val.text} onChange={set('text')} placeholder="e.g. Download Resume" />
+      <TextField {...sharedProps} label="CSS Classes" value={val.classes} onChange={set('classes')} placeholder="e.g. primary-btn" />
+      <TextField {...sharedProps} label="Icon ID" value={val.icon_id} onChange={set('icon_id')} placeholder="e.g. download" />
     </Box>
   );
 

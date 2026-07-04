@@ -14,7 +14,7 @@ export const Login = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as any)?.from?.pathname ?? "/";
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/";
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/auth/owner-exists/`)

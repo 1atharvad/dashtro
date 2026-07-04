@@ -5,7 +5,6 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
-  DragStartEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -17,6 +16,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Box, IconButton, Tooltip, Typography } from '@mui/material';
 import { Plus as AddIcon, Trash2 as DeleteIcon, GripVertical as DragIcon } from 'lucide-react';
 import { DocumentEntry } from '@ts/components/DocumentEntry';
+import type { SchemaFieldItem, DocumentData } from '@ts/types/constants';
 
 const SortableItem = ({
   id,
@@ -32,10 +32,10 @@ const SortableItem = ({
 }: {
   id: string;
   index: number;
-  value: any;
-  variableSchema: Record<string, any>;
-  schemaDetails: Record<string, any>;
-  onChange: (val: any) => void;
+  value: unknown;
+  variableSchema: SchemaFieldItem;
+  schemaDetails: Record<string, SchemaFieldItem[]>;
+  onChange: (val: unknown) => void;
   onRemove: () => void;
   readOnly: boolean;
   fieldName: string;
@@ -57,7 +57,11 @@ const SortableItem = ({
           variableSchema={{ ...variableSchema, _relation: 'OneToOne' }}
           variableEntryState={[
             { [fieldName]: value },
-            updated => { onChange((updated as Record<string, any>)[fieldName]); return updated; },
+            (updated: DocumentData | ((prev: DocumentData) => DocumentData)) => {
+              const next = typeof updated === 'function' ? updated({ [fieldName]: value }) : updated;
+              onChange(next[fieldName]);
+              return next;
+            },
           ]}
           schemaDetails={schemaDetails}
           readOnly={readOnly}
@@ -87,19 +91,19 @@ export const SimpleArrayField = ({
 }: {
   label: string;
   fieldName: string;
-  variableSchema: Record<string, any>;
-  schemaDetails: Record<string, any>;
-  value: any[];
-  onChange: (value: any[]) => void;
+  variableSchema: SchemaFieldItem;
+  schemaDetails: Record<string, SchemaFieldItem[]>;
+  value: unknown[];
+  onChange: (value: unknown[]) => void;
   readOnly?: boolean;
-  defaultItem: any;
+  defaultItem: unknown;
 }) => {
-  const items: any[] = Array.isArray(value) ? value : [];
+  const items: unknown[] = Array.isArray(value) ? value : [];
   const ids = items.map((_, i) => `${fieldName}-arr-${i}`);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleDragStart = (_event: DragStartEvent) => {};
+  const handleDragStart = () => {};
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;

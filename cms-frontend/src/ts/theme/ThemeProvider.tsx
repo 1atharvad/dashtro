@@ -2,19 +2,9 @@
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { createTheme } from '@mui/material/styles';
 import { getDesignTokens } from './theme';
-import { useMemo, useState, createContext, useContext, ReactNode } from 'react';
-
-interface ColorModeContextValue {
-  mode: 'light' | 'dark';
-  toggleColorMode: () => void;
-}
-
-const ColorModeContext = createContext<ColorModeContextValue>({
-  mode: 'light',
-  toggleColorMode: () => {},
-});
-
-export const useColorMode = () => useContext(ColorModeContext);
+import { useMemo, useState, ReactNode } from 'react';
+import { ColorModeContext } from './colorModeContext';
+import type { ColorModeContextValue } from '@ts/types/constants';
 
 export const CustomThemeProvider = ({ children }: { children: ReactNode }) => {
   const [mode, setMode] = useState<'light' | 'dark'>(() => {

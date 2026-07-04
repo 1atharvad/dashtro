@@ -2,14 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   createDocument, deleteDocument, fetchCollection, fetchDocument,
-  fetchDocumentVersions, restoreDocumentVersion, updateDocument, updateDocumentStatus,
+  fetchDocumentVersions, restoreDocumentVersion, updateDocument,
+  pushCollectionToProd, pullCollectionFromProd, pushDocumentToProd, pullDocumentFromProd,
   DocumentVersion,
 } from '@/redux/documentSlice';
-import { RootState, AppDispatch } from '@/redux/store';
+import type { RootState, AppDispatch, DocumentData, NewDocumentInput, CollectionMeta } from '@ts/types/constants';
 import { unwrapResult } from '@reduxjs/toolkit';
 import { toast } from 'advi-ui';
 
-const EMPTY_PROJECT = { content: {} as Record<string, Record<string, any>>, ids: {} as Record<string, any> };
+const EMPTY_PROJECT = {
+  content: {} as Record<string, Record<string, DocumentData>>,
+  ids: {} as Record<string, CollectionMeta>,
+};
 
 export const useDocumentData = (
   projectId: string,
@@ -28,7 +32,8 @@ export const useDocumentData = (
 
   const [collDocumentIds, setCollDocumentIds] = useState<Record<string, string[]>>({});
   const [collDocumentStatuses, setCollDocumentStatuses] = useState<Record<string, Record<string, string>>>({});
-  const [collDocumentContent, setCollDocumentContent] = useState<Record<string, any>>({});
+  const [collDocumentLabels, setCollDocumentLabels] = useState<Record<string, Record<string, string>>>({});
+  const [collDocumentContent, setCollDocumentContent] = useState<Record<string, Record<string, DocumentData>>>({});
   const [loading2, setLoading2] = useState(false);
   const defaultId = 'new';
 
@@ -41,11 +46,12 @@ export const useDocumentData = (
       setLoading2(true);
       dispatch(fetchCollection({ projectId, collectionName, workspaceName }));
     }
-  }, [dispatch, projectId, workspaceName, collectionName, documentId]);
+  }, [dispatch, projectId, workspaceName, collectionName, documentId, collDocumentIds]);
 
   useEffect(() => {
     if (error) {
       console.error("Error fetching document data:", error);
+      setLoading2(false);
       return;
     }
     if (loading1) return;
@@ -53,7 +59,6 @@ export const useDocumentData = (
     if (documentId && documentId !== defaultId) {
       const docContent = projectData.content?.[collectionName]?.[documentId];
       if (!docContent) return;
-      // Only push content into local state when this specific document's data arrives.
       setCollDocumentContent(prev => {
         const existing = prev[collectionName]?.[documentId];
         if (existing === docContent) return prev;
@@ -64,14 +69,15 @@ export const useDocumentData = (
       });
       setLoading2(false);
     } else if (collectionName in projectData.ids) {
-      const { _document_ids, _document_statuses } = projectData.ids[collectionName];
+      const { _document_ids, _document_statuses, _document_labels } = projectData.ids[collectionName];
       setCollDocumentIds(prev => ({ ...prev, [collectionName]: _document_ids }));
       setCollDocumentStatuses(prev => ({ ...prev, [collectionName]: _document_statuses ?? {} }));
+      setCollDocumentLabels(prev => ({ ...prev, [collectionName]: _document_labels ?? {} }));
       setLoading2(false);
     }
   }, [loading1, projectData, error, collectionName, documentId]);
 
-  const addDocumentData = async (newDocument: Record<string, any>) => {
+  const addDocumentData = async (newDocument: NewDocumentInput) => {
     try {
       const resultAction = await dispatch(createDocument({ projectId, collectionName, workspaceName, newDocument }));
       toast.success('Document created');
@@ -82,7 +88,7 @@ export const useDocumentData = (
     }
   };
 
-  const updateDocumentData = async (updatedDocument: Record<string, any>) => {
+  const updateDocumentData = async (updatedDocument: NewDocumentInput) => {
     if (!documentId) return console.error("Document ID not found");
     try {
       await dispatch(updateDocument({ projectId, collectionName, documentId, workspaceName, updatedDocument }));
@@ -93,11 +99,32 @@ export const useDocumentData = (
     }
   };
 
-  const updateStatusData = (docId: string, status: 'draft' | 'published') => {
-    dispatch(updateDocumentStatus({ projectId, collectionName, documentId: docId, workspaceName, status }))
-      .then(() => toast.success(status === 'published' ? 'Marked as published' : 'Reverted to draft'))
-      .catch(err => { console.error(err); toast.error('Failed to update status'); });
-  };
+  const refreshCollection = () =>
+    dispatch(fetchCollection({ projectId, collectionName, workspaceName }));
+
+  const pushCollectionData = () =>
+    dispatch(pushCollectionToProd({ projectId, collectionName, workspaceName }))
+      .then(unwrapResult)
+      .then(() => toast.success('Collection pushed to production'))
+      .catch(err => { console.error(err); toast.error('Failed to push collection to production'); throw err; });
+
+  const pullCollectionData = (resolutions: Record<string, 'production' | 'workspace'>) =>
+    dispatch(pullCollectionFromProd({ projectId, collectionName, workspaceName, resolutions }))
+      .then(unwrapResult)
+      .then(() => toast.success('Collection updated from production'))
+      .catch(err => { console.error(err); toast.error('Failed to pull collection from production'); throw err; });
+
+  const pushDocumentData = (docId: string) =>
+    dispatch(pushDocumentToProd({ projectId, collectionName, workspaceName, documentId: docId }))
+      .then(unwrapResult)
+      .then(() => toast.success('Document pushed to production'))
+      .catch(err => { console.error(err); toast.error('Failed to push document to production'); throw err; });
+
+  const pullDocumentData = (docId: string) =>
+    dispatch(pullDocumentFromProd({ projectId, collectionName, workspaceName, documentId: docId }))
+      .then(unwrapResult)
+      .then(() => toast.success('Document updated from production'))
+      .catch(err => { console.error(err); toast.error('Failed to pull document from production'); throw err; });
 
   const deleteDocumentData = (docId: string) => {
     dispatch(deleteDocument({ projectId, collectionName, documentId: docId, workspaceName }))
@@ -120,11 +147,16 @@ export const useDocumentData = (
   return {
     collDocumentIds,
     collDocumentStatuses,
+    collDocumentLabels,
     collDocumentContent,
     addDocumentData,
     updateDocumentData,
-    updateStatusData,
     deleteDocumentData,
+    refreshCollection,
+    pushCollectionData,
+    pullCollectionData,
+    pushDocumentData,
+    pullDocumentData,
     fetchVersions,
     restoreVersion,
     versions,

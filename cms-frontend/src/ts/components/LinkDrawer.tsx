@@ -1,13 +1,10 @@
-import { forwardRef, ReactNode, useImperativeHandle, useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Avatar } from '@mui/material';
 import { PageAside, AsideItem, AsideBtn, LogoLink } from 'advi-ui';
-import { useUser } from '@ts/context/UserContext';
+import { useUser } from '@ts/context/userContextValue';
 import dashtroLogo from '@/assets/images/favicon-96x96.png';
-
-export interface DrawerFooterSlotProps {
-  isOpen: boolean;
-}
+import type { DrawerFooterSlotProps } from '@ts/types/constants';
 
 interface LinkDrawerProps {
   className?: string;
@@ -19,10 +16,10 @@ interface LinkDrawerProps {
   footer?: (isOpen: boolean) => ReactNode;
 }
 
-export const LinkDrawer = forwardRef(({
+export const LinkDrawer = ({
   className, items, subItems,
   settingsFooter, footer,
-}: LinkDrawerProps, ref) => {
+}: LinkDrawerProps) => {
   const navigate = useNavigate();
   const { user } = useUser();
   const { project_id } = useParams<{ project_id?: string }>();
@@ -34,10 +31,6 @@ export const LinkDrawer = forwardRef(({
     setOpen(next);
     localStorage.setItem('sidebarCollapsed', String(!next));
   };
-
-  useImperativeHandle(ref, () => ({
-    handleDrawerToggle: handleToggle,
-  }), [open]);
 
   const drawerFooter = (isOpen: boolean): ReactNode => (
     <>
@@ -69,4 +62,4 @@ export const LinkDrawer = forwardRef(({
       footer={drawerFooter}
     />
   );
-});
+};

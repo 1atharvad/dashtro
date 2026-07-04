@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSchema, updateSchemaNames } from '@/redux/schemaPresetSlice';
-import { RootState, AppDispatch } from '@/redux/store';
+import type { RootState, AppDispatch, SchemaVariablesSchema } from '@ts/types/constants';
 
 export const useSchemaMetaData = (projectId: string) => {
   const dispatch = useDispatch<AppDispatch>();
@@ -11,7 +11,7 @@ export const useSchemaMetaData = (projectId: string) => {
   // Derive directly from Redux so all hook instances stay in sync immediately —
   // no local state copy that lags by a render cycle on add/remove.
   const schemaNames: string[] = projectData?._schema_names ?? [];
-  const schemaVariables: Record<string, any> = projectData?._schema_variables ?? {};
+  const schemaVariables: SchemaVariablesSchema = projectData?._schema_variables ?? {};
 
   useEffect(() => {
     if (projectId && !projectData) {

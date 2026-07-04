@@ -1,13 +1,12 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootState, AppDispatch } from '@/redux/store';
+import type { RootState, AppDispatch, Category } from '@ts/types/constants';
 import {
   fetchCategories,
   createCategory as createCategoryAction,
   updateCategory as updateCategoryAction,
   deleteCategory as deleteCategoryAction,
   setSchemaCategory as setSchemaCategoryAction,
-  Category,
 } from '@/redux/categorySlice';
 
 export const useCategory = (projectId: string) => {

@@ -2,20 +2,22 @@ import React, {FormEvent, useEffect, useMemo, useRef, useState} from 'react';
 import {
   Box, Dialog, DialogActions, DialogContent, DialogTitle,
   Divider, Fab, IconButton, InputBase, ListItemIcon, Menu, MenuItem,
-  Popover, TextField, Tooltip, Typography,
+  Popover, Tooltip, Typography,
 } from "@mui/material";
 import { Button } from 'advi-ui';
-import { Plus, X, FolderOpen, GripVertical, MoreHorizontal, Trash2, Lock, Unlock, FileJson, Download, Upload } from 'lucide-react';
+import { unwrapResult } from '@reduxjs/toolkit';
+import { Plus, X, FolderOpen, GripVertical, MoreHorizontal, Trash2, Lock, Unlock, Download, Upload } from 'lucide-react';
 import { Badge } from 'advi-ui';
 import { Loading } from 'advi-ui';
 import { SchemaEntry } from "@ts/components/SchemaEntry";
+import type { SchemaVariablesSchema, NewSchemaFieldInput, SchemaEntryData } from '@ts/types/constants';
 import { PageForm } from '@ts/components/PageForm';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSchemaMetaData } from '@/hooks/useSchemaMetaData';
 import { useSchemaData } from '@/hooks/useSchema';
 import { useCategory } from '@/hooks/useCategory';
 import {
-  DndContext, DragEndEvent, DragStartEvent, PointerSensor,
+  DndContext, DragEndEvent, PointerSensor,
   useSensor, useSensors, closestCenter,
 } from '@dnd-kit/core';
 import {
@@ -26,19 +28,17 @@ import { CSS } from '@dnd-kit/utilities';
 
 const SortableSchemaEntry = ({
   dndId,
-  entry,
   isExpanded,
   locked,
   ...props
 }: {
   dndId: string;
-  entry: any;
   isExpanded: boolean;
   locked?: boolean;
   id: number | string;
-  schemaStructure: any;
+  schemaStructure: SchemaVariablesSchema;
   openedPanelList: [string[], React.Dispatch<React.SetStateAction<string[]>>];
-  schemaEntryState: [any, React.Dispatch<React.SetStateAction<any>>];
+  schemaEntryState: [SchemaEntryData, (updated: SchemaEntryData) => void];
   deleteEntry: () => void;
   disabled?: boolean;
 }) => {
@@ -69,18 +69,16 @@ const SortableSchemaEntry = ({
 
 export const SchemaComponent = ({
   componentName,
-  newSchema = false,
-  MenuIcon
+  newSchema = false
 }: {
   componentName: string,
-  newSchema?: boolean,
-  MenuIcon: () => JSX.Element
+  newSchema?: boolean
 }) => {
   const navigate = useNavigate();
   const { project_id = '' } = useParams<{ project_id: string }>();
   const { schemaVariables, schemaNames, removeSchemaName } = useSchemaMetaData(project_id);
   const { categories, addCategory, getCategoryForSchema, getGeneralSchemas, getSchemasInCategory, assignSchemaCategory } = useCategory(project_id);
-  const [schemaStructure, setSchemaStructure] = useState<any>({});
+  const [schemaStructure, setSchemaStructure] = useState<SchemaVariablesSchema>({});
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
   const [folderFilter, setFolderFilter] = useState('');
   const filterInputRef = useRef<HTMLInputElement>(null);
@@ -103,10 +101,10 @@ export const SchemaComponent = ({
       _reference_schema: { ...schemaStructure._reference_schema },
     };
   }, [schemaStructure, allowedSchemaNames]);
-  const [schema, setSchema] = useState<{[key: string]: any}[]>([]);
-  const [emptySchemaEntry, setEmptySchemaEntry] = useState<{[key: string]: any}>({});
-  const [newSchemaEntry, setNewSchemaEntry] = useState<{[key: string]: any}[]>([]);
-  const [updatedSchemaDetails, setUpdatedSchemaDetails] = useState<{[key: string]: any}>({});
+  const [schema, setSchema] = useState<SchemaEntryData[]>([]);
+  const [emptySchemaEntry, setEmptySchemaEntry] = useState<SchemaEntryData>({});
+  const [newSchemaEntry, setNewSchemaEntry] = useState<SchemaEntryData[]>([]);
+  const [updatedSchemaDetails, setUpdatedSchemaDetails] = useState<Record<string, NewSchemaFieldInput>>({});
   const [openedPanel, setOpenedPanel] = useState<string[]>([]);
   const [deleteSchemaOpen, setDeleteSchemaOpen] = useState(false);
   const [actionsAnchor, setActionsAnchor] = useState<null | HTMLElement>(null);
@@ -124,7 +122,7 @@ export const SchemaComponent = ({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleDragStart = (_event: DragStartEvent) => setOpenedPanel([]);
+  const handleDragStart = () => setOpenedPanel([]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -141,16 +139,16 @@ export const SchemaComponent = ({
     const schemaMap = Object.fromEntries(schema.map(e => [String(e['_id']), e]));
     const newMap = Object.fromEntries(newSchemaEntry.map((e, i) => [`new-${i}`, e]));
 
-    const newSchemaArr: any[] = [];
-    const newNewArr: any[] = [];
+    const newSchemaArr: SchemaEntryData[] = [];
+    const newNewArr: SchemaEntryData[] = [];
     reordered.forEach(id => {
       if (schemaMap[id]) newSchemaArr.push(schemaMap[id]);
       else if (newMap[id]) newNewArr.push(newMap[id]);
     });
 
-    const indexUpdates: Record<string, any> = {};
+    const indexUpdates: Record<string, NewSchemaFieldInput> = {};
     newSchemaArr.forEach((e, i) => {
-      if (e['_index'] !== i + 1) indexUpdates[e['_id']] = { _index: i + 1 };
+      if (e['_index'] !== i + 1) indexUpdates[String(e['_id'])] = { _index: i + 1 };
     });
     if (Object.keys(indexUpdates).length > 0) updateSchemaData(indexUpdates);
 
@@ -160,10 +158,10 @@ export const SchemaComponent = ({
 
   useEffect(() => {
     if (!newSchema) {
-      setSchema(schemaNameData);
+      setSchema(schemaNameData as unknown as SchemaEntryData[]);
       setNewSchemaEntry([]);
     }
-  }, [schemaNameData]);
+  }, [schemaNameData, newSchema]);
 
   useEffect(() => {
     setOpenedPanel([]);
@@ -171,12 +169,12 @@ export const SchemaComponent = ({
 
   useEffect(() => {
     if (schemaVariables) {
-      const emptySchema = Object.entries(schemaVariables).reduce((acc: any, [_key, value]: [string, any]) => {
-        if (_key == '_id') return acc;
-        acc[_key] = value.default || "";
+      const emptySchema = Object.entries(schemaVariables).reduce((acc: SchemaEntryData, [key, value]) => {
+        if (key == '_id') return acc;
+        acc[key] = value.default ?? "";
 
-        if (value.type === 'radio') acc[_key] = value.required;
-        if (_key == '_schema_name') acc[_key] = componentName;
+        if (value.type === 'radio') acc[key] = !!value.required;
+        if (key == '_schema_name') acc[key] = componentName;
         return acc;
       }, {});
 
@@ -184,15 +182,15 @@ export const SchemaComponent = ({
       setEmptySchemaEntry(emptySchema);
       setNewSchemaEntry(newSchema ? [{...emptySchema, '_index': 1}] : []);
     }
-  }, [schemaVariables]);
+  }, [schemaVariables, componentName, newSchema]);
 
-  const addNewEntry = (event: any) => {
+  const addNewEntry = (event: FormEvent) => {
     event.preventDefault();
-    setNewSchemaEntry((prev) => [...prev, Object.entries(emptySchemaEntry).reduce((acc: any, [_key, value]: [string, any]) => {
-      if (_key === '_index') {
+    setNewSchemaEntry((prev) => [...prev, Object.entries(emptySchemaEntry).reduce((acc: SchemaEntryData, [key, value]) => {
+      if (key === '_index') {
         const index = schema.length + newSchemaEntry.length + 1;
-        acc[_key] = index;
-      } else acc[_key] = value
+        acc[key] = index;
+      } else acc[key] = value
       return acc;
     }, {})]);
   }
@@ -213,7 +211,7 @@ export const SchemaComponent = ({
   };
 
   const handleDeleteSchema = () => {
-    schema.forEach(entry => deleteSchemaData(entry['_id']));
+    schema.forEach(entry => deleteSchemaData(String(entry['_id'])));
     removeSchemaName(componentName);
     setDeleteSchemaOpen(false);
     navigate(`/projects/${project_id}/schema/`);
@@ -244,7 +242,7 @@ export const SchemaComponent = ({
       for (const file of importFiles) {
         const text = await readFile(file);
         const parsed = JSON.parse(text);
-        let fields: any[];
+        let fields: Record<string, unknown>[];
 
         if (Array.isArray(parsed)) {
           fields = parsed;
@@ -258,7 +256,7 @@ export const SchemaComponent = ({
         // compute _index inside the updater so concurrent reads don't collide
         setNewSchemaEntry(prev => {
           const startIndex = schema.length + prev.length;
-          const newEntries = fields.map((field: any, i: number) => ({
+          const newEntries = fields.map((field, i: number) => ({
             ...emptySchemaEntry,
             ...field,
             _schema_name: componentName,
@@ -273,21 +271,21 @@ export const SchemaComponent = ({
         if (existing) {
           assignSchemaCategory(componentName, existing.id);
         } else {
-          const result = await addCategory(lastFolderName) as any;
-          const newCat = result?.payload?.category;
-          if (newCat?.id) assignSchemaCategory(componentName, newCat.id);
+          const result = unwrapResult(await addCategory(lastFolderName));
+          if (result.category?.id) assignSchemaCategory(componentName, result.category.id);
         }
       }
 
       setImportFiles([]);
       setImportOpen(false);
-    } catch (err: any) {
-      setImportError(err.message ?? 'Invalid JSON');
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Invalid JSON');
     }
   };
 
   const handleDownload = () => {
-    const fields = schema.map(({ _id, _schema_name, _index, ...rest }: any) => rest);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const fields = schema.map(({ _id, _schema_name, _index, ...rest }) => rest);
     const exportable = {
       _folder: currentCategoryName !== 'General' ? currentCategoryName : '',
       fields,
@@ -381,7 +379,6 @@ export const SchemaComponent = ({
             formTitle={componentName}
             submitBtnText='Save Schema'
             readOnly={isLocked}
-            MenuIcon={MenuIcon}
             setOpenedPanel={setOpenedPanel}
             extraButtons={[folderBadge].filter(Boolean) as React.ReactNode[]}
             afterSubmitButtons={newSchema ? [
@@ -438,30 +435,29 @@ export const SchemaComponent = ({
                 ]}
                 strategy={verticalListSortingStrategy}
               >
-                {schema && schema.map((entry: any, index: number) => (
+                {schema && schema.map((entry, index: number) => (
                   <SortableSchemaEntry
-                      key={entry['_id']}
+                      key={String(entry['_id'])}
                       dndId={String(entry['_id'])}
-                      entry={entry}
                       locked={isLocked}
                       disabled={isLocked}
-                      id={entry['_id']}
+                      id={entry['_id'] as string | number}
                       isExpanded={openedPanel.includes(`panel${entry['_id']}`)}
                       schemaStructure={filteredSchemaStructure}
                       openedPanelList={[openedPanel, setOpenedPanel]}
                       schemaEntryState={[entry, (updatedValue) =>
                         setSchema((prevSchema) => {
-                          const schemaId = entry['_id'];
+                          const schemaId = String(entry['_id']);
                           const updatedFields = Object.keys(prevSchema[index])
-                            .reduce((acc: {[key: string]: string}, key: string) => {
-                              const updated_val = (updatedValue as {[key: string]: string})[key];
+                            .reduce((acc: SchemaEntryData, key: string) => {
+                              const updated_val = updatedValue[key];
                               if (prevSchema[index][key] !== updated_val) acc[key] = updated_val;
                               return acc;
                             }, {});
                           setUpdatedSchemaDetails((prevUpdate) => {
                             if (!(schemaId in prevUpdate)) prevUpdate[schemaId] = {};
-                            return Object.entries(prevUpdate).reduce((acc: {[key: string]: any}, [_key, value]) => {
-                              acc[_key] = _key === schemaId ? {...value, ...updatedFields} : value;
+                            return Object.entries(prevUpdate).reduce((acc: Record<string, NewSchemaFieldInput>, [key, value]) => {
+                              acc[key] = key === schemaId ? {...value, ...updatedFields} : value;
                               return acc;
                             }, {});
                           });
@@ -469,17 +465,16 @@ export const SchemaComponent = ({
                         })
                       ]}
                       deleteEntry={() => {
-                        deleteSchemaData(entry['_id']);
+                        deleteSchemaData(String(entry['_id']));
                         setOpenedPanel(p => p.filter(panel => panel !== `panel${entry['_id']}`));
                         if (schema.length <= 1) navigate(`/projects/${project_id}/schema/`);
                       }}
                   />
                 ))}
-                {newSchemaEntry && newSchemaEntry.map((newEntry: any, index: number) => (
+                {newSchemaEntry && newSchemaEntry.map((newEntry, index: number) => (
                   <SortableSchemaEntry
                       key={`new-${index}`}
                       dndId={`new-${index}`}
-                      entry={newEntry}
                       locked={isLocked}
                       disabled={isLocked}
                       id={`new-${index}`}

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { createCollection, fetchCollections, updateCollection, deleteCollection } from '@/redux/collectionSlice';
-import { RootState, AppDispatch } from '@/redux/store';
+import type { SchemaCollectionItem, CollectionUiSchema, NewCollectionInput, RootState, AppDispatch } from '@ts/types/constants';
 import { toast } from 'advi-ui';
 
 export const useCollectionData = (projectId: string) => {
@@ -9,8 +9,8 @@ export const useCollectionData = (projectId: string) => {
   const { byProject, loading, error } = useSelector((state: RootState) => state.collections);
   const projectData = byProject[projectId];
 
-  const collections: Record<string, any>[] = projectData?._schema_collections ?? [];
-  const collectionStructure: any = projectData?._collection_schema_variables ?? {};
+  const collections: SchemaCollectionItem[] = projectData?._schema_collections ?? [];
+  const collectionStructure: CollectionUiSchema = projectData?._collection_schema_variables ?? {};
 
   useEffect(() => {
     if (projectId) dispatch(fetchCollections(projectId));
@@ -20,7 +20,7 @@ export const useCollectionData = (projectId: string) => {
     if (error) console.error("Error fetching collections:", error);
   }, [error]);
 
-  const addCollectionData = (newCollectionDetails: Record<string, any>[]) => {
+  const addCollectionData = (newCollectionDetails: NewCollectionInput[]) => {
     Promise.all(
       newCollectionDetails.map(newCollection =>
         dispatch(createCollection({ projectId, newCollection }))
@@ -29,7 +29,7 @@ export const useCollectionData = (projectId: string) => {
     ).then(() => toast.success('Collection created'));
   };
 
-  const updateCollectionData = (updatedCollectionDetails: Record<string, any>) => {
+  const updateCollectionData = (updatedCollectionDetails: Record<string, NewCollectionInput>) => {
     Promise.all(
       Object.entries(updatedCollectionDetails).map(([collectionId, updatedCollection]) =>
         dispatch(updateCollection({ projectId, collectionId, updatedCollection }))

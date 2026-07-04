@@ -1,14 +1,18 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchWorkspaces, createWorkspace, deleteWorkspace, pushToProd, clearPushSuccess
+  fetchWorkspaces, createWorkspace, deleteWorkspace, pushToProd, clearPushSuccess,
+  fetchWorkspaceDiff, pullFromProd,
 } from '@/redux/workspaceSlice';
-import { RootState, AppDispatch } from '@/redux/store';
+import type { RootState, AppDispatch } from '@ts/types/constants';
 
 export const useWorkspaceData = (projectId: string) => {
   const dispatch = useDispatch<AppDispatch>();
-  const { byProject, loading, error, pushSuccess } = useSelector((state: RootState) => state.workspaces);
+  const { byProject, diffByWorkspace, loading, error, pushSuccess } =
+    useSelector((state: RootState) => state.workspaces);
   const workspaces = byProject[projectId] ?? [];
+
+  const getCachedDiff = (workspaceName: string) => diffByWorkspace[`${projectId}:${workspaceName}`];
 
   useEffect(() => {
     if (projectId) dispatch(fetchWorkspaces(projectId));
@@ -25,6 +29,14 @@ export const useWorkspaceData = (projectId: string) => {
 
   const resetPushSuccess = () => dispatch(clearPushSuccess());
 
+  const fetchDiff = (workspaceName: string) =>
+    dispatch(fetchWorkspaceDiff({ projectId, workspaceName })).unwrap();
+
+  const pullWorkspaceFromProd = (
+    workspaceName: string,
+    resolutions: Record<string, 'production' | 'workspace'>
+  ) => dispatch(pullFromProd({ projectId, workspaceName, resolutions })).unwrap();
+
   return {
     workspaces,
     loading,
@@ -34,5 +46,8 @@ export const useWorkspaceData = (projectId: string) => {
     removeWorkspace,
     pushWorkspaceToProd,
     resetPushSuccess,
+    fetchDiff,
+    getCachedDiff,
+    pullWorkspaceFromProd,
   };
 };

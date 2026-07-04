@@ -11,12 +11,15 @@ type LinkValue = {
 
 const DEFAULT: LinkValue = { url: '', name: '', is_external_link: false, classes: '', icon_id: '' };
 
-const parseValue = (raw: any): LinkValue => {
-  if (raw && typeof raw === 'object') return {
-    ...DEFAULT,
-    ...raw,
-    is_external_link: raw.is_external_link === true || raw.is_external_link === 'true',
-  };
+const parseValue = (raw: unknown): LinkValue => {
+  if (raw && typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+    return {
+      ...DEFAULT,
+      ...r,
+      is_external_link: r.is_external_link === true || r.is_external_link === 'true',
+    };
+  }
   return DEFAULT;
 };
 
@@ -27,7 +30,7 @@ export const LinkField = ({
   disabled = false,
 }: {
   label: string;
-  value: any;
+  value: unknown;
   onChange: (value: LinkValue) => void;
   disabled?: boolean;
 }) => {
@@ -45,7 +48,7 @@ export const LinkField = ({
   const fields = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-        <TextField {...sharedProps} label="URL" type="url" value={link.url} onChange={set('url')} placeholder="https://example.com" />
+        <TextField {...sharedProps} label="URL" type="text" value={link.url} onChange={set('url')} placeholder="https://example.com" />
         {link.url && (
           <Tooltip title="Open in new tab">
             <IconButton size="small" href={link.url} target="_blank" rel="noopener noreferrer">

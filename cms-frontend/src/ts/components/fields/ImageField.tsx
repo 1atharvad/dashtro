@@ -6,22 +6,26 @@ import { authFetch } from '@ts/utils/auth';
 
 type ImageValue = {
   url: string;
-  alt: string;
+  alt_text: string;
   width: number | '';
   height: number | '';
   classes: string;
 };
 
-const DEFAULT: ImageValue = { url: '', alt: '', width: '', height: '', classes: '' };
+const DEFAULT: ImageValue = { url: '', alt_text: '', width: '', height: '', classes: '' };
 
-const parseValue = (raw: any): ImageValue => {
-  if (raw && typeof raw === 'object') return {
-    ...DEFAULT,
-    ...raw,
-    alt: raw.alt ?? '',
-    width: raw.width !== '' && raw.width != null ? Number(raw.width) : '',
-    height: raw.height !== '' && raw.height != null ? Number(raw.height) : '',
-  };
+const parseValue = (raw: unknown): ImageValue => {
+  if (raw && typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+    return {
+      ...DEFAULT,
+      ...r,
+      url: (r.url ?? r.src ?? '') as string,
+      alt_text: (r.alt_text ?? r.alt ?? '') as string,
+      width: r.width !== '' && r.width != null ? Number(r.width) : '',
+      height: r.height !== '' && r.height != null ? Number(r.height) : '',
+    };
+  }
   return DEFAULT;
 };
 
@@ -32,7 +36,7 @@ export const ImageField = ({
   disabled = false,
 }: {
   label: string;
-  value: any;
+  value: unknown;
   onChange: (value: ImageValue) => void;
   disabled?: boolean;
 }) => {
@@ -62,8 +66,8 @@ export const ImageField = ({
       }
       const data = await res.json();
       onChange({ ...img, url: data.url });
-    } catch (err: any) {
-      setError(err.message ?? 'Upload failed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -93,8 +97,10 @@ export const ImageField = ({
               <a href={img.url} target="_blank" rel="noopener noreferrer" style={{ display: 'contents' }}>
                 <img
                   src={img.url}
-                  alt={img.alt || 'preview'}
+                  alt={img.alt_text || 'preview'}
                   className="image-field-preview-img"
+                  loading="lazy"
+                  decoding="async"
                   style={{
                     width: img.width !== '' ? `${img.width}px` : undefined,
                     height: img.height !== '' ? `${img.height}px` : undefined,
@@ -153,8 +159,8 @@ export const ImageField = ({
           {...sharedProps}
           fullWidth
           label="Alt Text"
-          value={img.alt}
-          onChange={set('alt')}
+          value={img.alt_text}
+          onChange={set('alt_text')}
           placeholder="Describe the image"
         />
 

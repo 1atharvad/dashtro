@@ -7,6 +7,8 @@ import documentReducer from "@/redux/documentSlice";
 import projectReducer from "@/redux/projectSlice";
 import workspaceReducer from "@/redux/workspaceSlice";
 import categoryReducer from "@/redux/categorySlice";
+import richTextComponentReducer from "@/redux/richTextComponentSlice";
+import realtimeDbReducer from "@/redux/realtimeDbSlice";
 
 export const store = configureStore({
   reducer: {
@@ -18,8 +20,7 @@ export const store = configureStore({
     projects: projectReducer,
     workspaces: workspaceReducer,
     categories: categoryReducer,
+    richTextComponents: richTextComponentReducer,
+    realtimeDb: realtimeDbReducer,
   },
 });
-
-export type RootState = ReturnType<typeof store.getState>;
-export type AppDispatch = typeof store.dispatch;

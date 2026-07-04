@@ -3,8 +3,7 @@ import { Accordion, AccordionDetails, AccordionSummary, Divider, Grid, MenuItem,
 import { Trash2 as DeleteIcon, ChevronDown as ExpandMoreIcon } from "lucide-react";
 import { Button } from "advi-ui";
 import { ModalContentBtn } from "@ts/components/ModalContentBtn";
-
-type CollectionEntryData = {[key: string]: string}
+import type { CollectionUiSchema, CollectionEntryData } from '@ts/types/constants';
 
 export const CollectionEntry = ({
   collectionStructure,
@@ -13,8 +12,8 @@ export const CollectionEntry = ({
   deleteEntry,
   id
 }: {
-  collectionStructure: {[key: string]: string},
-  collectionEntryState: [CollectionEntryData, Dispatch<SetStateAction<CollectionEntryData>>],
+  collectionStructure: CollectionUiSchema,
+  collectionEntryState: [CollectionEntryData, (updated: CollectionEntryData) => void],
   openedPanelList: [string[], Dispatch<SetStateAction<string[]>>],
   deleteEntry: () => void,
   id: number | string
@@ -37,18 +36,22 @@ export const CollectionEntry = ({
     setCollectionEntryData({ ...collectionEntryData, [fieldName]: e.target.value });
   };
 
+  // Intentionally checks only the initial value — this locks the schema
+  // dropdown for entries that already had a schema assigned when the
+  // form opened, and should not re-lock/unlock as the user types.
   useEffect(() => {
     if (collectionEntryData['_schema_name']) setSchemaNamePresent(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const collectionName = collectionEntryData['_collection_name'];
     setName(collectionName
-        ? snakeToCamelCase(collectionName)
+        ? snakeToCamelCase(String(collectionName))
         : entryIsDirty
             ? '<em>No Collection Name</em>'
             : '<em>New Entry - Collection</em>');
-  }, [collectionEntryData]);
+  }, [collectionEntryData, entryIsDirty]);
 
   const panelKey = `panel${id}`;
   const isOpen = openedPanel.includes(panelKey);
@@ -57,15 +60,15 @@ export const CollectionEntry = ({
     <>
       <Grid container spacing={2} sx={{ mt: 1 }}>
         <Grid container size={12} spacing={2}>
-          {collectionStructure && collectionEntryData ? Object.entries(collectionStructure).filter(([_, value]: [string, any]) => {
+          {collectionStructure && collectionEntryData ? Object.entries(collectionStructure).filter(([, value]) => {
             if (value.hide_field_for) {
-              return !Object.entries(value.hide_field_for).find(([_key, _value]: [string, any]) => {
+              return !Object.entries(value.hide_field_for).find(([_key, _value]) => {
                 if (_value === 'all') return true;
-                return _value.includes(collectionEntryData[_key]);
+                return _value.includes(String(collectionEntryData[_key]));
               });
             }
             return true;
-          }).map(([key, value]: [string, any]) => {
+          }).map(([key, value]) => {
             const labelName = key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
             const labelValue = collectionEntryData[key] || '';
 
@@ -97,7 +100,7 @@ export const CollectionEntry = ({
                       value={labelValue}
                       onChange={handleSelectChange(key)}
                       disabled={schemaNamePresent}>
-                    {value.choices.map((c: string) => (
+                    {(value.choices ?? []).map((c: string) => (
                       <MenuItem key={c} value={c}>{c}</MenuItem>
                     ))}
                   </TextField>

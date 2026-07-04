@@ -13,12 +13,16 @@ export const isTokenExpired = (token: string): boolean => {
   }
 };
 
-const redirectToLogin = () => {
-  const path = window.location.pathname;
-  if (path === '/login/' || path === '/signup/') return;
+export const logout = () => {
   localStorage.removeItem('idToken');
   localStorage.removeItem('refreshToken');
   window.location.href = '/login/';
+};
+
+const redirectToLogin = () => {
+  const path = window.location.pathname;
+  if (path === '/login/' || path === '/signup/') return;
+  logout();
 };
 
 export const refreshTokens = async (): Promise<boolean> => {

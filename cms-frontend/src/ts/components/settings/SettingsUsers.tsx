@@ -8,7 +8,7 @@ import { UserPlus, Trash2 } from 'lucide-react';
 import { Button } from 'advi-ui';
 import { API_BASE_URL } from '@ts/config';
 import { authFetch } from '@ts/utils/auth';
-import { useUser } from '@ts/context/UserContext';
+import { useUser } from '@ts/context/userContextValue';
 
 type User = { uid: string; email: string; first_name: string; last_name: string; role: string };
 

@@ -6,7 +6,6 @@ export const PageForm = ({
   formType,
   formTitle,
   pageNavigation,
-  MenuIcon,
   submitBtnText,
   onSubmit,
   setOpenedPanel,
@@ -19,7 +18,6 @@ export const PageForm = ({
   formType: string,
   formTitle: string,
   pageNavigation?: ReactNode,
-  MenuIcon?: () => JSX.Element,
   submitBtnText: string,
   onSubmit: (event: FormEvent) => void,
   setOpenedPanel?: Dispatch<SetStateAction<string[]>>
@@ -54,12 +52,12 @@ export const PageForm = ({
     <Box
         ref={formRef}
         component="form"
+        noValidate
         onKeyDown={handleKeyDown}
         onSubmit={onSubmit}
         className={`${formType}-component`}>
       <Grid container columnSpacing={2} className={`${formType}-component-title-bar`}>
         <Grid container spacing={0} className={`${formType}-component-title-wrapper`}>
-          {MenuIcon && <Grid><MenuIcon/></Grid>}
           <Grid>
             {pageNavigation && <Typography
                 component="p" noWrap
@@ -91,25 +89,20 @@ export const PageForm = ({
 }
 
 export const PageWrapper = ({
-  wrapperType,
   wrapperTitle,
-  MenuIcon,
   extraButtons,
   children
 }: {
-  wrapperType: string,
   wrapperTitle: string,
-  MenuIcon: () => JSX.Element,
   extraButtons?: ReactNode[]
   children: ReactNode
 }) => {
   return (
     <Box className='collection-component'>
-      <Grid container columnSpacing={2} className={`${wrapperType}-component-title-bar`}>
-        <Grid container spacing={0} className={`${wrapperType}-component-title-wrapper`}>
-        <Grid><MenuIcon/></Grid>
+      <Grid container columnSpacing={2} className="document-component-title-bar">
+        <Grid container spacing={0} className="document-component-title-wrapper">
           <Grid>
-            <Typography component="h2" noWrap className={`${wrapperType}-component-title`}>
+            <Typography component="h2" noWrap className="document-component-title">
               {wrapperTitle}
             </Typography>
           </Grid>

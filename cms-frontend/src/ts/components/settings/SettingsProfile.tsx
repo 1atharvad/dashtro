@@ -3,8 +3,8 @@ import { Avatar, Box, Divider, IconButton, TextField, Typography } from '@mui/ma
 import { Camera as PhotoCamera } from 'lucide-react';
 import { Button, Card, CardContent, Badge, toast } from 'advi-ui';
 import { API_BASE_URL } from '@ts/config';
-import { authFetch } from '@ts/utils/auth';
-import { useUser } from '@ts/context/UserContext';
+import { authFetch, logout } from '@ts/utils/auth';
+import { useUser } from '@ts/context/userContextValue';
 
 export const SettingsProfile = () => {
   const { user: currentUser, refreshUser } = useUser();
@@ -105,6 +105,21 @@ export const SettingsProfile = () => {
                 Save Changes
               </Button>
             </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Danger zone */}
+      <Card>
+        <CardContent style={{ padding: '1.5rem' }}>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>Account</Typography>
+          <Divider sx={{ mb: 2 }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box>
+              <Typography variant="body2" fontWeight={500}>Log Out</Typography>
+              <Typography variant="caption" color="text.secondary">Sign out of your account on this device.</Typography>
+            </Box>
+            <Button variant="destructive" onClick={logout}>Log Out</Button>
           </Box>
         </CardContent>
       </Card>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, MenuItem, Select, Tooltip, Typography, FormControl } from '@mui/material';
+import { Box, Tooltip, Typography } from '@mui/material';
+import { Select } from 'advi-ui';
 import { API_BASE_URL } from '@ts/config';
 import { authFetch } from '@ts/utils/auth';
 import { ACTION_LABELS, MONTHS, DAY_LABELS, MONTH_LABELS, HEATMAP_CELL, HEATMAP_GAP, HEATMAP_CELL_MONTH } from '@ts/data/content';
@@ -61,11 +62,7 @@ const HeatCell = ({ day, intensity, size = HEATMAP_CELL }: CellProps) => {
   return <Tooltip title={label} placement="top" arrow>{cell}</Tooltip>;
 };
 
-type Props = {
-  totalOps: number;
-};
-
-export const AuditHeatmap = ({ totalOps }: Props) => {
+export const AuditHeatmap = () => {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
 
@@ -160,25 +157,27 @@ export const AuditHeatmap = ({ totalOps }: Props) => {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Controls */}
       <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-        <FormControl size="small" sx={{ minWidth: 100 }}>
-          <Select value={viewMode} onChange={e => setViewMode(e.target.value as ViewMode)}>
-            <MenuItem value="year">Year</MenuItem>
-            <MenuItem value="month">Month</MenuItem>
-          </Select>
-        </FormControl>
+        <Select
+          value={viewMode}
+          onChange={v => setViewMode(v as ViewMode)}
+          options={[
+            { value: 'year', label: 'Year' },
+            { value: 'month', label: 'Month' },
+          ]}
+        />
 
-        <FormControl size="small" sx={{ minWidth: 90 }}>
-          <Select value={year} onChange={e => setYear(Number(e.target.value))}>
-            {years.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
-          </Select>
-        </FormControl>
+        <Select
+          value={String(year)}
+          onChange={v => setYear(Number(v))}
+          options={years.map(y => ({ value: String(y), label: String(y) }))}
+        />
 
         {viewMode === 'month' && (
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <Select value={month} onChange={e => setMonth(Number(e.target.value))}>
-              {MONTHS.map((m, i) => <MenuItem key={i} value={i + 1}>{m}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <Select
+            value={String(month)}
+            onChange={v => setMonth(Number(v))}
+            options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))}
+          />
         )}
 
         <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>

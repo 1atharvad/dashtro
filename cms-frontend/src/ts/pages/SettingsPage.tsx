@@ -1,10 +1,9 @@
-import { useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { UserCircle, Lock, Users, Code2, Puzzle, ClipboardList } from 'lucide-react';
 import { AsideItem, AsideText, Switch } from 'advi-ui';
 import { LinkDrawer } from '@ts/components/LinkDrawer';
-import { useColorMode } from '@ts/theme/ThemeProvider';
+import { useColorMode } from '@ts/theme/colorModeContext';
 import { SettingsProfile } from '@ts/components/settings/SettingsProfile';
 import { SettingsSecurity } from '@ts/components/settings/SettingsSecurity';
 import { SettingsUsers } from '@ts/components/settings/SettingsUsers';
@@ -18,7 +17,6 @@ import '@/scss/Settings.scss';
 export const SettingsPage = () => {
   const navigate = useNavigate();
   const { setting_type } = useParams();
-  const drawerRef = useRef<{ handleDrawerToggle: () => void }>(null);
   const { mode, toggleColorMode } = useColorMode();
   const checked = mode === 'dark';
 
@@ -48,7 +46,6 @@ export const SettingsPage = () => {
       <LinkDrawer
         className="settings-drawer"
         items={navItems}
-        ref={drawerRef}
 
         footer={(isOpen) => isOpen ? (
           <AsideText

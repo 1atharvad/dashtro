@@ -34,7 +34,7 @@ export const ModalContentBtn = ({
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
           {modalTitle}
-          <IconButton size="small" onClick={handleClose}>
+          <IconButton size="small" onClick={handleClose} aria-label="Close">
             <CloseIcon className="h-4 w-4"/>
           </IconButton>
         </DialogTitle>

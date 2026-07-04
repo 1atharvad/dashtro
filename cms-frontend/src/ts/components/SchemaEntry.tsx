@@ -7,8 +7,7 @@ import { Trash2, ChevronDown } from 'lucide-react';
 import { Button } from 'advi-ui';
 import { ModalContentBtn } from '@ts/components/ModalContentBtn';
 import { ColorPickerField } from '@ts/components/fields/ColorPickerField';
-
-type SchemaEntryData = {[key: string]: string}
+import type { SchemaVariablesSchema, SchemaEntryData } from '@ts/types/constants';
 
 export const SchemaEntry = ({
   id,
@@ -20,8 +19,8 @@ export const SchemaEntry = ({
   disabled = false,
 }: {
   id: number | string,
-  schemaStructure: {[key: string]: string | boolean},
-  schemaEntryState: [SchemaEntryData, Dispatch<SetStateAction<SchemaEntryData>>],
+  schemaStructure: SchemaVariablesSchema,
+  schemaEntryState: [SchemaEntryData, (updated: SchemaEntryData) => void],
   openedPanelList: [string[], Dispatch<SetStateAction<string[]>>],
   deleteEntry: () => void,
   dragHandle?: ReactNode,
@@ -49,15 +48,15 @@ export const SchemaEntry = ({
 
   const handleSelectChange = (fieldName: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const updated = { ...schemaEntryData, [fieldName]: e.target.value };
-    if (fieldName === '_type' && e.target.value === 'Boolean' && !['true', 'false'].includes(updated['_default_value'])) {
+    if (fieldName === '_type' && e.target.value === 'Boolean' && !['true', 'false'].includes(String(updated['_default_value']))) {
       updated['_default_value'] = 'false';
     }
     setSchemaEntryData(updated);
   };
 
   const handleMultiSelectChange = (fieldName: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setSchemaEntryData({ ...schemaEntryData, [fieldName]: (typeof val === 'string' ? val.split(',') : val) as unknown as string });
+    const val = e.target.value as unknown as string | string[];
+    setSchemaEntryData({ ...schemaEntryData, [fieldName]: typeof val === 'string' ? val.split(',') : val });
   };
 
   const panelKey = `panel${id}`;
@@ -67,15 +66,15 @@ export const SchemaEntry = ({
     <>
       <Grid container spacing={2} sx={{ mt: 1 }}>
         <Grid container size={8} spacing={2}>
-          {schemaStructure && schemaEntryData ? Object.entries(schemaStructure).filter(([_, value]: [string, any]) => {
+          {schemaStructure && schemaEntryData ? Object.entries(schemaStructure).filter(([, value]) => {
             if (value.hide_field_for) {
-              return !Object.entries(value.hide_field_for).find(([_key, _value]: [string, any]) => {
+              return !Object.entries(value.hide_field_for).find(([_key, _value]) => {
                 if (_value === 'all') return true;
-                return _value.includes(schemaEntryData[_key]);
+                return _value.includes(String(schemaEntryData[_key]));
               });
             }
             return true;
-          }).map(([key, value]: [string, any], index: number) => {
+          }).map(([key, value], index: number) => {
             setTouched({key: false});
             const labelOverrides: Record<string, string> = { _reference_schema: 'Reference Collection' };
             const labelName = labelOverrides[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
@@ -100,7 +99,7 @@ export const SchemaEntry = ({
                   <ColorPickerField
                     name={key}
                     label={labelName}
-                    value={labelValue || '#000000'}
+                    value={String(labelValue || '#000000')}
                     onChange={(fieldName, val) => setSchemaEntryData({ ...schemaEntryData, [fieldName]: val })}
                   />
                 ) : value.type === 'input' && key === '_default_value' && schemaEntryData['_type'] === 'Date' ? (
@@ -152,14 +151,14 @@ export const SchemaEntry = ({
                       disabled={disabled}
                       name={key}
                       label={labelName}
-                      value={value.choices.includes(labelValue) ? labelValue : (labelValue || '')}
+                      value={(value.choices ?? []).includes(String(labelValue)) ? labelValue : (labelValue || '')}
                       onChange={handleSelectChange(key)}>
-                    {labelValue && !value.choices.includes(labelValue) && (
-                      <MenuItem key={labelValue} value={labelValue} disabled>
+                    {labelValue && !(value.choices ?? []).includes(String(labelValue)) && (
+                      <MenuItem key={String(labelValue)} value={String(labelValue)} disabled>
                         {labelValue} (unavailable)
                       </MenuItem>
                     )}
-                    {value.choices.map((c: string) => (
+                    {(value.choices ?? []).map((c: string) => (
                       <MenuItem key={c} value={c}>{c}</MenuItem>
                     ))}
                   </TextField>
@@ -174,12 +173,12 @@ export const SchemaEntry = ({
                       onChange={handleMultiSelectChange(key)}
                       slotProps={{ select: { multiple: true } }}>
                     {(Array.isArray(labelValue) ? labelValue : [])
-                      .filter((v: string) => !value.choices.includes(v))
+                      .filter((v: string) => !(value.choices ?? []).includes(v))
                       .map((v: string) => (
                         <MenuItem key={v} value={v} disabled>{v} (unavailable)</MenuItem>
                       ))
                     }
-                    {value.choices.map((c: string) => (
+                    {(value.choices ?? []).map((c: string) => (
                       <MenuItem key={c} value={c}>{c}</MenuItem>
                     ))}
                   </TextField>
@@ -200,7 +199,7 @@ export const SchemaEntry = ({
         </Grid>
         <Divider orientation='vertical' variant='middle' flexItem sx={{my: 0}}/>
         <Grid>
-          {schemaStructure && schemaEntryData ? Object.entries(schemaStructure).map(([key, value]: [string, any]) => {
+          {schemaStructure && schemaEntryData ? Object.entries(schemaStructure).map(([key, value]) => {
             const labelName = key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
             const labelValue = schemaEntryData[key];
             return (
@@ -275,7 +274,7 @@ export const SchemaEntry = ({
         }}>
       <AccordionSummary expandIcon={<ChevronDown className="h-4 w-4" />}>
         {dragHandle}
-        <Typography dangerouslySetInnerHTML={{ __html: name }}/>
+        <Typography dangerouslySetInnerHTML={{ __html: String(name) }}/>
       </AccordionSummary>
       <AccordionDetails>
         {accordionContent}

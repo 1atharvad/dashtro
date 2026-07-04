@@ -1,12 +1,7 @@
 import { ReactNode } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { Link as MatLink } from "@mui/material";
-
-export interface CustomLink {
-  url: string,
-  text?: string,
-  is_external_link: boolean
-}
+import type { CustomLink } from '@ts/types/constants';
 
 export const Link = ({ link, className, children }: { link: CustomLink, className?: string, children: ReactNode }) => {
   return link.is_external_link ? (

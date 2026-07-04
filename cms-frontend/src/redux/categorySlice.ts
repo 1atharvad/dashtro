@@ -1,8 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { API_BASE_URL } from "@ts/config";
 import { authFetch } from "@ts/utils/auth";
-
-export type Category = { id: string; name: string };
+import type { Category } from '@ts/types/constants';
 
 type CategoryState = {
   byProject: Record<string, { categories: Category[]; category_map: Record<string, string> }>;
@@ -11,7 +10,7 @@ type CategoryState = {
 };
 
 export const fetchCategories = createAsyncThunk("categories/fetch", async (projectId: string) => {
-  const response = await fetch(`${API_BASE_URL}/projects/${projectId}/schema-categories/`);
+  const response = await authFetch(`${API_BASE_URL}/projects/${projectId}/schema-categories/`);
   if (!response.ok) throw new Error(`Failed to fetch categories: ${response.status}`);
   return { projectId, data: await response.json() };
 });

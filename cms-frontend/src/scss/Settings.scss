@@ -24,6 +24,8 @@
 
   &-content {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
     padding: 32px;
 
     .MuiTypography-subtitle1 {
@@ -94,7 +96,8 @@
 .settings-table {
   border: 1px solid var(--cms-border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 
   .MuiTableHead-root .MuiTableCell-root {
     font-size: 0.78rem;

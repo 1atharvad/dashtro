@@ -17,24 +17,24 @@ export const CompoundField = ({
 }: {
   fieldType: string;
   label: string;
-  value: any;
-  onChange: (value: Record<string, any>) => void;
+  value: unknown;
+  onChange: (value: Record<string, unknown>) => void;
   disabled?: boolean;
 }) => {
   const def = getCompoundDef(fieldType);
   if (!def) return null;
 
-  const current: Record<string, any> = value && typeof value === 'object' ? value : def.defaultValue;
+  const current: Record<string, unknown> = value && typeof value === 'object' ? value as Record<string, unknown> : def.default;
 
-  const set = (name: string, val: any) => onChange({ ...current, [name]: val });
+  const set = (name: string, val: unknown) => onChange({ ...current, [name]: val });
 
   const fields = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {def.subfields.map(sf => {
           const fieldLabel = sf.label;
-          const val = current[sf.name] ?? (sf.inputType === 'checkbox' ? false : sf.inputType === 'number' ? '' : '');
+          const val = current[sf.name] ?? (sf.input_type === 'checkbox' ? false : sf.input_type === 'number' ? '' : '');
 
-          if (sf.inputType === 'checkbox') {
+          if (sf.input_type === 'checkbox') {
             return (
               <FormControlLabel
                 key={sf.name}
@@ -57,9 +57,9 @@ export const CompoundField = ({
               fullWidth
               disabled={disabled}
               label={fieldLabel}
-              type={sf.inputType}
-              value={val}
-              onChange={e => set(sf.name, sf.inputType === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
+              type={sf.input_type}
+              value={val as string | number}
+              onChange={e => set(sf.name, sf.input_type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
               slotProps={{ inputLabel: { shrink: true } }}
             />
           );

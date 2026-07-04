@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { createSchema, fetchSchema, updateSchema, deleteSchema } from '@/redux/schemaSlice';
-import { RootState, AppDispatch } from '@/redux/store';
+import type { RootState, AppDispatch, SchemaFieldItem, NewSchemaFieldInput } from '@ts/types/constants';
 import { useSchemaMetaData } from '@/hooks/useSchemaMetaData';
 import { toast } from 'advi-ui';
 
@@ -25,8 +25,8 @@ export const useSchemaData = (projectId: string, schemaName: string) => {
   const projectSchemaData = useMemo(() => byProject[projectId] ?? {}, [byProject, projectId]);
 
   const { schemaNames, addNewSchemeName, removeSchemaName } = useSchemaMetaData(projectId);
-  const [schemaNameData, setSchemaNameData] = useState<Record<string, any>[]>([]);
-  const [schemaDetails, setSchemaDetails] = useState<Record<string, any>>({});
+  const [schemaNameData, setSchemaNameData] = useState<SchemaFieldItem[]>([]);
+  const [schemaDetails, setSchemaDetails] = useState<Record<string, SchemaFieldItem[]>>({});
 
   const _loading = loading || !(schemaName in projectSchemaData);
 
@@ -39,8 +39,9 @@ export const useSchemaData = (projectId: string, schemaName: string) => {
    * the current schema session. Uses a ref-backed Set so multiple calls with
    * the same name are no-ops without causing re-renders.
    */
-  const requestSchema = (name: string) => {
-    if (!name || requestedRef.current.has(name) || !schemaNamesRef.current.includes(name)) return;
+  const requestSchema = (name: string, requireInList = true) => {
+    if (!name || requestedRef.current.has(name)) return;
+    if (requireInList && !schemaNamesRef.current.includes(name)) return;
     requestedRef.current.add(name);
     dispatch(fetchSchema({ projectId, schemaName: name }));
   };
@@ -62,7 +63,9 @@ export const useSchemaData = (projectId: string, schemaName: string) => {
    * if project metadata was not ready on the first render.
    */
   useEffect(() => {
-    requestSchema(schemaName);
+    // Don't wait for schemaNames to load before fetching the root schema —
+    // the caller always knows the schema exists (it came from a collection or URL).
+    requestSchema(schemaName, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schemaName, schemaNames]);
 
@@ -100,9 +103,9 @@ export const useSchemaData = (projectId: string, schemaName: string) => {
    * UI always reflects the most recent Redux state.
    */
   useEffect(() => {
-    Object.values(schemaDetails).forEach((schemaInfo: any) => {
-      schemaInfo?.forEach((variable: Record<string, any>) => {
-        const nested = variable['_nested_schema'];
+    Object.values(schemaDetails).forEach((schemaInfo) => {
+      schemaInfo?.forEach((variable) => {
+        const nested = variable._nested_schema;
         if (nested && nested !== schemaName) requestSchema(nested);
       });
     });
@@ -116,7 +119,7 @@ export const useSchemaData = (projectId: string, schemaName: string) => {
    * Accepts a map of `{ schemaFieldId: updatedFieldData }` and dispatches
    * an update action for each entry in parallel.
    */
-  const updateSchemaData = (updatedSchemaDetails: Record<string, any>) => {
+  const updateSchemaData = (updatedSchemaDetails: Record<string, NewSchemaFieldInput>) => {
     Promise.all(
       Object.entries(updatedSchemaDetails).map(([schemaId, updatedSchema]) =>
         dispatch(updateSchema({ projectId, schemaId, updatedSchema }))
@@ -130,7 +133,7 @@ export const useSchemaData = (projectId: string, schemaName: string) => {
    * registers `schemaName` in the project metadata if it is not already there
    * (i.e. this is the first field being added to a brand-new schema).
    */
-  const addSchemaData = (newSchemaDetails: Record<string, any>[]) => {
+  const addSchemaData = (newSchemaDetails: NewSchemaFieldInput[]) => {
     Promise.all(
       newSchemaDetails.map(newSchema =>
         dispatch(createSchema({ projectId, newSchema }))

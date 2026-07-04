@@ -3,18 +3,20 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   Box, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Drawer, IconButton, List, ListItem, ListItemButton,
-  ListItemText, Tooltip, Typography, useTheme,
+  Skeleton, Tooltip, Typography, useTheme,
 } from '@mui/material';
-import { Button } from 'advi-ui';
-import { Download, History, Trash2, Upload, X } from 'lucide-react';
+import { Button, Menu as AdviMenu } from 'advi-ui';
+import { CloudDownload, CloudUpload, Download, History, MoreVertical, Trash2, Upload, X } from 'lucide-react';
 import '@/scss/DocCollection.scss';
 import { useCollectionData } from '@/hooks/useCollection';
 import { useSchemaData } from '@/hooks/useSchema';
+import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { PageForm } from '@ts/components/PageForm';
 import { DocumentEntry } from '@ts/components/DocumentEntry';
 import { useDocumentData } from '@/hooks/useDocument';
 import { Link } from '@ts/components/Link';
 import { AppHeader } from '@ts/components/AppHeader';
+import type { SchemaFieldItem, DocumentData, WorkspaceDiff } from '@ts/types/constants';
 
 const PageNavigation = ({
   projectId, workspaceName, collectionName, documentId,
@@ -37,11 +39,12 @@ export const DocumentContent = () => {
     project_id: string; workspace_name: string; collection_name: string; document_id: string;
   }>();
 
-  const [schema, setSchema] = useState<Record<string, any>[]>([]);
-  const [emptyDocumentData, setEmptyDocumentData] = useState<Record<string, any>>({});
-  const [documentData, setDocumentData] = useState<Record<string, any>>({});
+  const [schema, setSchema] = useState<SchemaFieldItem[]>([]);
+  const [emptyDocumentData, setEmptyDocumentData] = useState<DocumentData>({});
+  const [documentData, setDocumentData] = useState<DocumentData>({});
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [syncConfirm, setSyncConfirm] = useState<'push' | 'pull' | null>(null);
   const [importDocOpen, setImportDocOpen] = useState(false);
   const [importDocError, setImportDocError] = useState('');
   const importDocFileRef = useRef<HTMLInputElement>(null);
@@ -49,15 +52,21 @@ export const DocumentContent = () => {
   const { collections } = useCollectionData(project_id ?? '');
   const schemaName = collections.reduce((prev, curr) =>
     curr['_collection_name'] === collection_name ? curr['_schema_name'] : prev, '');
+  const collectionId = collections.find(c => c._collection_name === collection_name)?._id;
 
   const { schemaDetails, loading: loading1 } = useSchemaData(project_id ?? '', schemaName);
+  const { fetchDiff, getCachedDiff } = useWorkspaceData(project_id ?? '');
+  const cachedDiff = workspace_name ? getCachedDiff(workspace_name) : undefined;
+  const [diff, setDiff] = useState<WorkspaceDiff | null>(cachedDiff ?? null);
+  const [diffLoaded, setDiffLoaded] = useState(!!cachedDiff);
   const {
     collDocumentContent,
     defaultId,
     addDocumentData,
     updateDocumentData,
-    updateStatusData,
     deleteDocumentData,
+    pushDocumentData,
+    pullDocumentData,
     fetchVersions,
     restoreVersion,
     versions,
@@ -67,7 +76,7 @@ export const DocumentContent = () => {
   const isProduction = workspace_name === 'production';
   const isNew = document_id === defaultId;
   const [error, setError] = useState('');
-  const [updatedDocumentDetails, setUpdatedDocumentDetails] = useState<Record<string, any>>({});
+  const [updatedDocumentDetails, setUpdatedDocumentDetails] = useState<DocumentData>({});
   const loadedDocumentIdRef = useRef<string | null>(null);
   const hasLoadedRef = useRef(false);
   const maxDepth = 5;
@@ -84,7 +93,29 @@ export const DocumentContent = () => {
     hasLoadedRef.current = true;
   }
   const isReady = hasLoadedRef.current;
-  const currentStatus: 'draft' | 'published' = currentDoc?._status ?? 'draft';
+
+  const modifiedEntry = (collectionId && document_id)
+    ? diff?.[collectionId]?.modified.find(d => d.document_id === document_id)
+    : undefined;
+  const notInProduction = !!(collectionId && document_id &&
+    diff?.[collectionId]?.source_only.some(d => d.document_id === document_id));
+  const outOfSync = !!modifiedEntry || notInProduction;
+  const currentStatus: 'draft' | 'published' | null =
+    isProduction ? 'published' : !diffLoaded ? null : outOfSync ? 'draft' : 'published';
+
+  const refreshDiff = () => {
+    if (isProduction || !workspace_name) { setDiff(null); setDiffLoaded(true); return; }
+    setDiffLoaded(false);
+    fetchDiff(workspace_name)
+      .then(setDiff)
+      .catch(err => console.error(err))
+      .finally(() => setDiffLoaded(true));
+  };
+
+  useEffect(() => {
+    refreshDiff();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace_name, collection_name]);
 
   useEffect(() => {
     if (!loading && collection_name && !isNew && document_id &&
@@ -93,13 +124,13 @@ export const DocumentContent = () => {
         document_id in collDocumentContent[collection_name]) {
       const content = collDocumentContent[collection_name][document_id];
       if ('error' in content) {
-        setError(content['error']);
+        setError(String(content['error']));
       } else {
         setDocumentData(content);
         loadedDocumentIdRef.current = document_id;
       }
     }
-  }, [loading, collection_name, document_id, collDocumentContent]);
+  }, [loading, collection_name, document_id, collDocumentContent, isNew]);
 
   useEffect(() => {
     loadedDocumentIdRef.current = null;
@@ -107,6 +138,21 @@ export const DocumentContent = () => {
     setDocumentData({});
     setUpdatedDocumentDetails({});
   }, [document_id]);
+
+  const createEmptyDocumentData = useCallback((details: Record<string, SchemaFieldItem[]>, name: string, depth = 0): DocumentData => {
+    const data = details[name];
+    if (!data) return {};
+    return data.reduce((acc, field) => {
+      const key = field['_name'];
+      if (field['_nested_schema']) {
+        const isMany = field['_relation'] === 'OneToMany';
+        acc[key] = isMany ? [] : depth <= maxDepth ? createEmptyDocumentData(details, field['_nested_schema'], depth + 1) : {};
+      } else {
+        acc[key] = field['_type'] === 'Boolean' ? field['_default_value'] === 'True' : field['_default_value'];
+      }
+      return acc;
+    }, {} as DocumentData);
+  }, [maxDepth]);
 
   useEffect(() => {
     if (!loading && schemaName && schemaDetails[schemaName]?.length) {
@@ -119,22 +165,12 @@ export const DocumentContent = () => {
           : prev
       );
     }
-  }, [loading, schemaDetails, schemaName]);
+  }, [loading, schemaDetails, schemaName, createEmptyDocumentData]);
 
-  const createEmptyDocumentData = (details: Record<string, any>, name: string, depth = 0): Record<string, any> => {
-    const data = details[name] as Record<string, any>[];
-    if (!data) return {};
-    return data.reduce((acc, field) => {
-      const key = field['_name'];
-      if (field['_nested_schema']) {
-        const isMany = field['_relation'] === 'OneToMany';
-        acc[key] = isMany ? [] : depth <= maxDepth ? createEmptyDocumentData(details, field['_nested_schema'], depth + 1) : {};
-      } else {
-        acc[key] = field['_type'] === 'Boolean' ? field['_default_value'] === 'True' : field['_default_value'];
-      }
-      return acc;
-    }, {} as Record<string, any>);
-  };
+  const displayNameField = schema.find(f => f._display_name)?._name;
+  const displayLabel: string = isNew
+    ? 'New Document'
+    : String((displayNameField ? (documentData[displayNameField] || document_id) : document_id) ?? '');
 
   const getDocumentId = (id: string, isTitle = false) => {
     const label = id === defaultId ? 'New Document' : id;
@@ -155,18 +191,12 @@ export const DocumentContent = () => {
     }
   };
 
-  const handleToggleStatus = () => {
-    if (!document_id || isNew || isProduction) return;
-    const next: 'draft' | 'published' = currentStatus === 'draft' ? 'published' : 'draft';
-    updateStatusData(document_id, next);
-  };
-
   // Ref so onImmediateSave stays stable across renders even though
   // updateDocumentData is recreated on every render by the hook.
   const updateDocumentDataRef = useRef(updateDocumentData);
   updateDocumentDataRef.current = updateDocumentData;
 
-  const onImmediateSave = useCallback((fieldName: string, val: any) => {
+  const onImmediateSave = useCallback((fieldName: string, val: unknown) => {
     if (isProduction) return;
     updateDocumentDataRef.current({ [fieldName]: val });
   }, [isProduction]);
@@ -193,40 +223,89 @@ export const DocumentContent = () => {
     } catch { return iso; }
   };
 
-  const statusBadge = !isNew && !isProduction ? (
-    <Tooltip title={`Click to mark as ${currentStatus === 'draft' ? 'published' : 'draft'}`}>
+  const statusBadge = ((!isNew && !isProduction) || (isProduction && currentDoc)) && currentStatus ? (
+    <Tooltip title={currentStatus === 'published' ? 'Matches production' : 'Differs from production'}>
       <Chip
         label={currentStatus === 'published' ? 'Published' : 'Draft'}
         color={currentStatus === 'published' ? 'success' : 'default'}
         size="small"
-        onClick={handleToggleStatus}
-        sx={{ cursor: 'pointer', fontWeight: 600, height: 24 }}
+        sx={{ fontWeight: 600, height: 24 }}
       />
     </Tooltip>
-  ) : isProduction && currentDoc ? (
-    <Chip
-      label={currentStatus === 'published' ? 'Published' : 'Draft'}
-      color={currentStatus === 'published' ? 'success' : 'default'}
-      size="small"
-      sx={{ fontWeight: 600, height: 24 }}
+  ) : null;
+
+  const actionsButton = !isNew && !isProduction ? (
+    <AdviMenu
+      align="end"
+      contentClassName="cms-actions-menu"
+      trigger={
+        <IconButton size="small">
+          <MoreVertical className="h-4 w-4" />
+        </IconButton>
+      }
+      items={[
+        {
+          value: 'push',
+          label: outOfSync ? 'Push to production' : 'Already matches production',
+          icon: <CloudUpload className="h-4 w-4" />,
+          disabled: !outOfSync,
+          onSelect: () => setSyncConfirm('push'),
+        },
+        {
+          value: 'pull',
+          label: notInProduction ? 'Not in production yet' : 'Pull from production',
+          icon: <CloudDownload className="h-4 w-4" />,
+          disabled: notInProduction || !outOfSync,
+          onSelect: () => setSyncConfirm('pull'),
+        },
+        { type: 'separator', value: 'sep-1' },
+        {
+          value: 'history',
+          label: 'Version history',
+          icon: <History className="h-4 w-4" />,
+          onSelect: handleOpenHistory,
+        },
+        {
+          value: 'download',
+          label: 'Download',
+          icon: <Download className="h-4 w-4" />,
+          onSelect: () => handleExportDocument(),
+        },
+        { type: 'separator', value: 'sep-2' },
+        {
+          value: 'delete',
+          label: 'Delete document',
+          icon: <Trash2 className="h-4 w-4" />,
+          destructive: true,
+          onSelect: () => setDeleteOpen(true),
+        },
+      ]}
     />
   ) : null;
 
-  const historyButton = !isNew && !isProduction ? (
-    <Tooltip title="Version history">
-      <IconButton size="small" onClick={handleOpenHistory}>
-        <History className="h-4 w-4" />
+  // Production is read-only: no push/pull/history/delete, but export is still allowed.
+  const downloadButton = !isNew && isProduction ? (
+    <Tooltip title="Download document">
+      <IconButton size="small" onClick={() => handleExportDocument()}>
+        <Download className="h-4 w-4" />
       </IconButton>
     </Tooltip>
   ) : null;
 
-  const deleteButton = !isNew && !isProduction ? (
-    <Tooltip title="Delete document">
-      <IconButton size="small" onClick={() => setDeleteOpen(true)} color="error">
-        <Trash2 className="h-4 w-4" />
-      </IconButton>
-    </Tooltip>
-  ) : null;
+  const handleSyncConfirm = () => {
+    if (!document_id) return;
+    const pulling = syncConfirm === 'pull';
+    const action = pulling ? pullDocumentData(document_id) : pushDocumentData(document_id);
+    action.then(() => {
+      if (pulling) {
+        // Let the document-load effect re-read the pulled content from redux
+        loadedDocumentIdRef.current = null;
+        setUpdatedDocumentDetails({});
+      }
+      refreshDiff();
+    }).catch(() => undefined);
+    setSyncConfirm(null);
+  };
 
   const handleDelete = () => {
     if (!document_id) return;
@@ -236,7 +315,7 @@ export const DocumentContent = () => {
   };
 
   const handleExportDocument = () => {
-    const defaults = schema.reduce((acc: Record<string, any>, field: any) => {
+    const defaults = schema.reduce((acc: DocumentData, field) => {
       if (field._default_value !== undefined && field._default_value !== '') {
         acc[field._name] = field._default_value;
       }
@@ -260,7 +339,7 @@ export const DocumentContent = () => {
       try {
         const parsed = JSON.parse(e.target?.result as string);
         if (typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Expected a JSON object.');
-        const schemaFieldNames = new Set(schema.map((f: any) => f._name));
+        const schemaFieldNames = new Set(schema.map((f) => f._name));
         setEmptyDocumentData(prev => {
           const merged = { ...prev };
           for (const [key, val] of Object.entries(parsed)) {
@@ -269,22 +348,14 @@ export const DocumentContent = () => {
           return merged;
         });
         setImportDocOpen(false);
-      } catch (err: any) {
-        setImportDocError(err.message ?? 'Invalid JSON');
+      } catch (err) {
+        setImportDocError(err instanceof Error ? err.message : 'Invalid JSON');
       }
     };
     reader.readAsText(file);
   };
 
-  const downloadButton = !isNew && !isProduction ? (
-    <Tooltip title="Download document">
-      <IconButton size="small" onClick={handleExportDocument}>
-        <Download className="h-4 w-4" />
-      </IconButton>
-    </Tooltip>
-  ) : null;
-
-  const importDocButton = isNew ? (
+  const importDocButton = isNew && !isProduction ? (
     <Button key="import-doc" variant="secondary" onClick={() => setImportDocOpen(true)}>
       <Upload className="h-4 w-4" /> Import from JSON
     </Button>
@@ -294,29 +365,28 @@ export const DocumentContent = () => {
     <>
       <AppHeader />
       {error === '' ? (
-        isReady && (
+        isReady ? (
           <Box className="document" sx={{ paddingTop: '72px' }}>
             <PageForm
                 formType="document"
                 onSubmit={handleSubmit}
                 readOnly={isProduction}
-                formTitle={getDocumentId(document_id ?? '', true)}
+                formTitle={displayLabel}
                 titleBadge={statusBadge}
                 pageNavigation={
                   <PageNavigation
                     projectId={project_id ?? ''}
                     workspaceName={workspace_name ?? 'production'}
                     collectionName={collection_name ?? ''}
-                    documentId={getDocumentId(document_id ?? '')}
+                    documentId={displayLabel}
                   />
                 }
-                extraButtons={[historyButton, downloadButton, deleteButton].filter(Boolean) as React.ReactNode[]}
-                afterSubmitButtons={importDocButton ? [importDocButton] : []}
+                afterSubmitButtons={[actionsButton, downloadButton, importDocButton].filter(Boolean) as React.ReactNode[]}
                 submitBtnText="Save Document"
               >
                 <Box className="document-body">
                   <Box className="document-fields" sx={{ '--border-color': theme.palette.borderColor }}>
-                    {schema.map((entry: any, index: number) => (
+                    {schema.map((entry, index: number) => (
                       <Box key={index} className="document-field-row">
                         <DocumentEntry
                           id={`variable-${entry['_index']}`}
@@ -332,13 +402,13 @@ export const DocumentContent = () => {
                               : [documentData, (updOrFn) => {
                                   setDocumentData(prev => {
                                     const v = typeof updOrFn === 'function' ? updOrFn(prev) : updOrFn;
-                                    const changed = Object.keys(prev).reduce((acc: Record<string, any>, key) => {
-                                      const val = (v as Record<string, any>)[key];
+                                    const changed = Object.keys(prev).reduce((acc: DocumentData, key) => {
+                                      const val = v[key];
                                       if (prev[key] !== val) acc[key] = val;
                                       return acc;
                                     }, {});
                                     setUpdatedDocumentDetails(upd => ({ ...upd, ...changed }));
-                                    return v as Record<string, any>;
+                                    return v;
                                   });
                                   return updOrFn;
                                 }]
@@ -351,6 +421,38 @@ export const DocumentContent = () => {
                   </Box>
                 </Box>
               </PageForm>
+          </Box>
+        ) : (
+          <Box className="document" sx={{ paddingTop: '72px' }}>
+            <Box className="document-component">
+              {/* Title bar — mirrors .document-component-title-bar padding (12px 24px) */}
+              <Box className="document-component-title-bar" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Skeleton width={110} height={13} sx={{ mb: 0.5 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Skeleton width={220} height={26} />
+                    <Skeleton variant="rounded" width={64} height={22} />
+                  </Box>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Skeleton variant="circular" width={30} height={30} />
+                  <Skeleton variant="circular" width={30} height={30} />
+                  <Skeleton variant="circular" width={30} height={30} />
+                  <Skeleton variant="rounded" width={108} height={36} />
+                </Box>
+              </Box>
+              {/* Fields card — mirrors .document-fields structure */}
+              <Box className="document-body">
+                <Box className="document-fields">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Box key={i} className="document-field-row">
+                      <Skeleton width={130} height={13} sx={{ mb: 0.75 }} />
+                      <Skeleton variant="rectangular" height={40} sx={{ borderRadius: '4px' }} />
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Box>
           </Box>
         )
       ) : (
@@ -457,6 +559,30 @@ export const DocumentContent = () => {
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
           <Button variant="secondary" onClick={() => setDeleteOpen(false)}>Cancel</Button>
           <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Scoped push/pull confirmation */}
+      <Dialog open={!!syncConfirm} onClose={() => setSyncConfirm(null)} fullWidth maxWidth="xs">
+        <DialogTitle>
+          {syncConfirm === 'push' ? 'Push document to production?' : 'Pull document from production?'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {syncConfirm === 'push' ? (
+              modifiedEntry
+                ? <>Production&rsquo;s copy of <strong>{getDocumentId(document_id ?? '')}</strong> will be replaced (changed fields: {modifiedEntry.changed_fields.join(', ')}).</>
+                : <><strong>{getDocumentId(document_id ?? '')}</strong> will be added to production.</>
+            ) : (
+              <>Your workspace&rsquo;s copy of <strong>{getDocumentId(document_id ?? '')}</strong> will be overwritten with production&rsquo;s version{modifiedEntry ? <> (changed fields: {modifiedEntry.changed_fields.join(', ')})</> : null}.</>
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button variant="secondary" onClick={() => setSyncConfirm(null)}>Cancel</Button>
+          <Button variant="default" className="border-current" onClick={handleSyncConfirm}>
+            {syncConfirm === 'push' ? 'Push' : 'Pull'}
+          </Button>
         </DialogActions>
       </Dialog>
     </>

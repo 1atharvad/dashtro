@@ -107,14 +107,6 @@
       }
     }
   }
-
-  & &-view-hamburger-menu {
-    @include mixins.bp(tab) {
-      @include mixins.bp-height(ml) {
-        display: none;
-      }
-    }
-  }
 }
 
 .schema-component .empty-container {

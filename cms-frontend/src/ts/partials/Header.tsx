@@ -1,6 +1,7 @@
 import '../../scss/Header.scss';
 import dashtroLogo from '../../assets/images/favicon-96x96.png';
-import { Link, CustomLink } from '../components/Link';
+import { Link } from '../components/Link';
+import type { CustomLink } from '@ts/types/constants';
 import { Box } from '@mui/material';
 
 interface Image {

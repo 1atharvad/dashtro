@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProjects, createProject, updateProject, deleteProject } from '@/redux/projectSlice';
-import { RootState, AppDispatch } from '@/redux/store';
+import type { RootState, AppDispatch } from '@ts/types/constants';
 
 export const useProjectData = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -11,7 +11,7 @@ export const useProjectData = () => {
     if (loading && projects.length === 0) {
       dispatch(fetchProjects());
     }
-  }, [dispatch]);
+  }, [dispatch, loading, projects.length]);
 
   const addProject = (name: string, description = '') =>
     dispatch(createProject({ name, description }));

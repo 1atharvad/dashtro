@@ -3,13 +3,14 @@ import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import {
   Box, Card, CardContent, Chip,
   Dialog, DialogActions, DialogContent, DialogTitle,
-  Grid, IconButton, Menu, MenuItem, TextField, Tooltip, Typography
+  Grid, IconButton, TextField, Tooltip, Typography
 } from '@mui/material';
-import { Plus, ArrowRight, Check, X, Pencil, MoreVertical, LayoutTemplate } from 'lucide-react';
-import { Button } from 'advi-ui';
+import { Plus, ArrowRight, Check, X, Pencil, MoreVertical, LayoutTemplate, Database } from 'lucide-react';
+import { Button, Menu as AdviMenu } from 'advi-ui';
 import { useProjectData } from '@/hooks/useProject';
 import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { AppHeader } from '@ts/components/AppHeader';
+import { WorkspaceSyncModal } from '@ts/components/WorkspaceSyncModal';
 import '@/scss/ProjectPage.scss';
 
 export const ProjectPage = () => {
@@ -41,7 +42,7 @@ export const ProjectPage = () => {
   };
 
   const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
-  const [wsMenuAnchor, setWsMenuAnchor] = useState<{ el: HTMLElement; name: string } | null>(null);
+  const [syncModal, setSyncModal] = useState<{ workspaceName: string; mode: 'push' | 'pull' } | null>(null);
 
   useEffect(() => {
     if (project) {
@@ -97,7 +98,7 @@ export const ProjectPage = () => {
         {/* ── Info cards ──────────────────────────────────────────────── */}
         <Grid container spacing={3} className="project-page-cards">
 
-          <Grid size={{ xs: 12, md: 6 }}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Card className="pp-card pp-card--production" elevation={0}>
               <CardContent className="pp-card-content">
                 <Box className="pp-card-header">
@@ -114,7 +115,26 @@ export const ProjectPage = () => {
             </Card>
           </Grid>
 
-          <Grid size={{ xs: 12, md: 6 }}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Card className="pp-card" elevation={0}>
+              <CardContent className="pp-card-content">
+                <Box className="pp-card-header">
+                  <Typography variant="overline" color="text.secondary" lineHeight={1}>
+                    Realtime Database
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 2, flex: 1 }}>
+                  A live JSON data store for this project, synced instantly across every connected client.
+                </Typography>
+                <Button variant="secondary" className="border-current"
+                  onClick={() => navigate(`/projects/${project_id}/rtdb/`)}>
+                  <Database className="h-4 w-4" /> Open Realtime Database
+                </Button>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 4 }}>
             <Card className="pp-card" elevation={0}>
               <CardContent className="pp-card-content">
                 <Box className="pp-card-header">
@@ -233,19 +253,13 @@ export const ProjectPage = () => {
             </DialogActions>
           </Dialog>
 
-          {/* 3-dot menu */}
-          <Menu
-            anchorEl={wsMenuAnchor?.el}
-            open={!!wsMenuAnchor}
-            onClose={() => setWsMenuAnchor(null)}
-          >
-            <MenuItem onClick={() => {
-              setConfirmArchive(wsMenuAnchor?.name ?? null);
-              setWsMenuAnchor(null);
-            }}>
-              Archive workspace
-            </MenuItem>
-          </Menu>
+          <WorkspaceSyncModal
+            projectId={project_id ?? ''}
+            open={!!syncModal}
+            workspaceName={syncModal?.workspaceName ?? null}
+            mode={syncModal?.mode ?? 'push'}
+            onClose={() => setSyncModal(null)}
+          />
 
           {!wsLoading && (
             nonProdWorkspaces.length === 0 ? (
@@ -269,15 +283,38 @@ export const ProjectPage = () => {
                         Created {new Date(ws.created_at).toLocaleDateString()}
                       </Typography>
                     </RouterLink>
-                    <Tooltip title="More options">
-                      <IconButton
-                        size="small"
-                        className="workspace-row-menu-btn"
-                        onClick={e => { e.stopPropagation(); setWsMenuAnchor({ el: e.currentTarget, name: ws.workspace_name }); }}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </IconButton>
-                    </Tooltip>
+                    <AdviMenu
+                      align="end"
+                      contentClassName="cms-actions-menu"
+                      trigger={
+                        <IconButton
+                          size="small"
+                          className="workspace-row-menu-btn"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </IconButton>
+                      }
+                      items={[
+                        {
+                          value: 'push',
+                          label: 'Push to production',
+                          onSelect: () => setSyncModal({ workspaceName: ws.workspace_name, mode: 'push' }),
+                        },
+                        {
+                          value: 'pull',
+                          label: 'Pull latest from production',
+                          onSelect: () => setSyncModal({ workspaceName: ws.workspace_name, mode: 'pull' }),
+                        },
+                        { type: 'separator', value: 'sep' },
+                        {
+                          value: 'archive',
+                          label: 'Archive workspace',
+                          destructive: true,
+                          onSelect: () => setConfirmArchive(ws.workspace_name),
+                        },
+                      ]}
+                    />
                   </Box>
                 ))}
               </Box>
