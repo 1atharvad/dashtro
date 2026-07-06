@@ -1,0 +1,248 @@
+@use './global/global-colors' as colors;
+
+.rtdb-page {
+  min-height: 100vh;
+  background: colors.$page_bk_color;
+  display: flex;
+  flex-direction: column;
+
+  html.dark & {
+    background: var(--cms-bg);
+  }
+
+  .rtdb-body {
+    padding: 40px 48px;
+    padding-top: calc(40px + 64px);
+    max-width: 1920px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rtdb-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .rtdb-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--cms-border);
+
+    &--live {
+      background: colors.$production-green;
+    }
+  }
+
+  .rtdb-tree {
+    border: 1px solid var(--cms-border);
+    border-radius: 10px;
+    background: var(--cms-surface);
+    overflow: auto;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+}
+
+// ── Tree node rows ───────────────────────────────────────────────────────────
+// Indentation and connector lines come purely from DOM nesting (each level's
+// .rtdb-node-children adds its own margin/border), like a standard file-tree
+// — no per-row depth math needed.
+
+.rtdb-node-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 8px 6px 2px;
+  border-radius: 4px;
+
+  &:hover {
+    background: colors.$workspace-hover-bg;
+
+    html.dark & {
+      background: rgba(colors.$white, 0.05);
+    }
+
+    .rtdb-node-actions {
+      opacity: 1;
+    }
+  }
+
+  // Keep Save/Cancel visible while editing this row, even after the mouse
+  // moves away (e.g. onto the input field itself).
+  &--active .rtdb-node-actions {
+    opacity: 1;
+  }
+
+  &--flash .rtdb-node-value {
+    animation: rtdb-flash 1400ms ease-out;
+  }
+}
+
+@keyframes rtdb-flash {
+  0% { text-shadow: 1px 1px 6px rgba(colors.$production-green, 1), 0 0 6px rgba(colors.$production-green, 1); }
+  100% { text-shadow: 0 0 6px rgba(colors.$production-green, 0), 0 0 6px rgba(colors.$production-green, 0); }
+}
+
+.rtdb-expand-btn {
+  flex-shrink: 0;
+  padding: 2px !important;
+}
+
+.rtdb-expand-spacer {
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.rtdb-node-key {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: text;
+  color: colors.$product-title-color;
+
+  html.dark & {
+    color: colors.$workspace-name-dk;
+  }
+
+  &:hover {
+    text-decoration: underline dotted;
+  }
+
+  // List indices aren't renamable — no edit affordance.
+  &--fixed {
+    cursor: default;
+    opacity: 0.55;
+    font-weight: 500;
+
+    &:hover {
+      text-decoration: none;
+    }
+  }
+}
+
+.rtdb-key-input {
+  max-width: 140px;
+
+  input {
+    font-family: monospace;
+    font-weight: 600;
+  }
+}
+
+.rtdb-type-select {
+  min-width: 96px;
+  flex-shrink: 0;
+}
+
+.rtdb-node-badge {
+  color: var(--cms-text-secondary, inherit);
+  opacity: 0.45;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+// Firebase-console-style type colors for leaf values.
+.rtdb-node-value {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  cursor: text;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.9;
+
+  &:hover {
+    opacity: 1;
+    text-decoration: underline dotted;
+  }
+
+  &--string {
+    color: #c0341d;
+    html.dark & { color: #e2836b; }
+  }
+  &--number {
+    color: #1a56db;
+    html.dark & { color: #7ba7f7; }
+  }
+  &--boolean {
+    color: #7c3aed;
+    html.dark & { color: #b794f6; }
+  }
+  &--null {
+    color: var(--cms-text-secondary, #888);
+    font-style: italic;
+  }
+}
+
+.rtdb-value-input {
+  flex: 1;
+
+  input {
+    font-family: monospace;
+  }
+}
+
+.rtdb-node-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+// Each nesting level adds its own indent + a vertical guide line, so the
+// tree connectors stack correctly at every depth automatically.
+.rtdb-node-children {
+  display: flex;
+  flex-direction: column;
+  margin-left: 13px;
+  padding-left: 14px;
+  border-left: 1px dashed var(--cms-border);
+}
+
+.rtdb-add-form-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.rtdb-add-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+
+  .MuiTextField-root {
+    max-width: 160px;
+  }
+}
+
+// Entries accumulated locally inside an in-progress Dict/List creation,
+// shown before the whole container is committed in one write.
+.rtdb-nested-entries {
+  display: flex;
+  flex-direction: column;
+  margin-left: 13px;
+  padding-left: 14px;
+  border-left: 1px dashed var(--cms-border);
+}
+
+.rtdb-pending-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 6px 8px;
+
+  .rtdb-node-value {
+    flex: 1;
+  }
+}
