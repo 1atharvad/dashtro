@@ -1,0 +1,203 @@
+@use './global/global-colors' as colors;
+
+// ── List page ──────────────────────────────────────────────────────────────
+// Uses the shared .collection / PageWrapper / DocumentList row layout (same
+// classes DocumentList uses: .collection-document-container, .document-row,
+// .collection-document, .document-container, .document-title) for the
+// drawer, title bar, empty state, and component rows — nothing page-specific
+// is needed here.
+
+// ── Editor page ───────────────────────────────────────────────────────────────
+
+// Reuses PageForm (formType="document") for the title bar, same as the
+// Document page. AppHeader renders advi-ui's `.vi-header`, which is
+// `position: fixed` — it reserves no space in normal flow, so this page has
+// to offset for its height itself (same 72px Document page uses) or the
+// title bar renders under it. The split pane then needs the shared
+// `.document-component`'s `min-height: 100vh` overridden to `flex: 1` so it
+// fills the rest of the viewport instead of pushing the page taller.
+.rtc-editor-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding-top: 72px;
+  box-sizing: border-box;
+  overflow: hidden;
+
+  .document-component {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  // Slightly more vertical breathing room than the shared Document page's
+  // title bar — the name field here is taller than a plain title.
+  .document-component-title-bar {
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+}
+
+.rtc-name-input {
+  width: 220px;
+  flex-shrink: 0;
+}
+
+// ── CodePen-style split pane ───────────────────────────────────────────────────
+// Top row: three equal code columns (React Component / CSS / Sample
+// Content). Bottom: full-width Preview. Panels use the same card language as
+// .document-fields (var(--cms-surface) / var(--cms-border), 12px radius) so
+// the editor reads as panels on the page background rather than bleeding
+// straight into the app chrome. The code-row/preview split ratio is
+// user-draggable (see .rtc-resize-handle) and set inline via JS, so no fixed
+// flex-basis on .rtc-code-row here.
+
+.rtc-split {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  padding: 0 24px 24px;
+  background: var(--cms-bg);
+  box-sizing: border-box;
+}
+
+.rtc-code-row {
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+}
+
+// Draggable divider between the code row and the preview pane.
+.rtc-resize-handle {
+  flex: 0 0 10px;
+  position: relative;
+  cursor: row-resize;
+  padding: 10px 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+    background: var(--cms-border);
+    transition: background 0.15s;
+  }
+
+  &:hover::after,
+  &:active::after {
+    background: var(--cms-text-muted);
+  }
+
+  html.dark & {
+    &::after { background: rgba(colors.$white, 0.12); }
+
+    &:hover::after,
+    &:active::after {
+      background: rgba(colors.$white, 0.3);
+    }
+  }
+}
+
+// All three editor boxes share this card look (same #1e1e1e Monaco chrome,
+// border, radius as the preview pane) so React Component / CSS / Sample
+// Content read as identical, equal-width columns.
+.rtc-sample-editor,
+.rtc-source-editor,
+.rtc-css-editor {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  border: 1px solid var(--cms-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.rtc-monaco-body,
+.rtc-sample-editor-body,
+.rtc-css-editor-body {
+  flex: 1;
+  overflow: hidden;
+}
+
+.rtc-preview-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cms-surface);
+  border: 1px solid var(--cms-border);
+  border-radius: 12px;
+  overflow: hidden;
+
+  html.dark & {
+    border-color: rgba(colors.$white, 0.07);
+  }
+}
+
+.rtc-preview-body {
+  flex: 1;
+  overflow: auto;
+  padding: 20px 24px;
+  // Rendered components default to a light card (e.g. `bg-white`) but don't
+  // set their own text color, so they'd otherwise inherit the app's dark-mode
+  // near-white text — invisible on a white background. Force a light-mode
+  // baseline for the sandboxed preview; author classes (e.g. Tailwind
+  // `text-*`) still override this since they're more specific.
+  color-scheme: light;
+  color: #1a1a1a;
+
+  .wmde-markdown-var,
+  .wmde-markdown,
+  [class*="wmde-"],
+  [data-color-mode] {
+    background: none !important;
+    background-color: transparent !important;
+  }
+}
+
+.rtc-pane-label {
+  font-size: 0.65rem !important;
+  letter-spacing: 0.1em !important;
+  font-weight: 700 !important;
+  opacity: 0.4;
+  padding: 8px 16px 4px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+
+  .rtc-code-row & { color: rgba(colors.$white, 0.5) !important; }
+
+  &--preview { color: var(--cms-text-muted) !important; }
+}
+
+// ── Live error ────────────────────────────────────────────────────────────────
+
+.rtc-live-error {
+  color: colors.$danger !important;
+  font-size: 0.75rem !important;
+  font-family: monospace;
+  white-space: pre-wrap;
+  padding: 10px 14px;
+  background: rgba(colors.$danger, 0.06);
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+// ── Delete confirm ────────────────────────────────────────────────────────────
+
+.rtc-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rtc-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -1,5 +1,7 @@
 import '@uiw/react-md-editor/markdown-editor.css';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import MDEditor from '@uiw/react-md-editor';
 import {
   Box, Dialog, DialogActions, DialogContent,
@@ -7,7 +9,10 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Button } from 'advi-ui';
-import { Pencil, X } from 'lucide-react';
+import { Pencil, X, Eye } from 'lucide-react';
+import type { AppDispatch, RootState, RichTextComponent } from '@ts/types/constants';
+import { fetchRichTextComponents } from '@/redux/richTextComponentSlice';
+import { RichTextWrapperRenderer } from '@ts/config/richTextWrapper';
 
 // Legacy array values become newline-joined text — literal text, no HTML parsing.
 const toEditorText = (value: string | string[]): string =>
@@ -18,15 +23,20 @@ const EditorInner = ({
   onSave,
   onClose,
   disabled,
+  wrapperKey,
+  customComponents,
 }: {
   value: string | string[];
   onSave: (text: string) => void;
   onClose: () => void;
   disabled: boolean;
+  wrapperKey?: string;
+  customComponents: RichTextComponent[];
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const [text, setText] = useState(() => toEditorText(value));
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const handleSave = () => {
     onSave(text);
@@ -35,8 +45,8 @@ const EditorInner = ({
 
   return (
     <>
-      <DialogContent sx={{ p: 0, overflow: 'hidden' }} data-color-mode={isDark ? 'dark' : 'light'}>
-        <Box className="rich-text-body" sx={{ border: 'none', borderRadius: 0 }}>
+      <DialogContent className="rich-text-dialog-content" data-color-mode={isDark ? 'dark' : 'light'}>
+        <Box className="rich-text-body rich-text-body--flat">
           <MDEditor
             value={text}
             onChange={v => setText(v ?? '')}
@@ -47,7 +57,10 @@ const EditorInner = ({
           />
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+      <DialogActions className="rich-text-dialog-actions">
+        <Button variant="secondary" onClick={() => setPreviewOpen(true)} style={{ marginRight: 'auto' }}>
+          <Eye className="h-4 w-4" /> Preview
+        </Button>
         <Button variant="secondary" onClick={onClose}>
           {disabled ? 'Close' : 'Cancel'}
         </Button>
@@ -57,19 +70,22 @@ const EditorInner = ({
           </Button>
         )}
       </DialogActions>
+
+      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle className="rich-text-dialog-title">
+          <Typography fontWeight={600}>Preview</Typography>
+          <IconButton size="small" onClick={() => setPreviewOpen(false)}>
+            <X className="h-4 w-4" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent className="rich-text-preview-content">
+          <Box className="rich-text-preview-canvas">
+            <RichTextWrapperRenderer wrapperKey={wrapperKey} source={text} customComponents={customComponents} />
+          </Box>
+        </DialogContent>
+      </Dialog>
     </>
   );
-};
-
-// Preview: newlines become <br> so inline HTML (spans/links) still renders as-is.
-const toPreviewHtml = (value: any): string => {
-  if (typeof value === 'string') return value.replace(/\n/g, '<br>');
-  if (Array.isArray(value)) {
-    return value
-      .filter((i): i is string => typeof i === 'string')
-      .join('<br>');
-  }
-  return '';
 };
 
 export const RichTextModal = ({
@@ -77,51 +93,46 @@ export const RichTextModal = ({
   value,
   onChange,
   disabled = false,
+  wrapperKey,
 }: {
   label: string;
-  value: any;
-  onChange: (value: any) => void;
+  value: unknown;
+  onChange: (value: string) => void;
   disabled?: boolean;
+  wrapperKey?: string;
 }) => {
   const [open, setOpen] = useState(false);
-  const previewHtml = toPreviewHtml(value);
+  const { project_id } = useParams<{ project_id: string }>();
+  const dispatch = useDispatch<AppDispatch>();
+  const byProject = useSelector((state: RootState) => state.richTextComponents.byProject);
+  const customComponents = useMemo(
+    () => byProject[project_id ?? ''] ?? [],
+    [byProject, project_id]
+  );
+
+  useEffect(() => {
+    if (project_id) dispatch(fetchRichTextComponents(project_id));
+  }, [dispatch, project_id]);
+
   const editorValue: string | string[] = Array.isArray(value) ? value : (typeof value === 'string' ? value : '');
+  const previewSource = editorValue ? (Array.isArray(editorValue) ? editorValue.join('\n') : editorValue) : '';
 
   return (
     <Box className="rich-text-field">
       <label className="nested-variable-label" style={{ marginBottom: 8 }}>{label}</label>
-      <Box
-        onClick={() => setOpen(true)}
-        sx={{
-          position: 'relative',
-          border: '1px solid var(--cms-border)',
-          borderRadius: 2,
-          px: 2,
-          py: 1.5,
-          cursor: 'pointer',
-          minHeight: 56,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 1,
-          transition: 'border-color 0.15s',
-          '&:hover': { borderColor: 'var(--cms-text-muted)' },
-        }}
-      >
-        {previewHtml ? (
-          <Box
-            className="rich-text-preview"
-            sx={{ flex: 1, fontSize: '0.875rem', lineHeight: 1.6, overflow: 'hidden', pointerEvents: 'none' }}
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
+      <Box className="rich-text-trigger" onClick={() => setOpen(true)}>
+        {previewSource ? (
+          <Box className="rich-text-preview">
+            <RichTextWrapperRenderer wrapperKey={wrapperKey} source={previewSource} customComponents={customComponents} />
+          </Box>
         ) : (
-          <Typography variant="body2" color="text.disabled" sx={{ flex: 1 }}>
+          <Typography variant="body2" color="text.disabled" className="rich-text-empty">
             No content — click to edit
           </Typography>
         )}
         <IconButton
           size="small"
-          sx={{ flexShrink: 0, opacity: 0.5 }}
+          className="rich-text-edit-btn"
           onClick={e => { e.stopPropagation(); setOpen(true); }}
         >
           <Pencil className="h-4 w-4" />
@@ -135,7 +146,7 @@ export const RichTextModal = ({
         maxWidth="md"
         keepMounted={false}
       >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+        <DialogTitle className="rich-text-dialog-title">
           <Typography fontWeight={600}>{label}</Typography>
           <IconButton size="small" onClick={() => setOpen(false)}>
             <X className="h-4 w-4" />
@@ -148,6 +159,8 @@ export const RichTextModal = ({
             onSave={onChange}
             onClose={() => setOpen(false)}
             disabled={!!disabled}
+            wrapperKey={wrapperKey}
+            customComponents={customComponents}
           />
         )}
       </Dialog>
