@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dashtro-client"
+version = "0.2.0"
+description = "Python client SDK for the Dashtro CMS API"
+requires-python = ">=3.10"
+dependencies = ["httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dashtro_client*"]
