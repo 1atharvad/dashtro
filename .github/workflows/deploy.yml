@@ -64,48 +64,51 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy:
-    needs: build-and-push
-    environment: production
-    runs-on: ubuntu-latest
-    env:
-      SECRETS_JSON: ${{ toJSON(secrets) }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Generate .env from repo secrets
-        run: |
-          rm -f .env
-          echo "$SECRETS_JSON" | jq -r '
-            to_entries
-            | map(select(
-                (.key | test("^(GITHUB_TOKEN|DEPLOY_.*|GHCR_PULL_TOKEN)$") | not)
-                and (.value | type == "string")
-              ))
-            | map("\(.key)=\(.value)")
-            | .[]
-          ' > .env
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Copy .env to server
-        run: |
-          scp -i ~/.ssh/id_ed25519 .env \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/.env
-
-      - name: Deploy
-        run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
-            set -e
-            cd ${{ secrets.DEPLOY_PATH }}
-            git pull
-            echo '${{ secrets.GHCR_PULL_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml pull dashtro
-            IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml up -d
-            docker image prune -f
-          "
+  # Disabled for now: server isn't set up yet. Pulling/running the image is
+  # being done manually on the server while it's provisioned. Re-enable this
+  # job (and its DEPLOY_*/GHCR_PULL_TOKEN secrets) once that's done.
+  # deploy:
+  #   needs: build-and-push
+  #   environment: production
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     SECRETS_JSON: ${{ toJSON(secrets) }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Generate .env from repo secrets
+  #       run: |
+  #         rm -f .env
+  #         echo "$SECRETS_JSON" | jq -r '
+  #           to_entries
+  #           | map(select(
+  #               (.key | test("^(GITHUB_TOKEN|DEPLOY_.*|GHCR_PULL_TOKEN)$") | not)
+  #               and (.value | type == "string")
+  #             ))
+  #           | map("\(.key)=\(.value)")
+  #           | .[]
+  #         ' > .env
+  #
+  #     - name: Setup SSH
+  #       run: |
+  #         mkdir -p ~/.ssh
+  #         echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+  #         chmod 600 ~/.ssh/id_ed25519
+  #         ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+  #
+  #     - name: Copy .env to server
+  #       run: |
+  #         scp -i ~/.ssh/id_ed25519 .env \
+  #           ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/.env
+  #
+  #     - name: Deploy
+  #       run: |
+  #         ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
+  #           set -e
+  #           cd ${{ secrets.DEPLOY_PATH }}
+  #           git pull
+  #           echo '${{ secrets.GHCR_PULL_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+  #           IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml pull dashtro
+  #           IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml up -d
+  #           docker image prune -f
+  #         "
