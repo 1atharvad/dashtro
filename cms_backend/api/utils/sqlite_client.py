@@ -615,7 +615,11 @@ class SqliteData(SqliteClient):
         rows = cursor.fetchall()
         cursor.close()
         return [
-            {"collection_id": r["collection_id"], "document_id": r["document_id"], "data": json.loads(r["data"])}
+            {
+                "collection_id": r["collection_id"],
+                "document_id": r["document_id"],
+                "data": json.loads(r["data"]),
+            }
             for r in rows
         ]
 

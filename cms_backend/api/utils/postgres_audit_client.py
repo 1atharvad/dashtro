@@ -5,7 +5,6 @@ from datetime import UTC
 
 import psycopg2
 import psycopg2.extras
-
 from api.utils.postgres_client import PostgresClient
 
 

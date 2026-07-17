@@ -630,7 +630,11 @@ class PostgresData(PostgresClient):
         rows = cursor.fetchall()
         cursor.close()
         return [
-            {"collection_id": r["collection_id"], "document_id": r["document_id"], "data": r["data"]}
+            {
+                "collection_id": r["collection_id"],
+                "document_id": r["document_id"],
+                "data": r["data"],
+            }
             for r in rows
         ]
 
@@ -663,7 +667,12 @@ class PostgresData(PostgresClient):
                     """INSERT INTO cms_project_workspace_data
                        (project_id, workspace_name, collection_id, document_id, data)
                        VALUES (%s, 'production', %s, %s, %s)""",
-                    (project_id, r["collection_id"], r["document_id"], psycopg2.extras.Json(r["data"])),
+                    (
+                        project_id,
+                        r["collection_id"],
+                        r["document_id"],
+                        psycopg2.extras.Json(r["data"]),
+                    ),
                 )
 
             # Carry meta (sequence/statuses) over unchanged
@@ -789,7 +798,13 @@ class PostgresData(PostgresClient):
                    VALUES (%s, %s, %s, %s, %s)
                    ON CONFLICT(project_id, workspace_name, collection_id, document_id)
                    DO UPDATE SET data=excluded.data""",
-                (project_id, workspace_name, collection_id, document_id, psycopg2.extras.Json(data)),
+                (
+                    project_id,
+                    workspace_name,
+                    collection_id,
+                    document_id,
+                    psycopg2.extras.Json(data),
+                ),
             )
             touched_collections.add(collection_id)
             status_by_key[(collection_id, document_id)] = data.get("_status", "draft")
@@ -853,7 +868,8 @@ class PostgresData(PostgresClient):
         cursor = self.get_cursor()
         with self.transaction():
             cursor.execute(
-                "DELETE FROM cms_project_schema WHERE project_id=%s AND id=%s", (project_id, field_id)
+                "DELETE FROM cms_project_schema WHERE project_id=%s AND id=%s",
+                (project_id, field_id),
             )
             for sid in shifted_ids:
                 cursor.execute(

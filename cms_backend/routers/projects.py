@@ -237,7 +237,9 @@ def diff_vs_production(project_id: str, workspace_name: str):
 
 
 @router.post("/projects/{project_id}/workspaces/{workspace_name}/pull-from-production/")
-def pull_from_production(project_id: str, workspace_name: str, body: dict[str, Any], request: Request):
+def pull_from_production(
+    project_id: str, workspace_name: str, body: dict[str, Any], request: Request
+):
     if workspace_name == PRODUCTION:
         raise HTTPException(status_code=400, detail="Cannot pull production into itself.")
     if not db.get_project(project_id):
@@ -256,7 +258,11 @@ def pull_from_production(project_id: str, workspace_name: str, body: dict[str, A
         resource_name=workspace_name,
         project_id=project_id,
         workspace_name=workspace_name,
-        details={"target_workspace": workspace_name, "source": "production", "resolutions": resolutions},
+        details={
+            "target_workspace": workspace_name,
+            "source": "production",
+            "resolutions": resolutions,
+        },
         ip_address=get_client_ip(request),
     )
     return {"detail": f"Latest production content pulled into '{workspace_name}'."}

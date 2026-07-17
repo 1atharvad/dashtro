@@ -40,10 +40,19 @@ TEST_JWT_SECRET = "test-secret-key-not-for-production"
 TEST_DB_TYPE = os.environ.get("TEST_DB_TYPE", "sqlite")
 
 _POSTGRES_TABLES = (
-    "cms_users", "cms_api_keys", "cms_projects", "cms_workspaces",
-    "cms_project_schema", "cms_project_collections", "cms_project_workspace_data",
-    "cms_schema_categories", "cms_schema_category_map", "cms_rich_text_components",
-    "cms_project_rtdb", "cms_document_versions", "cms_audit_logs",
+    "cms_users",
+    "cms_api_keys",
+    "cms_projects",
+    "cms_workspaces",
+    "cms_project_schema",
+    "cms_project_collections",
+    "cms_project_workspace_data",
+    "cms_schema_categories",
+    "cms_schema_category_map",
+    "cms_rich_text_components",
+    "cms_project_rtdb",
+    "cms_document_versions",
+    "cms_audit_logs",
 )
 
 

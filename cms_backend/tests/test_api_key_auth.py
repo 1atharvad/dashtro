@@ -29,7 +29,9 @@ def _create_api_key(client, auth_headers, **overrides):
 
 
 def _sdk_url(project_id="proj-1", workspace="staging", collection="posts"):
-    return SDK_COLLECTION_URL.format(project_id=project_id, workspace=workspace, collection=collection)
+    return SDK_COLLECTION_URL.format(
+        project_id=project_id, workspace=workspace, collection=collection
+    )
 
 
 # ── Missing / invalid / revoked keys ────────────────────────────────────────
@@ -52,9 +54,7 @@ def test_unknown_api_key_is_rejected(client):
 def test_revoked_api_key_is_rejected(client, auth_headers):
     """A key that has been explicitly revoked is treated the same as unknown."""
     key = _create_api_key(client, auth_headers, scopes=["read"])
-    revoke_resp = client.patch(
-        f"/api/cms/auth/api-keys/{key['id']}/revoke/", headers=auth_headers
-    )
+    revoke_resp = client.patch(f"/api/cms/auth/api-keys/{key['id']}/revoke/", headers=auth_headers)
     assert revoke_resp.status_code == 200
 
     resp = client.get(_sdk_url(), headers={"X-API-Key": key["key"]})
@@ -68,9 +68,7 @@ def test_revoked_api_key_is_rejected(client, auth_headers):
 def test_read_only_key_rejected_on_write_route(client, auth_headers):
     """A key with scopes=["read"] must not be usable on a write (POST) route."""
     key = _create_api_key(client, auth_headers, scopes=["read"])
-    resp = client.post(
-        _sdk_url(), json={"title": "hello"}, headers={"X-API-Key": key["key"]}
-    )
+    resp = client.post(_sdk_url(), json={"title": "hello"}, headers={"X-API-Key": key["key"]})
     assert resp.status_code == 403
     assert "write" in resp.json()["detail"]
 
@@ -88,9 +86,7 @@ def test_read_key_accepted_on_read_route(client, auth_headers):
 def test_write_key_accepted_on_write_route(client, auth_headers):
     """A key with the 'write' scope passes the auth layer on a write route."""
     key = _create_api_key(client, auth_headers, scopes=["write"])
-    resp = client.post(
-        _sdk_url(), json={"title": "hello"}, headers={"X-API-Key": key["key"]}
-    )
+    resp = client.post(_sdk_url(), json={"title": "hello"}, headers={"X-API-Key": key["key"]})
     assert resp.status_code not in (401, 403)
 
 

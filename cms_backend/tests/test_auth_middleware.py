@@ -13,7 +13,6 @@ Covers:
 
 from tests.conftest import make_expired_token
 
-
 # ── Whitelisted routes bypass auth ──────────────────────────────────────────
 
 
@@ -123,9 +122,7 @@ def test_sdk_route_not_blocked_by_cms_auth_middleware(client):
     still rejected, but by the SDK's own X-API-Key dependency
     (see test_api_key_auth.py), not by this middleware.
     """
-    resp = client.get(
-        "/api/sdk/projects/some-project/workspace/staging/collection/posts/"
-    )
+    resp = client.get("/api/sdk/projects/some-project/workspace/staging/collection/posts/")
     assert resp.status_code == 401
     assert resp.json()["detail"] == "X-API-Key header missing"
 

@@ -28,14 +28,17 @@ def diff_workspaces(source_docs: list[dict], target_docs: list[dict]) -> dict:
             )
         elif source_data != target_data:
             changed_fields = sorted(
-                k for k in source_data.keys() | target_data.keys()
+                k
+                for k in source_data.keys() | target_data.keys()
                 if source_data.get(k) != target_data.get(k)
             )
-            bucket(collection_id)["modified"].append({
-                "document_id": document_id,
-                "source_data": source_data,
-                "target_data": target_data,
-                "changed_fields": changed_fields,
-            })
+            bucket(collection_id)["modified"].append(
+                {
+                    "document_id": document_id,
+                    "source_data": source_data,
+                    "target_data": target_data,
+                    "changed_fields": changed_fields,
+                }
+            )
 
     return result
