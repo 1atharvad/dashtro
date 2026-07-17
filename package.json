@@ -17,7 +17,7 @@
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/1atharvad/dashro.git"
+    "url": "https://github.com/1atharvad/dashtro.git"
   },
   "scripts": {
     "dev": "docker compose -f docker-compose.dev.yml up --build",
@@ -25,6 +25,9 @@
     "prod": "docker compose -f docker-compose.prod.yml up -d",
     "prod:build": "docker compose -f docker-compose.prod.yml build",
     "prod:down": "docker compose -f docker-compose.prod.yml down",
-    "prod:logs": "docker compose -f docker-compose.prod.yml logs -f"
+    "prod:logs": "docker compose -f docker-compose.prod.yml logs -f",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "lint:frontend": "npm --prefix cms-frontend run lint",
+    "lint:backend": "isort --check . && black --check . && ruff check ."
   }
 }

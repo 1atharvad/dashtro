@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE: ghcr.io/1atharvad/dashro
+  IMAGE: ghcr.io/1atharvad/dashtro
 
 jobs:
   lint:

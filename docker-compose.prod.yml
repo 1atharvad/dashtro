@@ -15,7 +15,7 @@ services:
   # Single app image: FastAPI serves both the API and the built frontend
   # (see Dockerfile.dashtro / main.py's static mount + SPA fallback).
   dashtro:
-    image: ghcr.io/1atharvad/dashro:${IMAGE_TAG:-latest}
+    image: ghcr.io/1atharvad/dashtro:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.dashtro

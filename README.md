@@ -88,7 +88,7 @@ push to `main` (or manually via `workflow_dispatch`):
 1. **`lint`** — frontend `npm run lint` + backend `isort`/`black`/`ruff
    --check`. Must pass before anything builds or deploys.
 2. **`build-and-push`** — builds `Dockerfile.dashtro`, pushes to
-   `ghcr.io/1atharvad/dashro` tagged `latest` and the commit SHA.
+   `ghcr.io/1atharvad/dashtro` tagged `latest` and the commit SHA.
 3. **`deploy`** — regenerates `.env` fresh from repo secrets, copies it to the
    server, then SSHes in to `git pull`, `docker compose pull`, and `up -d`.
    No build happens on the server, and `.env` is no longer hand-maintained
