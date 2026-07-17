@@ -129,18 +129,3 @@ class FirebaseData(FirebaseClient, Schema):
     @staticmethod
     def delete_realtime_content(path):
         return db.reference(path).delete()
-
-
-if __name__ == "__main__":
-    api_key = "REDACTED-ROTATED-KEY"
-    firebaseAuth = FirebaseAuth()
-    # print(firebaseAuth.create_user('atharvadevasthali22@gmail.com', 'asd@12345'))
-    data = firebaseAuth.login_user("atharvadevasthali22@gmail.com", "asd@12345", api_key)
-    print(data, firebaseAuth.verify_id_token(data["idToken"]))
-
-    # firebaseData = FirebaseData()
-    # print(json.dumps(
-    #     asyncio.run(firebaseData.fetch_document_data('portfolio', 'fQceYKreWBjS9WfY1E4S')),
-    #     indent=2
-    # ))
-    # asyncio.run(firebaseData.fetch_document_data('global-details', 'vtJHCyAzyZYh5mLHQ8Wc'))
