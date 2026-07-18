@@ -47,7 +47,7 @@ docker compose -f docker-compose.dev.yml --profile postgres up
 
 ## Running the image elsewhere
 
-The published image serves both the API and the built SPA on port 8000, and
+The published image serves both the API and the built SPA on port 7312, and
 reads its config from env vars (see below) — no other dependency beyond
 whichever `DB_TYPE` backend you point it at:
 
