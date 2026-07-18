@@ -22,10 +22,6 @@
   "scripts": {
     "dev": "docker compose -f docker-compose.dev.yml up --build",
     "dev:down": "docker compose -f docker-compose.dev.yml down",
-    "prod": "docker compose -f docker-compose.prod.yml up -d",
-    "prod:build": "docker compose -f docker-compose.prod.yml build",
-    "prod:down": "docker compose -f docker-compose.prod.yml down",
-    "prod:logs": "docker compose -f docker-compose.prod.yml logs -f",
     "lint": "npm run lint:frontend && npm run lint:backend",
     "lint:frontend": "npm --prefix cms-frontend run lint",
     "lint:backend": "isort --check . && black --check . && ruff check ."
