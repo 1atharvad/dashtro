@@ -36,6 +36,14 @@ app.add_middleware(
 # preflight OPTIONS requests through untouched.
 app.add_middleware(CMSAuthMiddleware)
 
+
+# Unauthenticated liveness check for Docker/orchestrator health probes.
+# Registered before the routers/SPA fallback below so nothing shadows it.
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 app.include_router(auth.router, prefix="/api/cms")
 app.include_router(projects.router, prefix="/api/cms")
 app.include_router(schema.router, prefix="/api/cms")

@@ -6,6 +6,17 @@ fixes/chores/docs — pre-1.0, so breaking changes may still land as minor.
 
 ---
 
+## [0.22.0] — 2026-07-18
+
+- `GET /health` returns `{"status": "ok"}`, unauthenticated (registered before
+  `CMSAuthMiddleware`-covered routers and the SPA fallback catch-all so
+  nothing shadows it).
+- `Dockerfile.dashtro`'s `HEALTHCHECK` polls it via Python's `urllib` (no
+  `curl` in `python:3.12-slim`), so orchestrators/compose's
+  `depends_on: condition: service_healthy` can rely on container status.
+
+---
+
 ## [0.21.2] — 2026-07-18
 
 - Retroactively tags the full commit history (v0.1.0 through v0.21.1) and
