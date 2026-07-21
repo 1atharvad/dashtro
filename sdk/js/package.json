@@ -1,6 +1,6 @@
 {
   "name": "@dashtro/client",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "JS/TS client SDK for the Dashtro CMS API",
   "license": "ISC",
   "author": "Atharva Devasthali",
@@ -22,7 +22,9 @@
       "require": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts",
     "changeset": "changeset",
