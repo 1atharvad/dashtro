@@ -1,6 +1,6 @@
 {
   "name": "dashtro",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "private": true,
   "description": "Dashtro: a self-hosted CMS with a project/workspace/collection/document model, FastAPI backend, and React frontend.",
   "keywords": [

@@ -6,6 +6,17 @@ fixes/chores/docs — pre-1.0, so breaking changes may still land as minor.
 
 ---
 
+## [0.23.1] — 2026-07-21
+
+- Fixes `sdk/js/package-lock.json` inconsistency that broke `npm ci` in the
+  new `sdk-release` CI job (`Missing: undici-types@8.3.0 from lock file`).
+  A single `npm install` left nested `@types/node` entries — pulled in
+  transitively by `@changesets/cli` via `@inquirer/external-editor` and
+  `@manypkg/find-root`, which want different major versions — not fully
+  converged; running install twice stabilizes it.
+
+---
+
 ## [0.23.0] — 2026-07-21
 
 - Sets up publishing for both SDKs: `sdk/js` (`@dashtro/client`) gets
