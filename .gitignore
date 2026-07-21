@@ -28,5 +28,6 @@ __pycache__
 **/**.pyc
 .env
 *.egg-info/
+sdk/python/build/
 cms_backend/db.sqlite3
 backup/

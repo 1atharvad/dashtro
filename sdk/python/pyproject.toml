@@ -6,8 +6,20 @@ build-backend = "setuptools.build_meta"
 name = "dashtro-client"
 version = "0.2.0"
 description = "Python client SDK for the Dashtro CMS API"
+readme = "README.md"
+license = "ISC"
+authors = [{ name = "Atharva Devasthali" }]
 requires-python = ">=3.10"
 dependencies = ["httpx>=0.27"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/1atharvad/dashtro"
+Repository = "https://github.com/1atharvad/dashtro"
+"Source" = "https://github.com/1atharvad/dashtro/tree/main/sdk/python"
 
 [tool.setuptools.packages.find]
 where = ["."]

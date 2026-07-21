@@ -6,6 +6,25 @@ fixes/chores/docs — pre-1.0, so breaking changes may still land as minor.
 
 ---
 
+## [0.23.0] — 2026-07-21
+
+- Sets up publishing for both SDKs: `sdk/js` (`@dashtro/client`) gets
+  Changesets (`.changeset/`, `changeset`/`version-packages`/`release`
+  scripts) for version bumps and changelog generation; `sdk/scripts/
+  sync-python-version.mjs` mirrors each bump into `sdk/python`'s
+  `pyproject.toml` and `CHANGELOG.md` so both SDKs stay in lockstep.
+- Adds a `sdk-release` job to `build-image.yml`: on a pending changeset, it
+  versions, publishes `@dashtro/client` to npm and `dashtro-client` to PyPI
+  via OIDC trusted publishing (no stored tokens), and pushes the version
+  bump commit back to `main`.
+- Adds READMEs for both SDKs (shown on their npm/PyPI package pages) and
+  fills in `pyproject.toml`/`package.json` metadata (license, author,
+  repository, classifiers) PyPI/npm expect.
+- Fixes an `exports` field ordering warning in `sdk/js/package.json`
+  (`types` now listed before `import`/`require`).
+
+---
+
 ## [0.22.0] — 2026-07-18
 
 - `GET /health` returns `{"status": "ok"}`, unauthenticated (registered before

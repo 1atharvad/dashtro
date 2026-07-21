@@ -68,3 +68,75 @@ jobs:
             ${{ env.IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  sdk-release:
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # OIDC trusted publishing to npm + PyPI, no stored tokens
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sdk/js/package-lock.json
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install JS SDK deps
+        working-directory: sdk/js
+        run: npm ci
+
+      # Trusted Publishing (OIDC) requires npm CLI >= 11.5.1; setup-node's
+      # bundled npm on ubuntu-latest may be older. Pinned to the npm@11 line
+      # (not `latest`) because npm 12 dropped support for Node 20.
+      - run: npm install -g npm@11
+
+      - name: Check for pending changesets
+        id: changesets
+        working-directory: sdk/js
+        run: |
+          if compgen -G ".changeset/*.md" > /dev/null && [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md)" ]; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Version, sync, commit, and publish
+        if: steps.changesets.outputs.pending == 'true'
+        run: |
+          cd sdk/js
+          npm run version-packages
+          cd ../..
+          node sdk/scripts/sync-python-version.mjs
+
+          NEW_VERSION=$(node -p "require('./sdk/js/package.json').version")
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sdk/js sdk/python
+          git commit -m "sdk v$NEW_VERSION"
+
+          cd sdk/js
+          npm run release
+
+          cd ../python
+          python -m pip install --quiet build
+          python -m build
+
+      - name: Publish to PyPI
+        if: steps.changesets.outputs.pending == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist
+
+      - name: Push version bump
+        if: steps.changesets.outputs.pending == 'true'
+        run: git push origin HEAD:main --follow-tags

@@ -2,21 +2,35 @@
   "name": "@dashtro/client",
   "version": "0.2.0",
   "description": "JS/TS client SDK for the Dashtro CMS API",
+  "license": "ISC",
+  "author": "Atharva Devasthali",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1atharvad/dashtro.git",
+    "directory": "sdk/js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     }
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts"
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "npm run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
   }
