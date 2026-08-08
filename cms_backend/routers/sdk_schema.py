@@ -13,6 +13,7 @@ router = APIRouter()
 
 # ── Schema Read (Export) ──────────────────────────────────────────────────────
 
+
 @router.get("/projects/{project_id}/schema/")
 def get_schema_names(
     project_id: str,
@@ -103,7 +104,9 @@ async def get_collection_metadata(
     }
 
 
-@router.get("/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/")
+@router.get(
+    "/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/"
+)
 async def get_document(
     project_id: str,
     workspace_name: str,
@@ -123,13 +126,16 @@ async def get_document(
     if not collection_id:
         raise HTTPException(status_code=404, detail=f"Collection {collection_name} not found")
 
-    doc = await db.fetch_document(project_id, workspace_name, collection_id, document_id, depth=depth)
+    doc = await db.fetch_document(
+        project_id, workspace_name, collection_id, document_id, depth=depth
+    )
     if not doc:
         raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
     return doc
 
 
 # ── Schema Write (Import) ─────────────────────────────────────────────────────
+
 
 @router.post("/projects/{project_id}/schema-categories/")
 def create_schema_category(
@@ -240,7 +246,9 @@ async def create_document(
     return {"_id": doc_id, **doc_data}
 
 
-@router.put("/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/")
+@router.put(
+    "/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/"
+)
 async def update_document(
     project_id: str,
     workspace_name: str,

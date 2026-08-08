@@ -96,7 +96,9 @@ import urllib.error
 import urllib.request
 
 
-def _request(method: str, url: str, payload: dict | None = None, api_key: str | None = None) -> dict | list:
+def _request(
+    method: str, url: str, payload: dict | None = None, api_key: str | None = None
+) -> dict | list:
     data = json.dumps(payload).encode() if payload is not None else None
     headers = {"Content-Type": "application/json"} if data else {}
     if api_key:
@@ -330,7 +332,9 @@ def _import_collections(db, project_id: str, backup_dir: Path) -> None:
 # ─── HTTP-based schema export/import ──────────────────────────────────────────
 
 
-def cmd_export_http(base_url: str, project_id: str, backup_dir: Path, api_key: str | None = None) -> None:
+def cmd_export_http(
+    base_url: str, project_id: str, backup_dir: Path, api_key: str | None = None
+) -> None:
     schemas_dir = backup_dir / "schemas"
     schemas_dir.mkdir(parents=True, exist_ok=True)
     meta = _get(base_url, f"/api/sdk/projects/{project_id}/schema/", api_key=api_key)
@@ -361,7 +365,9 @@ def cmd_export_http(base_url: str, project_id: str, backup_dir: Path, api_key: s
     print("Done.")
 
 
-def cmd_import_http(base_url: str, project_id: str, backup_dir: Path, api_key: str | None = None) -> None:
+def cmd_import_http(
+    base_url: str, project_id: str, backup_dir: Path, api_key: str | None = None
+) -> None:
     schemas_dir = backup_dir / "schemas"
     if not schemas_dir.exists():
         print(f"Error: {schemas_dir} not found.", file=sys.stderr)
@@ -375,7 +381,12 @@ def cmd_import_http(base_url: str, project_id: str, backup_dir: Path, api_key: s
         for c in live_cats:
             if c["name"] == name:
                 return c["id"]
-        new_cat = _post(base_url, f"/api/sdk/projects/{project_id}/schema-categories/", {"name": name}, api_key=api_key)
+        new_cat = _post(
+            base_url,
+            f"/api/sdk/projects/{project_id}/schema-categories/",
+            {"name": name},
+            api_key=api_key,
+        )
         live_cats.append(new_cat)
         return new_cat["id"]
 
@@ -400,7 +411,9 @@ def cmd_import_http(base_url: str, project_id: str, backup_dir: Path, api_key: s
         fields_from_file = deduped
         print(f"\n  [{schema_name}]  {len(fields_from_file)} field(s)")
         try:
-            resp = _get(base_url, f"/api/sdk/projects/{project_id}/schema/{schema_name}/", api_key=api_key)
+            resp = _get(
+                base_url, f"/api/sdk/projects/{project_id}/schema/{schema_name}/", api_key=api_key
+            )
             live_fields = resp.get(schema_name, []) if isinstance(resp, dict) else resp
         except RuntimeError as e:
             live_fields = [] if "404" in str(e) else (_ for _ in ()).throw(e)
@@ -415,7 +428,12 @@ def cmd_import_http(base_url: str, project_id: str, backup_dir: Path, api_key: s
                 fid = live_by_name[fn]["_id"]
                 payload = {k: v for k, v in field.items() if k not in _PRESERVE_IMPORT}
                 try:
-                    _put(base_url, f"/api/sdk/projects/{project_id}/schema/{fid}/", payload, api_key=api_key)
+                    _put(
+                        base_url,
+                        f"/api/sdk/projects/{project_id}/schema/{fid}/",
+                        payload,
+                        api_key=api_key,
+                    )
                     print(f"    ~ {fn}")
                 except RuntimeError as e:
                     print(f"    ✗ {fn}: {e}", file=sys.stderr)
@@ -433,7 +451,11 @@ def cmd_import_http(base_url: str, project_id: str, backup_dir: Path, api_key: s
         for fn, lf in live_by_name.items():
             if fn not in file_names:
                 try:
-                    _request("DELETE", f"{base_url}/api/sdk/projects/{project_id}/schema/{lf['_id']}/", api_key=api_key)
+                    _request(
+                        "DELETE",
+                        f"{base_url}/api/sdk/projects/{project_id}/schema/{lf['_id']}/",
+                        api_key=api_key,
+                    )
                     print(f"    - {fn}")
                 except RuntimeError as e:
                     print(f"    ✗ delete {fn}: {e}", file=sys.stderr)
@@ -497,7 +519,11 @@ def _unwrap_references(doc: dict) -> dict:
 
 
 def cmd_documents_export_http(
-    base_url: str, project_id: str, workspace_name: str, backup_dir: Path, api_key: str | None = None
+    base_url: str,
+    project_id: str,
+    workspace_name: str,
+    backup_dir: Path,
+    api_key: str | None = None,
 ) -> None:
     docs_dir = backup_dir / "documents"
     docs_dir.mkdir(parents=True, exist_ok=True)
@@ -506,7 +532,9 @@ def cmd_documents_export_http(
     for col in cols.get("_schema_collections", []):
         coll_name = col["_collection_name"]
         coll_meta = _get(
-            base_url, f"/api/sdk/projects/{project_id}/workspace/{workspace_name}/collection/{coll_name}/", api_key=api_key
+            base_url,
+            f"/api/sdk/projects/{project_id}/workspace/{workspace_name}/collection/{coll_name}/",
+            api_key=api_key,
         )
         doc_ids = [d for d in coll_meta.get("_document_ids", []) if d]
         if not doc_ids:
@@ -540,7 +568,12 @@ def cmd_documents_export_http(
 
 
 def cmd_documents_import_http(
-    base_url: str, project_id: str, workspace_name: str, backup_dir: Path, merge: bool = False, api_key: str | None = None
+    base_url: str,
+    project_id: str,
+    workspace_name: str,
+    backup_dir: Path,
+    merge: bool = False,
+    api_key: str | None = None,
 ) -> None:
     docs_dir = backup_dir / "documents"
     if not docs_dir.exists():
@@ -551,7 +584,9 @@ def cmd_documents_import_http(
     for coll_dir in sorted(p for p in docs_dir.iterdir() if p.is_dir()):
         coll_name = coll_dir.name
         coll_meta = _get(
-            base_url, f"/api/sdk/projects/{project_id}/workspace/{workspace_name}/collection/{coll_name}/", api_key=api_key
+            base_url,
+            f"/api/sdk/projects/{project_id}/workspace/{workspace_name}/collection/{coll_name}/",
+            api_key=api_key,
         )
         existing_ids = set(coll_meta.get("_document_ids", []))
         doc_files = sorted(coll_dir.glob("*.json"))
@@ -814,7 +849,9 @@ def cmd_media_export_http(base_url: str, backup_dir: Path, api_key: str | None =
             headers = {}
             if api_key:
                 headers["X-API-Key"] = api_key
-            req = urllib.request.Request(f"{base_url}/api/sdk/media/files/{filename}", headers=headers)
+            req = urllib.request.Request(
+                f"{base_url}/api/sdk/media/files/{filename}", headers=headers
+            )
             with urllib.request.urlopen(req) as resp:
                 (media_dir / filename).write_bytes(resp.read())
             print(f"  ✓ {filename}")
@@ -955,7 +992,9 @@ def main() -> None:
                     cmd_export(args.project_id, backup_dir)
             elif args.noun == "documents":
                 if base_url:
-                    cmd_documents_export_http(base_url, args.project_id, args.workspace, backup_dir, api_key=api_key)
+                    cmd_documents_export_http(
+                        base_url, args.project_id, args.workspace, backup_dir, api_key=api_key
+                    )
                 else:
                     cmd_documents_export(args.project_id, args.workspace, backup_dir)
             elif args.noun == "media":
@@ -972,7 +1011,12 @@ def main() -> None:
             elif args.noun == "documents":
                 if base_url:
                     cmd_documents_import_http(
-                        base_url, args.project_id, args.workspace, backup_dir, merge=args.merge, api_key=api_key
+                        base_url,
+                        args.project_id,
+                        args.workspace,
+                        backup_dir,
+                        merge=args.merge,
+                        api_key=api_key,
                     )
                 else:
                     cmd_documents_import(
