@@ -2,7 +2,7 @@
   "name": "dashtro",
   "version": "0.23.1",
   "private": true,
-  "description": "Dashtro: a self-hosted CMS with a project/workspace/collection/document model, FastAPI backend, and React frontend.",
+  "description": "Self-hosted headless CMS platform with a unified Studio for managing content, collections, and documents across multiple projects.",
   "keywords": [
     "cms",
     "dashtro",

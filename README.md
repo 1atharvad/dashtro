@@ -75,19 +75,76 @@ See [`.env.example`](.env.example) for the full list (`DB_TYPE`, `JWT_SECRET_KEY
 ## Backup / restore CLI
 
 `cms_backend/scripts/cms_schema.py` (installed as the `dashtro` console script)
-exports/imports schemas, documents, and media to/from a `backup/` directory:
+exports/imports schemas, documents, and media to/from a `backup/` directory.
+
+### Local (Direct Database Access)
 
 ```bash
+# Export
 dashtro export schema --project-id <id>
 dashtro export documents --project-id <id> --workspace <name>
 dashtro export media
+
+# Import
+dashtro import schema --project-id <id>
+dashtro import documents --project-id <id> --workspace <name>
+dashtro import media
 ```
 
-Run against the running container directly:
+Run against a running container:
 
 ```bash
 docker exec <container> dashtro export schema --project-id <id> --backup-dir /app/backup
+docker exec <container> dashtro import schema --project-id <id> --backup-dir /app/backup
 ```
+
+### Remote (HTTP API with Authentication)
+
+Use `--base-url` to export/import from/to a remote Dashtro instance. Requires an API key generated in the CMS settings.
+
+**Via command line:**
+
+```bash
+# Export from remote
+dashtro export schema --project-id <id> --base-url https://your-cms.com --api-key <api-key>
+dashtro export documents --project-id <id> --workspace <name> --base-url https://your-cms.com --api-key <api-key>
+dashtro export media --base-url https://your-cms.com --api-key <api-key>
+
+# Import to remote
+dashtro import schema --project-id <id> --base-url https://your-cms.com --api-key <api-key>
+dashtro import documents --project-id <id> --workspace <name> --base-url https://your-cms.com --api-key <api-key>
+dashtro import media --base-url https://your-cms.com --api-key <api-key>
+```
+
+**Via environment variable (recommended):**
+
+```bash
+export CMS_API_KEY=<api-key>
+dashtro export schema --project-id <id> --base-url https://your-cms.com
+dashtro import documents --project-id <id> --workspace <name> --base-url https://your-cms.com
+```
+
+### Full Backup/Restore Workflow
+
+Export must run in order: schema → documents → media. Restore uses the same order:
+
+```bash
+# Backup from source instance
+dashtro export schema --project-id abc123 --base-url https://source.com --api-key <key>
+dashtro export documents --project-id abc123 --workspace production --base-url https://source.com --api-key <key>
+dashtro export media --base-url https://source.com --api-key <key>
+
+# Restore to destination instance
+dashtro import schema --project-id abc123 --base-url https://dest.com --api-key <key>
+dashtro import documents --project-id abc123 --workspace production --base-url https://dest.com --api-key <key>
+dashtro import media --base-url https://dest.com --api-key <key>
+```
+
+**Options:**
+- `--backup-dir` — backup directory location (default: `./backup/`)
+- `--base-url` — remote API URL (if omitted, uses direct database access)
+- `--api-key` — API key for authentication (or set `CMS_API_KEY` env var)
+- `--merge` — merge documents instead of replacing (local mode only)
 
 ## CI/CD
 
