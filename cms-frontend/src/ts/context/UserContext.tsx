@@ -8,7 +8,6 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<CurrentUser | null>(null);
 
   const refreshUser = useCallback(async () => {
-    if (!getToken()) return;
     try {
       const r = await authFetch(`${API_BASE_URL}/auth/`);
       const data = r.ok ? await r.json() : null;
@@ -25,7 +24,9 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, []);
 
-  useEffect(() => { refreshUser(); }, [refreshUser]);
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
 
   return <UserContext.Provider value={{ user, refreshUser }}>{children}</UserContext.Provider>;
 };
