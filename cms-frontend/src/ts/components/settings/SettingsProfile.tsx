@@ -11,14 +11,12 @@ export const SettingsProfile = () => {
   const [user, setUser] = useState<{ uid: string; email: string } | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (currentUser) {
       setUser({ uid: currentUser.uid, email: currentUser.email });
       setFirstName(currentUser.firstName || '');
       setLastName(currentUser.lastName || '');
-      setIsLoading(false);
     }
   }, [currentUser]);
 

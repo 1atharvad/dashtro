@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL } from '@ts/config';
-import { authFetch, getToken } from '@ts/utils/auth';
+import { authFetch } from '@ts/utils/auth';
 import { UserContext } from './userContextValue';
 import type { CurrentUser } from '@ts/types/constants';
 
