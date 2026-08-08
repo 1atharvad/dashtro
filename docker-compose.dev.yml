@@ -28,6 +28,9 @@ services:
     build:
       context: ./cms_backend
       dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./cms_backend:/app
       - uploads_data:/app/uploads
@@ -65,12 +68,9 @@ services:
     networks:
       - internal
 
-  # Optional: only needed if DB_TYPE=postgres and you want a local Postgres
-  # instead of pointing DB_HOST at an external one. Not started by default —
-  # bring it up explicitly with `docker compose --profile postgres up`.
+  # Local PostgreSQL database for development
   postgres:
     image: postgres:16-alpine
-    profiles: ["postgres"]
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}

@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { Avatar, Box, IconButton, Tooltip } from '@mui/material';
 import { LogoLink } from 'advi-ui';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -11,9 +11,15 @@ interface AppHeaderProps {
 
 export const AppHeader = ({ actions }: AppHeaderProps) => {
   const navigate = useNavigate();
-  const { user } = useUser();
+  const { user, refreshUser } = useUser();
   const { project_id } = useParams<{ project_id?: string }>();
   const logoUrl = project_id ? `/projects/${project_id}/` : '/';
+
+  useEffect(() => {
+    if (!user) {
+      refreshUser();
+    }
+  }, [user, refreshUser]);
   return (
     <Box component="header" className="vi-header">
       <Box className="vi-header-desktop">

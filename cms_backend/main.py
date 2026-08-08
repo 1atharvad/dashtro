@@ -20,6 +20,7 @@ from routers import (
     schema_categories,
     sdk_documents,
     sdk_realtime_db,
+    sdk_schema,
 )
 
 app = FastAPI(title="DashTro CMS API", redirect_slashes=False)
@@ -60,6 +61,7 @@ app.include_router(realtime_db.router, prefix="/api/cms")
 # only inspects /api/cms/, so it never touches these routes.
 app.include_router(sdk_documents.router, prefix="/api/sdk")
 app.include_router(sdk_realtime_db.router, prefix="/api/sdk")
+app.include_router(sdk_schema.router, prefix="/api/sdk")
 
 # Built frontend (cms-frontend/dist), copied to /app/static by the combined
 # Dockerfile at repo root. Absent in local/dev-container runs where the

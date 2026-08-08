@@ -15,10 +15,16 @@ export const SettingsProfile = () => {
   useEffect(() => {
     if (currentUser) {
       setUser({ uid: currentUser.uid, email: currentUser.email });
-      setFirstName(currentUser.firstName);
-      setLastName(currentUser.lastName);
+      setFirstName(currentUser.firstName || '');
+      setLastName(currentUser.lastName || '');
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      refreshUser();
+    }
+  }, [currentUser, refreshUser]);
 
   const handleSave = async () => {
     await authFetch(`${API_BASE_URL}/auth/profile/`, {

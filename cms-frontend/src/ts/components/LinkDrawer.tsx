@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Avatar } from '@mui/material';
 import { PageAside, AsideItem, AsideBtn, LogoLink } from 'advi-ui';
@@ -21,10 +21,16 @@ export const LinkDrawer = ({
   settingsFooter, footer,
 }: LinkDrawerProps) => {
   const navigate = useNavigate();
-  const { user } = useUser();
+  const { user, refreshUser } = useUser();
   const { project_id } = useParams<{ project_id?: string }>();
   const logoUrl = project_id ? `/projects/${project_id}/` : '/';
   const [open, setOpen] = useState(() => localStorage.getItem('sidebarCollapsed') !== 'true');
+
+  useEffect(() => {
+    if (!user) {
+      refreshUser();
+    }
+  }, [user, refreshUser]);
 
   const handleToggle = () => {
     const next = !open;

@@ -174,15 +174,16 @@ class PostgresAuth(PostgresClient):
 
         secret = config("JWT_SECRET_KEY")
         now = datetime.now(tz=UTC)
+        now_ts = int(now.timestamp())
         payload = {
             "uid": str(row["id"]),
             "email": row["email"],
             "email_verified": True,
-            "exp": now + timedelta(hours=1),
-            "iat": now,
+            "exp": now_ts + 3600,
+            "iat": now_ts,
         }
         id_token = jwt.encode(payload, secret, algorithm="HS256")
-        refresh_payload = {**payload, "exp": now + timedelta(days=30)}
+        refresh_payload = {**payload, "exp": now_ts + 2592000}
         refresh_token = jwt.encode(refresh_payload, secret, algorithm="HS256")
 
         return {
@@ -194,15 +195,16 @@ class PostgresAuth(PostgresClient):
     def refresh_tokens(self, uid: str, email: str):
         secret = config("JWT_SECRET_KEY")
         now = datetime.now(tz=UTC)
+        now_ts = int(now.timestamp())
         payload = {
             "uid": uid,
             "email": email,
             "email_verified": True,
-            "exp": now + timedelta(hours=1),
-            "iat": now,
+            "exp": now_ts + 3600,
+            "iat": now_ts,
         }
         id_token = jwt.encode(payload, secret, algorithm="HS256")
-        refresh_payload = {**payload, "exp": now + timedelta(days=30)}
+        refresh_payload = {**payload, "exp": now_ts + 2592000}
         refresh_token = jwt.encode(refresh_payload, secret, algorithm="HS256")
         return {"idToken": id_token, "refreshToken": refresh_token}
 
