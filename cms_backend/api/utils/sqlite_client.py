@@ -392,7 +392,6 @@ class SqliteAuth(SqliteClient):
         if not row:
             raise Exception("No users exist. Please sign up first.")
         secret = config("JWT_SECRET_KEY")
-        from datetime import datetime, timedelta
 
         import jwt as pyjwt
 
