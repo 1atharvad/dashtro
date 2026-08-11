@@ -7,6 +7,7 @@ name = "dashtro"
 version = "0.1.0"
 requires-python = ">=3.10"
 description = "DashTro CMS CLI tools"
+license = "MIT"
 
 [project.scripts]
 dashtro = "cms_backend.scripts.cms_schema:main"

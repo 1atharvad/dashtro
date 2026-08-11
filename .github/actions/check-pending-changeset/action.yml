@@ -1,0 +1,22 @@
+name: Check for pending changeset
+description: Sets `pending=true` if the given package directory has an unconsumed changeset file.
+inputs:
+  working-directory:
+    description: Package directory containing a .changeset/ folder
+    required: true
+outputs:
+  pending:
+    description: "'true' if there's at least one pending (non-README) changeset file"
+    value: ${{ steps.check.outputs.pending }}
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if compgen -G ".changeset/*.md" > /dev/null && [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md)" ]; then
+          echo "pending=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "pending=false" >> "$GITHUB_OUTPUT"
+        fi

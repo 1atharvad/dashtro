@@ -84,7 +84,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: sdk/js/package-lock.json
+          cache-dependency-path: |
+            sdk/js/package-lock.json
+            sdk/mcp/package-lock.json
           registry-url: https://registry.npmjs.org
 
       - uses: actions/setup-python@v5
@@ -95,6 +97,10 @@ jobs:
         working-directory: sdk/js
         run: npm ci
 
+      - name: Install MCP server deps
+        working-directory: sdk/mcp
+        run: npm ci
+
       # Trusted Publishing (OIDC) requires npm CLI >= 11.5.1; setup-node's
       # bundled npm on ubuntu-latest may be older. Pinned to the npm@11 line
       # (not `latest`) because npm 12 dropped support for Node 20.
@@ -102,13 +108,15 @@ jobs:
 
       - name: Check for pending changesets
         id: changesets
-        working-directory: sdk/js
-        run: |
-          if compgen -G ".changeset/*.md" > /dev/null && [ -n "$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md)" ]; then
-            echo "pending=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "pending=false" >> "$GITHUB_OUTPUT"
-          fi
+        uses: ./.github/actions/check-pending-changeset
+        with:
+          working-directory: sdk/js
+
+      - name: Check for pending sdk/mcp changesets
+        id: mcp-changesets
+        uses: ./.github/actions/check-pending-changeset
+        with:
+          working-directory: sdk/mcp
 
       - name: Version, sync, commit, and publish
         if: steps.changesets.outputs.pending == 'true'
@@ -137,6 +145,25 @@ jobs:
         with:
           packages-dir: sdk/python/dist
 
+      - name: Version, commit, and publish @dashtro/mcp
+        # sdk/mcp releases independently of sdk/js — (success() || failure())
+        # keeps this from being skipped just because the unrelated sdk/js/PyPI
+        # publish above it failed.
+        if: (success() || failure()) && steps.mcp-changesets.outputs.pending == 'true'
+        run: |
+          cd sdk/mcp
+          npm run version-packages
+          cd ../..
+
+          NEW_MCP_VERSION=$(node -p "require('./sdk/mcp/package.json').version")
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sdk/mcp
+          git commit -m "@dashtro/mcp v$NEW_MCP_VERSION"
+
+          cd sdk/mcp
+          npm run release
+
       - name: Push version bump
-        if: steps.changesets.outputs.pending == 'true'
+        if: (success() || failure()) && (steps.changesets.outputs.pending == 'true' || steps.mcp-changesets.outputs.pending == 'true')
         run: git push origin HEAD:main --follow-tags
