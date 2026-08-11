@@ -98,6 +98,33 @@ jobs:
             ${{ env.IMAGE }}:${{ github.sha }}-amd64 \
             ${{ env.IMAGE }}:${{ github.sha }}-arm64
 
+  dashtro-release:
+    # Publishes the root `dashtro` package (backup/restore CLI + cms_mcp) to
+    # PyPI. Unlike sdk-release, there's no JS sibling to drive changesets off
+    # of, so versioning here is just "bump pyproject.toml's version by hand
+    # when you want a release" — skip-existing makes this a no-op otherwise.
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC trusted publishing to PyPI, no stored tokens
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build dashtro
+        run: |
+          python -m pip install --quiet build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
   sdk-release:
     needs: lint
     runs-on: ubuntu-latest

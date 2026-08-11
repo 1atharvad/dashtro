@@ -6,8 +6,22 @@ build-backend = "setuptools.build_meta"
 name = "dashtro"
 version = "0.1.0"
 requires-python = ">=3.10"
-description = "DashTro CMS CLI tools"
+description = "DashTro CMS backup/restore CLI, plus a direct-database-access MCP server"
+readme = "README.md"
 license = "MIT"
+authors = [{ name = "Atharva Devasthali" }]
+dependencies = [
+    "pydantic>=2.9",
+    "python-decouple>=3.8",
+    "PyJWT>=2.8",
+    "psycopg2-binary>=2.9",
+    "mcp>=1.0.0,<2.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/1atharvad/dashtro"
+Repository = "https://github.com/1atharvad/dashtro"
 
 [project.scripts]
 dashtro = "cms_backend.scripts.cms_schema:main"
@@ -15,7 +29,17 @@ dashtro-mcp = "cms_mcp.server:mcp.run"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["cms_backend*", "cms_mcp*"]
+# Only what cms_schema.py (the `dashtro` CLI) and cms_mcp/server.py (the
+# `dashtro-mcp` MCP server) actually import — not routers/, tests/, or
+# api/middleware/, which belong to the FastAPI app, not this CLI package.
+include = [
+    "cms_backend",
+    "cms_backend.scripts",
+    "cms_backend.api",
+    "cms_backend.api.utils",
+    "cms_backend.models",
+    "cms_mcp",
+]
 
 [tool.black]
 line-length = 100

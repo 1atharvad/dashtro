@@ -3,6 +3,7 @@
 [![CI](https://github.com/1atharvad/dashtro/actions/workflows/build-image.yml/badge.svg)](https://github.com/1atharvad/dashtro/actions/workflows/build-image.yml)
 [![Docker image](https://img.shields.io/badge/ghcr.io-1atharvad%2Fdashtro-2496ED?logo=docker&logoColor=white)](https://github.com/1atharvad/dashtro/pkgs/container/dashtro)
 [![npm @dashtro/client](https://img.shields.io/npm/v/%40dashtro%2Fclient?label=%40dashtro%2Fclient)](https://www.npmjs.com/package/@dashtro/client)
+[![npm @dashtro/mcp](https://img.shields.io/npm/v/%40dashtro%2Fmcp?label=%40dashtro%2Fmcp)](https://www.npmjs.com/package/@dashtro/mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A self-hosted CMS with a project → workspace → collection → document model, a
@@ -46,8 +47,8 @@ Everything this repo publishes, and what it's for:
 | `ghcr.io/1atharvad/dashtro` | [GHCR](https://github.com/1atharvad/dashtro/pkgs/container/dashtro) | `docker pull ghcr.io/1atharvad/dashtro` | The CMS itself — backend + built frontend in one image. See [Running the image elsewhere](#running-the-image-elsewhere). |
 | [`@dashtro/client`](sdk/js/) | [npm](https://www.npmjs.com/package/@dashtro/client) | `npm install @dashtro/client` | JS/TS client SDK for `/api/sdk/*` — read/write a project's documents and RTDB from an external app. |
 | [`dashtro-client`](sdk/python/) | [PyPI](https://pypi.org/project/dashtro-client/) | `pip install dashtro-client` | Python equivalent of `@dashtro/client`, released in lockstep with it. |
-| [`@dashtro/mcp`](sdk/mcp/) | npm (not yet published) | `npx @dashtro/mcp init` | npx-runnable MCP server — lets Claude/other MCP clients read and write your CMS content. Node port of `cms_mcp/`, no Python needed. |
-| `dashtro` | not published | n/a — run from a repo checkout | Root package: the `dashtro` backup/restore CLI (`cms_backend/scripts/cms_schema.py`) and the Python MCP server (`cms_mcp/`, console script `dashtro-mcp`). Not on PyPI — use `@dashtro/mcp` instead for MCP access, or run this from a checkout for the backup CLI. |
+| [`@dashtro/mcp`](sdk/mcp/) | [npm](https://www.npmjs.com/package/@dashtro/mcp) | `npx @dashtro/mcp init` | npx-runnable MCP server — lets Claude/other MCP clients read and write your CMS content. Node port of `cms_mcp/`, no Python needed. |
+| `dashtro` | not published | n/a — run from a repo checkout | Root package: the `dashtro` backup/restore CLI (`cms_backend/scripts/cms_schema.py`, see [Backup / restore CLI](#backup--restore-cli)). Also bundles `cms_mcp`/`dashtro-mcp`, but use `@dashtro/mcp` instead for MCP access — this package isn't on PyPI. |
 
 ## Architecture
 
