@@ -14,8 +14,8 @@ function runInit(): never {
     command: "npx",
     args: ["-y", "@dashtro/mcp"],
     env: {
-      CMS_API_URL: "https://<your-dashtro-instance>/api/cms",
-      CMS_TOKEN: "<your-api-token>",
+      CMS_API_URL: "https://<your-dashtro-instance>/api/sdk",
+      CMS_API_KEY: "<your-api-key>",
     },
   };
 
@@ -27,7 +27,7 @@ function runInit(): never {
       "",
       "Next steps:",
       "  1. Replace CMS_API_URL with your running Dashtro instance's URL.",
-      "  2. Replace CMS_TOKEN with an API key from your instance's settings page.",
+      "  2. Replace CMS_API_KEY with an API key from your instance's settings page.",
       "  3. Restart your MCP client (or run `claude mcp` / `/mcp` to reconnect).",
     ].join("\n"),
   );

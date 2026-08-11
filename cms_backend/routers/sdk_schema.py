@@ -4,6 +4,7 @@ import uuid
 
 from api.utils import get_data_client
 from api.utils.api_key_auth import check_key_scope, require_api_key
+from api.utils.schema import get_schema_names as _get_schema_names
 from api.utils.schema import schema_jsonify
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -23,8 +24,7 @@ def get_schema_names(
     check_key_scope(key_info, project_id, None)
     db = get_data_client()
     schema = db.get_schema(project_id)
-    schema_names = [s["_name"] for s in schema if s.get("_name")]
-    return {"_schema_names": schema_names}
+    return {"_schema_names": _get_schema_names(schema)}
 
 
 @router.get("/projects/{project_id}/schema/{schema_name}/")
@@ -198,6 +198,52 @@ def delete_schema_field(
     db = get_data_client()
     db.delete_schema_field(project_id, field_id)
     return {"success": True}
+
+
+@router.post("/projects/{project_id}/collections/")
+def create_collection(
+    project_id: str,
+    body: dict,
+    key_info: dict = Depends(require_api_key("write")),
+):
+    """Create a collection."""
+    check_key_scope(key_info, project_id, None)
+    db = get_data_client()
+    collection_name = body.get("_collection_name")
+    schema_name = body.get("_schema_name")
+    if not collection_name or not schema_name:
+        raise HTTPException(status_code=400, detail="_collection_name and _schema_name required")
+
+    collection_id = uuid.uuid4().hex[:20]
+    data = {
+        "_collection_name": collection_name,
+        "_schema_name": schema_name,
+        "_index": body.get("_index", 1),
+    }
+    db.upsert_collection(project_id, collection_id, data)
+    db.upsert_document(
+        project_id, "production", collection_id, "_meta_data", {"_document_sequence": []}
+    )
+    return {"_id": collection_id, **data}
+
+
+@router.put("/projects/{project_id}/collections/{collection_id}/")
+def update_collection(
+    project_id: str,
+    collection_id: str,
+    body: dict,
+    key_info: dict = Depends(require_api_key("write")),
+):
+    """Update a collection."""
+    check_key_scope(key_info, project_id, None)
+    db = get_data_client()
+    data = {
+        "_collection_name": body.get("_collection_name"),
+        "_schema_name": body.get("_schema_name"),
+        "_index": body.get("_index", 1),
+    }
+    db.upsert_collection(project_id, collection_id, data)
+    return {"_id": collection_id, **data}
 
 
 @router.put("/projects/{project_id}/schema-category-map/{schema_name}/")

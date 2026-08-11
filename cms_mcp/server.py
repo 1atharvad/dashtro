@@ -1,12 +1,20 @@
 """
 DashTro CMS — MCP Server
 
-Exposes the CMS REST API as MCP tools so Claude (or any MCP client) can
-read and write content directly.
+Exposes the CMS SDK REST API (/api/sdk/*) as MCP tools so Claude (or any MCP
+client) can read and write project content directly. Uses API-key auth only
+(X-API-Key) — never a user's JWT — so what an MCP client can do is exactly
+what the configured API key is scoped to (project/collections/read-write).
+
+That also means tools with no API-key-authorized equivalent aren't exposed
+here: listing all projects, listing/pushing workspaces, and document version
+history are all admin (JWT-only) operations on the /api/cms/* surface.
 
 Configuration (env vars):
-  CMS_API_URL  — base URL of the CMS backend, e.g. http://localhost:7312/api/cms
-  CMS_TOKEN    — Bearer token for authenticated requests (omit in DEBUG mode)
+  CMS_API_URL  — base URL of the CMS backend's SDK API, e.g.
+                 http://localhost:7312/api/sdk
+  CMS_API_KEY  — API key for authenticated requests, scoped per collection
+                 (read/write) from the CMS's settings page
 """
 
 import json
@@ -16,8 +24,8 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-CMS_API_URL = os.environ.get("CMS_API_URL", "http://localhost:7312/api/cms")
-CMS_TOKEN = os.environ.get("CMS_TOKEN", "")
+CMS_API_URL = os.environ.get("CMS_API_URL", "http://localhost:7312/api/sdk")
+CMS_API_KEY = os.environ.get("CMS_API_KEY", "")
 
 mcp = FastMCP("DashTro CMS")
 
@@ -26,17 +34,20 @@ mcp = FastMCP("DashTro CMS")
 
 
 def _headers() -> dict:
+    """JSON content-type header, plus X-API-Key if CMS_API_KEY is set."""
     h = {"Content-Type": "application/json"}
-    if CMS_TOKEN:
-        h["Authorization"] = f"Bearer {CMS_TOKEN}"
+    if CMS_API_KEY:
+        h["X-API-Key"] = CMS_API_KEY
     return h
 
 
 def _url(path: str) -> str:
+    """Join CMS_API_URL and path into a full request URL."""
     return f"{CMS_API_URL.rstrip('/')}{path}"
 
 
 async def _get(path: str, params: dict | None = None) -> dict | list:
+    """GET path and return the parsed JSON body, raising on a non-2xx response."""
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.get(_url(path), headers=_headers(), params=params)
         r.raise_for_status()
@@ -44,6 +55,7 @@ async def _get(path: str, params: dict | None = None) -> dict | list:
 
 
 async def _post(path: str, data: dict | None = None) -> dict:
+    """POST data as JSON to path and return the parsed JSON body, raising on a non-2xx response."""
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(_url(path), headers=_headers(), json=data or {})
         r.raise_for_status()
@@ -51,6 +63,7 @@ async def _post(path: str, data: dict | None = None) -> dict:
 
 
 async def _put(path: str, data: dict) -> dict:
+    """PUT data as JSON to path and return the parsed JSON body, raising on a non-2xx response."""
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.put(_url(path), headers=_headers(), json=data)
         r.raise_for_status()
@@ -58,6 +71,7 @@ async def _put(path: str, data: dict) -> dict:
 
 
 async def _patch(path: str, data: dict) -> dict:
+    """PATCH data as JSON to path and return the parsed JSON body, raising on a non-2xx response."""
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.patch(_url(path), headers=_headers(), json=data)
         r.raise_for_status()
@@ -65,34 +79,15 @@ async def _patch(path: str, data: dict) -> dict:
 
 
 async def _delete(path: str) -> None:
+    """DELETE path, raising on a non-2xx response."""
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.delete(_url(path), headers=_headers())
         r.raise_for_status()
 
 
 def _dump(obj) -> str:
+    """Serialize obj to pretty-printed JSON for a tool's text response."""
     return json.dumps(obj, indent=2, default=str)
-
-
-# ── Projects ──────────────────────────────────────────────────────────────────
-
-
-@mcp.tool()
-async def list_projects() -> str:
-    """List all CMS projects."""
-    return _dump(await _get("/projects/"))
-
-
-@mcp.tool()
-async def list_workspaces(project_id: str) -> str:
-    """List all workspaces for a project, including which one is production."""
-    return _dump(await _get(f"/projects/{project_id}/workspaces/"))
-
-
-@mcp.tool()
-async def push_workspace_to_production(project_id: str, workspace_name: str) -> str:
-    """Push a workspace's content to the production workspace. Irreversible — use with care."""
-    return _dump(await _post(f"/projects/{project_id}/workspaces/{workspace_name}/push-to-prod/"))
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────
@@ -239,43 +234,6 @@ async def delete_document(
         f"/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/"
     )
     return _dump({"deleted": document_id})
-
-
-# ── Document versions ─────────────────────────────────────────────────────────
-
-
-@mcp.tool()
-async def list_document_versions(
-    project_id: str,
-    workspace_name: str,
-    collection_name: str,
-    document_id: str,
-) -> str:
-    """List all saved versions of a document (created automatically on each update)."""
-    return _dump(
-        await _get(
-            f"/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/versions/"
-        )
-    )
-
-
-@mcp.tool()
-async def restore_document_version(
-    project_id: str,
-    workspace_name: str,
-    collection_name: str,
-    document_id: str,
-    version_id: str,
-) -> str:
-    """
-    Restore a document to a previous version. The current state is saved as a new
-    version before the restore so nothing is permanently lost.
-    """
-    return _dump(
-        await _post(
-            f"/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/versions/{version_id}/restore/"
-        )
-    )
 
 
 # ── Realtime Database ─────────────────────────────────────────────────────────

@@ -1,36 +1,49 @@
 /**
  * DashTro CMS — MCP Server (Node/TS port of cms_mcp/server.py)
  *
- * Exposes the CMS REST API as MCP tools so Claude (or any MCP client) can
- * read and write content directly. A pure HTTP client against CMS_API_URL —
- * no local access to a Dashtro instance's database is required, so this can
- * run anywhere and just point at a deployed (e.g. Docker) instance.
+ * Exposes the CMS SDK REST API (/api/sdk/*) as MCP tools so Claude (or any
+ * MCP client) can read and write project content directly. Uses API-key
+ * auth only (X-API-Key) — never a user's JWT — so what an MCP client can do
+ * is exactly what the configured API key is scoped to (project/collections/
+ * read-write). A pure HTTP client against CMS_API_URL — no local access to
+ * a Dashtro instance's database is required, so this can run anywhere and
+ * just point at a deployed (e.g. Docker) instance.
+ *
+ * That also means tools with no API-key-authorized equivalent aren't
+ * exposed here: listing all projects, listing/pushing workspaces, and
+ * document version history are all admin (JWT-only) operations on the
+ * /api/cms/* surface.
  *
  * Configuration (env vars):
- *   CMS_API_URL — base URL of the CMS backend, e.g. https://admin.example.com/api/cms
- *   CMS_TOKEN   — Bearer token for authenticated requests (omit in DEBUG mode)
+ *   CMS_API_URL — base URL of the CMS backend's SDK API, e.g.
+ *                 https://admin.example.com/api/sdk
+ *   CMS_API_KEY — API key for authenticated requests, scoped per collection
+ *                 (read/write) from the CMS's settings page
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-const CMS_API_URL = process.env.CMS_API_URL ?? "http://localhost:7312/api/cms";
-const CMS_TOKEN = process.env.CMS_TOKEN ?? "";
+const CMS_API_URL = process.env.CMS_API_URL ?? "http://localhost:7312/api/sdk";
+const CMS_API_KEY = process.env.CMS_API_KEY ?? "";
 
 // ── HTTP helpers ────────────────────────────────────────────────────────────
 
+/** JSON content-type header, plus X-API-Key if CMS_API_KEY is set. */
 function headers(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (CMS_TOKEN) h.Authorization = `Bearer ${CMS_TOKEN}`;
+  if (CMS_API_KEY) h["X-API-Key"] = CMS_API_KEY;
   return h;
 }
 
+/** Join CMS_API_URL and path (plus optional query params) into a full request URL. */
 function apiUrl(path: string, params?: Record<string, string | number>): string {
   const u = new URL(`${CMS_API_URL.replace(/\/$/, "")}${path}`);
   if (params) for (const [k, v] of Object.entries(params)) u.searchParams.set(k, String(v));
   return u.toString();
 }
 
+/** Send an HTTP request and return the parsed JSON body, throwing on a non-ok response. */
 async function request(method: string, path: string, options?: {
   params?: Record<string, string | number>;
   data?: unknown;
@@ -54,6 +67,7 @@ const put = (path: string, data: unknown) => request("PUT", path, { data });
 const patch = (path: string, data: unknown) => request("PATCH", path, { data });
 const del = (path: string) => request("DELETE", path);
 
+/** Serialize obj to pretty-printed JSON for a tool's text response. */
 function dump(obj: unknown): { content: [{ type: "text"; text: string }] } {
   return { content: [{ type: "text", text: JSON.stringify(obj, null, 2) }] };
 }
@@ -62,36 +76,6 @@ function dump(obj: unknown): { content: [{ type: "text"; text: string }] } {
 
 export function createServer(): McpServer {
   const server = new McpServer({ name: "DashTro CMS", version: "0.1.0" });
-
-  // Projects
-
-  server.registerTool(
-    "list_projects",
-    { description: "List all CMS projects." },
-    async () => dump(await get("/projects/")),
-  );
-
-  server.registerTool(
-    "list_workspaces",
-    {
-      description: "List all workspaces for a project, including which one is production.",
-      inputSchema: { project_id: z.string() },
-    },
-    async ({ project_id }) => dump(await get(`/projects/${project_id}/workspaces/`)),
-  );
-
-  server.registerTool(
-    "push_workspace_to_production",
-    {
-      description:
-        "Push a workspace's content to the production workspace. Irreversible — use with care.",
-      inputSchema: { project_id: z.string(), workspace_name: z.string() },
-    },
-    async ({ project_id, workspace_name }) =>
-      dump(
-        await post(`/projects/${project_id}/workspaces/${workspace_name}/push-to-prod/`),
-      ),
-  );
 
   // Schema
 
@@ -257,48 +241,6 @@ export function createServer(): McpServer {
       );
       return dump({ deleted: document_id });
     },
-  );
-
-  // Document versions
-
-  server.registerTool(
-    "list_document_versions",
-    {
-      description: "List all saved versions of a document (created automatically on each update).",
-      inputSchema: {
-        project_id: z.string(),
-        workspace_name: z.string(),
-        collection_name: z.string(),
-        document_id: z.string(),
-      },
-    },
-    async ({ project_id, workspace_name, collection_name, document_id }) =>
-      dump(
-        await get(
-          `/projects/${project_id}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/versions/`,
-        ),
-      ),
-  );
-
-  server.registerTool(
-    "restore_document_version",
-    {
-      description:
-        "Restore a document to a previous version. The current state is saved as a new version before the restore so nothing is permanently lost.",
-      inputSchema: {
-        project_id: z.string(),
-        workspace_name: z.string(),
-        collection_name: z.string(),
-        document_id: z.string(),
-        version_id: z.string(),
-      },
-    },
-    async ({ project_id, workspace_name, collection_name, document_id, version_id }) =>
-      dump(
-        await post(
-          `/projects/${project_id}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/versions/${version_id}/restore/`,
-        ),
-      ),
   );
 
   // Realtime Database

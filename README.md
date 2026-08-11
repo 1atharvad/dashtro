@@ -32,10 +32,10 @@ that embeds Dashtro as its admin/CMS backend).
 | --- | --- |
 | [`cms_backend/`](cms_backend/) | FastAPI backend — API, auth, schema engine, data clients. See its [README](cms_backend/README.md). |
 | [`cms-frontend/`](cms-frontend/) | React + TypeScript + Vite frontend. See its [README](cms-frontend/README.md). |
-| [`cms_mcp/`](cms_mcp/) | MCP server exposing Dashtro operations to MCP-compatible clients (Python, console script `dashtro-mcp`, direct database access). |
+| [`cms_mcp/`](cms_mcp/) | MCP server exposing Dashtro operations to MCP-compatible clients over `/api/sdk/*` (Python, console script `dashtro-mcp`, API-key auth). |
 | [`sdk/js/`](sdk/js/) | `@dashtro/client` — JS/TS client SDK for `/api/sdk/*`. |
 | [`sdk/python/`](sdk/python/) | `dashtro-client` — Python client SDK for `/api/sdk/*`, released in lockstep with `sdk/js/`. |
-| [`sdk/mcp/`](sdk/mcp/) | `@dashtro/mcp` — npx-runnable MCP server (Node/TS port of `cms_mcp/`) for consuming projects; talks to `/api/cms/*` over HTTP, no Python required. |
+| [`sdk/mcp/`](sdk/mcp/) | `@dashtro/mcp` — npx-runnable MCP server (Node/TS port of `cms_mcp/`) for consuming projects; talks to `/api/sdk/*` over HTTP with an API key, no Python required. |
 | [`nginx/`](nginx/) | Reverse proxy config for local dev only. |
 
 ## Packages
@@ -59,16 +59,19 @@ flowchart LR
     ExternalApp["External app"] -->|"/api/sdk/*"| Backend
     ExternalApp -.->|uses| ClientSDK["@dashtro/client\ndashtro-client"]
     MCPClient["MCP client\n(Claude, etc.)"] -->|stdio, npx| MCPNode["@dashtro/mcp\n(Node)"]
-    MCPNode -->|"/api/cms/*"| Backend
+    MCPNode -->|"/api/sdk/*"| Backend
     MCPClient -.->|stdio, local install| MCPPy["dashtro-mcp\n(cms_mcp, Python)"]
-    MCPPy -->|"/api/cms/*"| Backend
+    MCPPy -->|"/api/sdk/*"| Backend
 ```
 
 Everything ultimately talks to the same FastAPI backend — the frontend over
-its own API, external apps over the API-key-scoped `/api/sdk/*` surface (via
-either client SDK), and MCP clients over `/api/cms/*` through either MCP
-server (`@dashtro/mcp` for a zero-install `npx` setup, or `cms_mcp`/`dashtro-mcp`
-if you're already in a Python environment with direct database access).
+its own JWT-authenticated API, and everything else (external apps via either
+client SDK, and MCP clients via either MCP server) over the API-key-scoped
+`/api/sdk/*` surface only. MCP clients never see a user's JWT — what an MCP
+client can do is exactly what its configured API key is scoped to
+(project/collections, read vs. write). Pick `@dashtro/mcp` for a zero-install
+`npx` setup, or `cms_mcp`/`dashtro-mcp` if you're already in a Python
+environment.
 
 ## Data backends
 
@@ -217,10 +220,12 @@ image (e.g. the portfolio project) is responsible for pulling and running it.
 ## Tests
 
 ```bash
-cd cms_backend && pytest              # backend, SQLite by default
-TEST_DB_TYPE=postgres pytest          # backend, against a reachable Postgres
+npm test                              # everything: frontend, backend + cms_mcp, sdk/mcp
 
-cd cms-frontend && npm test           # frontend (vitest)
+npm run test:frontend                 # cms-frontend (vitest)
+npm run test:backend                  # cms_backend + cms_mcp (pytest, SQLite by default)
+TEST_DB_TYPE=postgres pytest          # cms_backend, against a reachable Postgres
+npm run test:mcp                      # sdk/mcp — @dashtro/mcp (vitest)
 ```
 
 ## License
