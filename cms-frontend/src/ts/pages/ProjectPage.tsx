@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import {
   Box, Card, CardContent, Chip,
   Dialog, DialogActions, DialogContent, DialogTitle,
   Grid, IconButton, TextField, Tooltip, Typography
 } from '@mui/material';
-import { Plus, ArrowRight, Check, X, Pencil, MoreVertical, LayoutTemplate, Database } from 'lucide-react';
+import { Plus, ArrowRight, Pencil, MoreVertical, LayoutTemplate, Database } from 'lucide-react';
 import { Button, Menu as AdviMenu } from 'advi-ui';
 import { useProjectData } from '@/hooks/useProject';
 import { useWorkspaceData } from '@/hooks/useWorkspace';
@@ -17,17 +17,13 @@ export const ProjectPage = () => {
   const navigate = useNavigate();
   const { project_id } = useParams<{ project_id: string }>();
 
-  const { projects, loading: projectsLoading, editProject } = useProjectData();
+  const { projects, loading: projectsLoading } = useProjectData();
   const {
     workspaces, loading: wsLoading, error: wsError,
     addWorkspace, removeWorkspace,
   } = useWorkspaceData(project_id ?? '');
 
   const project = projects.find(p => p._id === project_id);
-
-  const [editingInfo, setEditingInfo] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editDesc, setEditDesc] = useState('');
 
   const [addingWs, setAddingWs] = useState(false);
   const [newWsName, setNewWsName] = useState('');
@@ -43,20 +39,6 @@ export const ProjectPage = () => {
 
   const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
   const [syncModal, setSyncModal] = useState<{ workspaceName: string; mode: 'push' | 'pull' } | null>(null);
-
-  useEffect(() => {
-    if (project) {
-      setEditName(project.name);
-      setEditDesc(project.description);
-    }
-  }, [project]);
-
-
-  const handleSaveInfo = () => {
-    if (!editName.trim()) return;
-    editProject(project_id!, editName.trim(), editDesc.trim());
-    setEditingInfo(false);
-  };
 
   const handleAddWorkspace = () => {
     if (!newWsName.trim() || newWsNameError) return;
@@ -141,46 +123,22 @@ export const ProjectPage = () => {
                   <Typography variant="overline" color="text.secondary" lineHeight={1}>
                     Project Info
                   </Typography>
-                  {!editingInfo && (
-                    <Tooltip title="Edit">
-                      <IconButton size="small" onClick={() => setEditingInfo(true)}>
-                        <Pencil className="h-4 w-4" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
+                  <Tooltip title="Project settings">
+                    <IconButton size="small" onClick={() => navigate(`/projects/${project_id}/settings/identity/`)}>
+                      <Pencil className="h-4 w-4" />
+                    </IconButton>
+                  </Tooltip>
                 </Box>
 
-                {editingInfo ? (
-                  <Box sx={{ mt: 1.5 }}>
-                    <TextField fullWidth size="small" label="Name" value={editName}
-                      onChange={e => setEditName(e.target.value)} sx={{ mb: 1.5 }} autoFocus />
-                    <TextField fullWidth size="small" label="Description" value={editDesc}
-                      onChange={e => setEditDesc(e.target.value)} multiline rows={2} />
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1.5, justifyContent: 'flex-end' }}>
-                      <IconButton size="small" onClick={() => {
-                        setEditingInfo(false);
-                        setEditName(project.name);
-                        setEditDesc(project.description);
-                      }}>
-                        <X className="h-4 w-4" />
-                      </IconButton>
-                      <IconButton size="small" color="primary" onClick={handleSaveInfo}
-                        disabled={!editName.trim()}>
-                        <Check className="h-4 w-4" />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                ) : (
-                  <Box sx={{ mt: 1.5 }}>
-                    <Typography variant="body1" fontWeight={600}>{project.name}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {project.description || 'No description.'}
-                    </Typography>
-                    <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 2 }}>
-                      Created {new Date(project.created_at).toLocaleDateString()}
-                    </Typography>
-                  </Box>
-                )}
+                <Box sx={{ mt: 1.5 }}>
+                  <Typography variant="body1" fontWeight={600}>{project.name}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {project.description || 'No description.'}
+                  </Typography>
+                  <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 2 }}>
+                    Created {new Date(project.created_at).toLocaleDateString()}
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
           </Grid>

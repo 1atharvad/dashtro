@@ -177,8 +177,15 @@ class SqliteAuditClient:
 
         return {"total": total, "logs": logs}
 
-    def get_heatmap_data(self, year: int, month: int | None = None) -> list[dict]:
-        """Return per-day operation counts and top action for a year or a single month."""
+    def get_heatmap_data(
+        self, year: int, month: int | None = None, project_id: str | None = None
+    ) -> list[dict]:
+        """Return per-day operation counts and top action for a year or a single month.
+
+        When project_id is given, only counts entries logged against that
+        project (used by the per-project audit log tab in the CMS settings
+        UI); otherwise counts every entry in the instance.
+        """
         import calendar as cal
 
         if month:
@@ -190,15 +197,20 @@ class SqliteAuditClient:
             end = f"{year:04d}-12-31"
 
         cursor = self.get_cursor()
+        params: list = [start, end]
+        project_filter = ""
+        if project_id:
+            project_filter = "AND project_id = ?"
+            params.append(project_id)
         cursor.execute(
-            """
+            f"""
             SELECT date(created_at) AS day, action, COUNT(*) AS cnt
             FROM cms_audit_logs
-            WHERE date(created_at) BETWEEN ? AND ?
+            WHERE date(created_at) BETWEEN ? AND ? {project_filter}
             GROUP BY day, action
             ORDER BY day, cnt DESC
             """,
-            (start, end),
+            params,
         )
         rows = cursor.fetchall()
         cursor.close()

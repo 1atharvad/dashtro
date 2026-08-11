@@ -21,6 +21,7 @@ const Login = lazy(() => import('@ts/pages/Login').then(m => ({ default: m.Login
 const Signup = lazy(() => import('@ts/pages/Signup').then(m => ({ default: m.Signup })));
 const ProjectsList = lazy(() => import('@ts/pages/ProjectsList').then(m => ({ default: m.ProjectsList })));
 const ProjectPage = lazy(() => import('@ts/pages/ProjectPage').then(m => ({ default: m.ProjectPage })));
+const ProjectSettingsPage = lazy(() => import('@ts/pages/ProjectSettingsPage').then(m => ({ default: m.ProjectSettingsPage })));
 const RealtimeDatabase = lazy(() => import('@ts/pages/RealtimeDatabase').then(m => ({ default: m.RealtimeDatabase })));
 const SettingsPage = lazy(() => import('@ts/pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
@@ -60,6 +61,7 @@ export const App = () => {
               <Route path="/settings/:setting_type/" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
               <Route path="/projects/:project_id/" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
+              <Route path="/projects/:project_id/settings/:section/" element={<ProtectedRoute><ProjectSettingsPage /></ProtectedRoute>} />
               <Route path="/projects/:project_id/rtdb/" element={<ProtectedRoute><RealtimeDatabase /></ProtectedRoute>} />
 
               <Route path="/projects/:project_id/schema/" element={<ProtectedRoute><Schema /></ProtectedRoute>} />

@@ -30,6 +30,38 @@
   }
 }
 
+// ── Project settings (aside + content, mirrors .schema/.settings) ───────────
+
+.project-settings {
+  display: flex;
+  min-height: 100vh;
+  background: colors.$page_bk_color;
+
+  html.dark & {
+    background: var(--cms-bg);
+  }
+
+  &-content {
+    flex: 1;
+    min-width: 0;
+    padding: 32px;
+
+    .MuiTypography-subtitle1 {
+      font-size: 1.35rem !important;
+      font-weight: 700 !important;
+      line-height: 1.3 !important;
+    }
+
+    // Scoped to this page only (not the shared .settings-section used by the
+    // org-level Settings page) — gives the card a visible boundary instead
+    // of relying on a background-color difference that can read as "no card
+    // at all, just full-width content" against the dark theme.
+    .settings-section {
+      border: 1px solid var(--cms-border);
+    }
+  }
+}
+
 // ── Info cards ──────────────────────────────────────────────────────────────
 
 .pp-card {

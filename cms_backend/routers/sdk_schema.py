@@ -2,14 +2,22 @@
 
 import uuid
 
-from api.utils import get_data_client
+from api.utils import get_audit_client, get_data_client
+from api.utils.actor import get_client_ip
 from api.utils.api_key_auth import check_key_scope, require_api_key
 from api.utils.schema import get_schema_names as _get_schema_names
 from api.utils.schema import schema_jsonify
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
+from models.collection import SchemaCollectionIn
+from pydantic import ValidationError
 
 router = APIRouter()
+db_audit = get_audit_client()
+
+
+def _key_actor(key_info: dict) -> tuple[str, str]:
+    return f"apikey:{key_info['id']}", key_info["label"]
 
 
 # ── Schema Read (Export) ──────────────────────────────────────────────────────
@@ -141,6 +149,7 @@ async def get_document(
 def create_schema_category(
     project_id: str,
     body: dict,
+    request: Request,
     key_info: dict = Depends(require_api_key("write")),
 ):
     """Create a schema category/folder."""
@@ -152,6 +161,18 @@ def create_schema_category(
 
     cat_id = uuid.uuid4().hex[:16]
     db.upsert_category(project_id, cat_id, {"name": name})
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="create_category",
+        resource_type="category",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=cat_id,
+        resource_name=name,
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
     return {"id": cat_id, "name": name}
 
 
@@ -159,6 +180,7 @@ def create_schema_category(
 def create_schema_field(
     project_id: str,
     body: dict,
+    request: Request,
     key_info: dict = Depends(require_api_key("write")),
 ):
     """Create a schema field."""
@@ -170,6 +192,18 @@ def create_schema_field(
 
     field_id = uuid.uuid4().hex[:16]
     db.upsert_schema_field(project_id, field_id, body)
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="create_schema_field",
+        resource_type="schema_field",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=field_id,
+        resource_name=f"{schema_name}.{body.get('_name', '')}",
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
     return {"_id": field_id, **body}
 
 
@@ -178,12 +212,25 @@ def update_schema_field(
     project_id: str,
     field_id: str,
     body: dict,
+    request: Request,
     key_info: dict = Depends(require_api_key("write")),
 ):
     """Update a schema field."""
     check_key_scope(key_info, project_id, None)
     db = get_data_client()
     db.upsert_schema_field(project_id, field_id, body)
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="update_schema_field",
+        resource_type="schema_field",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=field_id,
+        resource_name=f"{body.get('_schema_name', '')}.{body.get('_name', '')}",
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
     return {"_id": field_id, **body}
 
 
@@ -191,12 +238,24 @@ def update_schema_field(
 def delete_schema_field(
     project_id: str,
     field_id: str,
+    request: Request,
     key_info: dict = Depends(require_api_key("write")),
 ):
     """Delete a schema field."""
     check_key_scope(key_info, project_id, None)
     db = get_data_client()
     db.delete_schema_field(project_id, field_id)
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="delete_schema_field",
+        resource_type="schema_field",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=field_id,
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
     return {"success": True}
 
 
@@ -204,25 +263,39 @@ def delete_schema_field(
 def create_collection(
     project_id: str,
     body: dict,
+    request: Request,
     key_info: dict = Depends(require_api_key("write")),
 ):
     """Create a collection."""
     check_key_scope(key_info, project_id, None)
     db = get_data_client()
-    collection_name = body.get("_collection_name")
-    schema_name = body.get("_schema_name")
-    if not collection_name or not schema_name:
-        raise HTTPException(status_code=400, detail="_collection_name and _schema_name required")
 
+    try:
+        collection = SchemaCollectionIn.model_validate(body)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=e.errors()) from e
+
+    schema_names = _get_schema_names(db.get_schema(project_id))
+    if collection.schema_name not in schema_names:
+        raise HTTPException(status_code=400, detail="Schema doesn't exist, create it first.")
+
+    data = collection.to_storage()
     collection_id = uuid.uuid4().hex[:20]
-    data = {
-        "_collection_name": collection_name,
-        "_schema_name": schema_name,
-        "_index": body.get("_index", 1),
-    }
     db.upsert_collection(project_id, collection_id, data)
     db.upsert_document(
         project_id, "production", collection_id, "_meta_data", {"_document_sequence": []}
+    )
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="create_collection",
+        resource_type="collection",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=collection_id,
+        resource_name=data.get("_collection_name", ""),
+        project_id=project_id,
+        ip_address=get_client_ip(request),
     )
     return {"_id": collection_id, **data}
 
@@ -232,18 +305,109 @@ def update_collection(
     project_id: str,
     collection_id: str,
     body: dict,
+    request: Request,
     key_info: dict = Depends(require_api_key("write")),
 ):
     """Update a collection."""
     check_key_scope(key_info, project_id, None)
     db = get_data_client()
-    data = {
-        "_collection_name": body.get("_collection_name"),
-        "_schema_name": body.get("_schema_name"),
-        "_index": body.get("_index", 1),
-    }
-    db.upsert_collection(project_id, collection_id, data)
-    return {"_id": collection_id, **data}
+
+    collections = db.get_collections(project_id)
+    if collection_id not in collections:
+        raise HTTPException(status_code=404, detail="Collection not found.")
+
+    try:
+        collection = SchemaCollectionIn.model_validate(body)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=e.errors()) from e
+
+    existing = {**collections[collection_id]}
+    existing.update(collection.to_storage())
+    db.upsert_collection(project_id, collection_id, existing)
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="update_collection",
+        resource_type="collection",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=collection_id,
+        resource_name=existing.get("_collection_name", ""),
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
+    return {"_id": collection_id, **existing}
+
+
+@router.delete("/projects/{project_id}/collections/{collection_id}/", status_code=204)
+def delete_collection(
+    project_id: str,
+    collection_id: str,
+    request: Request,
+    key_info: dict = Depends(require_api_key("write")),
+):
+    """Delete a collection, including its documents in every workspace."""
+    check_key_scope(key_info, project_id, None)
+    db = get_data_client()
+
+    collections = db.get_collections(project_id)
+    if collection_id not in collections:
+        raise HTTPException(status_code=404, detail="Collection not found.")
+
+    collection_name = collections[collection_id].get("_collection_name", "")
+    workspaces = db.fetch_workspaces(project_id)
+    for ws in workspaces:
+        db.delete_collection_workspace_docs(project_id, ws["workspace_name"], collection_id)
+
+    db.delete_collection_record(project_id, collection_id)
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="delete_collection",
+        resource_type="collection",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=collection_id,
+        resource_name=collection_name,
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
+
+
+@router.delete("/projects/{project_id}/", status_code=204)
+def delete_project(
+    project_id: str,
+    request: Request,
+    key_info: dict = Depends(require_api_key("write")),
+):
+    """Delete a project through the API-key surface.
+
+    Mirrors routers/projects.py's JWT-authenticated delete_project, but scoped
+    to whatever project the API key is bound to (check_key_scope rejects any
+    other project_id). delete_project_record cascades the removal across
+    workspaces, schema, collections, and every workspace's documents, so
+    there's nothing left to clean up manually afterward.
+    """
+    check_key_scope(key_info, project_id, None)
+    db = get_data_client()
+
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    db.delete_project_record(project_id)
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="delete_project",
+        resource_type="project",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=project_id,
+        resource_name=project.get("name", ""),
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
 
 
 @router.put("/projects/{project_id}/schema-category-map/{schema_name}/")
@@ -251,6 +415,7 @@ def update_schema_category_map(
     project_id: str,
     schema_name: str,
     body: dict,
+    request: Request,
     key_info: dict = Depends(require_api_key("write")),
 ):
     """Map schema to category."""
@@ -261,6 +426,18 @@ def update_schema_category_map(
         raise HTTPException(status_code=400, detail="category_id required")
 
     db.set_schema_category(project_id, schema_name, category_id)
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="assign_category",
+        resource_type="schema",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=schema_name,
+        resource_name=schema_name,
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
     return {"schema_name": schema_name, "category_id": category_id}
 
 
@@ -340,6 +517,7 @@ def download_media_file(
 def upload_media_file(
     filename: str,
     body: bytes,
+    request: Request,
     key_info: dict = Depends(require_api_key("write")),
 ):
     """Upload a media file."""
@@ -352,4 +530,14 @@ def upload_media_file(
     file_path = upload_dir / filename
     file_path.write_bytes(body)
 
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="upload_media",
+        resource_type="media",
+        user_id=user_id,
+        user_email=user_email,
+        resource_name=filename,
+        details={"size_bytes": len(body)},
+        ip_address=get_client_ip(request),
+    )
     return {"filename": filename, "size": len(body)}

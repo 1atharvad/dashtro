@@ -42,6 +42,16 @@ export const deleteProject = createAsyncThunk("projects/deleteProject", async (
   return { _id: projectId };
 });
 
+export const duplicateProject = createAsyncThunk("projects/duplicateProject", async (
+  projectId: string
+) => {
+  const response = await authFetch(`${API_BASE_URL}/projects/${projectId}/duplicate/`, {
+    method: "POST",
+  });
+  if (!response.ok) throw new Error("Failed to duplicate project");
+  return await response.json();
+});
+
 type Project = { _id: string; name: string; description: string; created_at: string; updated_at: string };
 
 const projectSlice = createSlice({
@@ -76,6 +86,9 @@ const projectSlice = createSlice({
       })
       .addCase(deleteProject.fulfilled, (state, action) => {
         state.projects = state.projects.filter(p => p._id !== action.payload._id);
+      })
+      .addCase(duplicateProject.fulfilled, (state, action) => {
+        state.projects = [...state.projects, action.payload];
       });
   },
 });

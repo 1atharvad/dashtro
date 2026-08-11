@@ -131,6 +131,92 @@ def delete_project(project_id: str, request: Request):
     )
 
 
+@router.post("/projects/{project_id}/duplicate/", status_code=201)
+async def duplicate_project(project_id: str, request: Request):
+    """Create an independent copy of a project under a new project id.
+
+    Copies schema fields, categories and their schema-name assignments,
+    collections, rich text components, every workspace (including
+    production) along with its documents, and the realtime database tree.
+    The copy is named "{source name} (Copy)" and gets its own uuid, so
+    editing or deleting it afterward has no effect on the source project —
+    nothing is shared or referenced, everything is written as fresh rows.
+
+    Runs through db.get_*/upsert_* only (no raw SQL), so this works
+    unmodified against either SqliteData or PostgresData.
+    """
+    source = db.get_project(project_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    new_project_id = str(uuid.uuid4().hex[:20])
+    now = _now_iso()
+    project_data = {
+        "name": f"{source.get('name', '')} (Copy)",
+        "description": source.get("description", ""),
+        "created_at": now,
+        "updated_at": now,
+    }
+    db.upsert_project(new_project_id, project_data)
+
+    for field_id, field_data in db.get_schema(project_id).items():
+        db.upsert_schema_field(new_project_id, field_id, field_data)
+
+    for cat_id, cat_data in db.get_categories(project_id).items():
+        db.upsert_category(new_project_id, cat_id, cat_data)
+
+    for schema_name, category_id in db.get_category_map(project_id).items():
+        if category_id:
+            db.set_schema_category(new_project_id, schema_name, category_id)
+
+    collection_ids = list(db.get_collections(project_id).keys())
+    for collection_id, collection_data in db.get_collections(project_id).items():
+        db.upsert_collection(new_project_id, collection_id, collection_data)
+
+    for component_id, component_data in db.get_rich_text_components(project_id).items():
+        db.upsert_rich_text_component(new_project_id, component_id, component_data)
+
+    for ws in db.fetch_workspaces(project_id):
+        workspace_name = ws["workspace_name"]
+        db.upsert_workspace(
+            new_project_id,
+            workspace_name,
+            {"is_production": ws.get("is_production", False), "created_at": ws.get("created_at", now)},
+        )
+        for doc in db.fetch_all_workspace_documents(project_id, workspace_name):
+            db.upsert_document(
+                new_project_id,
+                workspace_name,
+                doc["collection_id"],
+                doc["document_id"],
+                doc["data"],
+            )
+        # fetch_all_workspace_documents excludes "_meta_data" (it stores the
+        # document ordering/status index, not a real document) — carry it
+        # over per collection so the duplicate's document lists aren't empty.
+        for collection_id in collection_ids:
+            meta = await db.fetch_document(project_id, workspace_name, collection_id, "_meta_data")
+            if meta:
+                db.upsert_document(new_project_id, workspace_name, collection_id, "_meta_data", meta)
+
+    rtdb_tree = db.get_rtdb(project_id)
+    if rtdb_tree:
+        db.set_rtdb_path(new_project_id, "", rtdb_tree)
+
+    actor = get_actor(request)
+    db_audit.log(
+        action="duplicate_project",
+        resource_type="project",
+        user_id=actor["uid"],
+        user_email=actor["email"],
+        resource_id=new_project_id,
+        resource_name=project_data["name"],
+        project_id=new_project_id,
+        ip_address=get_client_ip(request),
+    )
+    return {"_id": new_project_id, **project_data}
+
+
 # ── Workspaces ────────────────────────────────────────────────────────────────
 
 

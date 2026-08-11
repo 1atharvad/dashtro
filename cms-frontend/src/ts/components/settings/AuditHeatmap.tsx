@@ -62,7 +62,8 @@ const HeatCell = ({ day, intensity, size = HEATMAP_CELL }: CellProps) => {
   return <Tooltip title={label} placement="top" arrow>{cell}</Tooltip>;
 };
 
-export const AuditHeatmap = () => {
+/** When projectId is given, the heatmap only counts that project's activity. */
+export const AuditHeatmap = ({ projectId }: { projectId?: string } = {}) => {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
 
@@ -84,12 +85,13 @@ export const AuditHeatmap = () => {
     try {
       const params = new URLSearchParams({ year: String(year) });
       if (viewMode === 'month') params.set('month', String(month));
+      if (projectId) params.set('project_id', projectId);
       const res = await authFetch(`${API_BASE_URL}/audit-logs/heatmap/?${params}`);
       if (res.ok) setData(await res.json());
     } finally {
       setLoading(false);
     }
-  }, [year, month, viewMode]);
+  }, [year, month, viewMode, projectId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchProjects, createProject, updateProject, deleteProject } from '@/redux/projectSlice';
+import { toast } from 'advi-ui';
+import { fetchProjects, createProject, updateProject, deleteProject, duplicateProject } from '@/redux/projectSlice';
 import type { RootState, AppDispatch } from '@ts/types/constants';
 
 export const useProjectData = () => {
@@ -20,7 +21,14 @@ export const useProjectData = () => {
     dispatch(updateProject({ projectId, data: { name, description } }));
 
   const removeProject = (projectId: string) =>
-    dispatch(deleteProject(projectId));
+    dispatch(deleteProject(projectId)).unwrap()
+      .then(() => { toast.success('Project deleted'); return true; })
+      .catch(err => { console.error(err); toast.error('Failed to delete project'); return false; });
 
-  return { projects, loading, error, addProject, editProject, removeProject };
+  const duplicateProjectData = (projectId: string) =>
+    dispatch(duplicateProject(projectId)).unwrap()
+      .then(newProject => { toast.success('Project duplicated'); return newProject as { _id: string }; })
+      .catch(err => { console.error(err); toast.error('Failed to duplicate project'); return null; });
+
+  return { projects, loading, error, addProject, editProject, removeProject, duplicateProjectData };
 };

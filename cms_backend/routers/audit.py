@@ -15,6 +15,7 @@ db_audit = get_audit_client()
 def get_heatmap(
     year: int = Query(default=None),
     month: int | None = Query(default=None, ge=1, le=12),
+    project_id: str | None = Query(default=None),
     authorization: str = Header(default=None),
 ):
     try:
@@ -25,7 +26,7 @@ def get_heatmap(
         raise HTTPException(status_code=401, detail=str(e)) from e
 
     resolved_year = year or datetime.now(tz=UTC).year
-    return db_audit.get_heatmap_data(year=resolved_year, month=month)
+    return db_audit.get_heatmap_data(year=resolved_year, month=month, project_id=project_id)
 
 
 @router.get("/audit-logs/export/")
