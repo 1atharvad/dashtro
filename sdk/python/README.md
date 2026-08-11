@@ -40,4 +40,4 @@ Dashtro instance's settings page.
 
 ## License
 
-ISC
+MIT

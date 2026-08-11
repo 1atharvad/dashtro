@@ -48,7 +48,7 @@ Everything this repo publishes, and what it's for:
 | [`@dashtro/client`](sdk/js/) | [npm](https://www.npmjs.com/package/@dashtro/client) | `npm install @dashtro/client` | JS/TS client SDK for `/api/sdk/*` — read/write a project's documents and RTDB from an external app. |
 | [`dashtro-client`](sdk/python/) | [PyPI](https://pypi.org/project/dashtro-client/) | `pip install dashtro-client` | Python equivalent of `@dashtro/client`, released in lockstep with it. |
 | [`@dashtro/mcp`](sdk/mcp/) | [npm](https://www.npmjs.com/package/@dashtro/mcp) | `npx @dashtro/mcp init` | npx-runnable MCP server — lets Claude/other MCP clients read and write your CMS content. Node port of `cms_mcp/`, no Python needed. |
-| `dashtro` | not published | n/a — run from a repo checkout | Root package: the `dashtro` backup/restore CLI (`cms_backend/scripts/cms_schema.py`, see [Backup / restore CLI](#backup--restore-cli)). Also bundles `cms_mcp`/`dashtro-mcp`, but use `@dashtro/mcp` instead for MCP access — this package isn't on PyPI. |
+| [`dashtro`](cms_backend/scripts/) | [PyPI](https://pypi.org/project/dashtro/) | `pip install dashtro` | The `dashtro` backup/restore CLI (`cms_backend/scripts/cms_schema.py`, see [Backup / restore CLI](#backup--restore-cli)). Also installs `dashtro-mcp` (direct-database-access MCP server) — use [`@dashtro/mcp`](sdk/mcp/) instead unless you specifically need that. |
 
 ## Architecture
 
