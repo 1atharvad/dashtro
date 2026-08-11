@@ -78,6 +78,14 @@ describe("createServer tools", () => {
     delete process.env.CMS_API_KEY;
   });
 
+  /**
+   * list_schema should GET /api/sdk/projects/{id}/schema/ (not /api/cms/*)
+   * and unwrap the backend's {"_schema_names": [...]} envelope into
+   * {"schema_names": [...]} for the MCP tool result. Also implicitly
+   * proves auth goes out as X-API-Key rather than an Authorization
+   * bearer header, since stubFetch only records what init.headers
+   * actually contained.
+   */
   it("list_schema unwraps _schema_names and sends X-API-Key, not a bearer token", async () => {
     const calls = stubFetch({
       "GET /api/sdk/projects/p1/schema/": () => ({ _schema_names: ["Post", "Author"] }),
@@ -89,6 +97,12 @@ describe("createServer tools", () => {
     expect(JSON.parse(textOf(result))).toEqual({ schema_names: ["Post", "Author"] });
   });
 
+  /**
+   * get_schema should GET the schema-name-scoped path
+   * (/api/sdk/projects/{id}/schema/{name}/) and pass the backend's
+   * field-list response straight through, unmodified — unlike list_schema
+   * or list_collections, there's no envelope to unwrap here.
+   */
   it("get_schema GETs the named schema", async () => {
     const calls = stubFetch({
       "GET /api/sdk/projects/p1/schema/Post/": () => ({ Post: [{ _name: "title" }] }),
@@ -103,6 +117,11 @@ describe("createServer tools", () => {
     expect(JSON.parse(textOf(result))).toEqual({ Post: [{ _name: "title" }] });
   });
 
+  /**
+   * list_collections should GET /api/sdk/projects/{id}/collections/ and
+   * unwrap the backend's {"_schema_collections": [...]} envelope into a
+   * bare array — the shape the tool actually hands back to an MCP client.
+   */
   it("list_collections unwraps _schema_collections", async () => {
     stubFetch({
       "GET /api/sdk/projects/p1/collections/": () => ({
@@ -120,6 +139,14 @@ describe("createServer tools", () => {
     ]);
   });
 
+  /**
+   * The backend's collection-metadata endpoint returns _schema_name,
+   * _document_ids, _document_labels, and _document_statuses alongside a
+   * _schema field the tool deliberately doesn't forward (the full field
+   * definitions aren't needed by a document-listing call). This checks
+   * the four kept keys are renamed/passed through correctly and nothing
+   * extra leaks into the tool result.
+   */
   it("list_documents shapes ids/labels/statuses from the collection response", async () => {
     stubFetch({
       "GET /api/sdk/projects/p1/workspace/staging/collection/posts/": () => ({
@@ -143,6 +170,13 @@ describe("createServer tools", () => {
     });
   });
 
+  /**
+   * get_document's `depth` argument (how many levels of ReferenceDocument
+   * fields to resolve) must be forwarded as a `?depth=` query param, not
+   * silently dropped or sent in the body of what's a GET request. Also
+   * re-checks the X-API-Key header lands correctly on a parameterized
+   * call, not just the simple no-arg list_schema case above.
+   */
   it("get_document sends the API key and passes depth as a query param", async () => {
     const calls = stubFetch({
       "GET /api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/": () => ({
@@ -167,6 +201,12 @@ describe("createServer tools", () => {
     expect(calls[0].apiKey).toBe("test-api-key");
   });
 
+  /**
+   * create_document should POST the `data` argument as the request body
+   * (not wrapped in an extra envelope) to the collection URL, and hand
+   * back the created document — including the server-assigned `_id` —
+   * unmodified.
+   */
   it("create_document POSTs the data payload", async () => {
     const calls = stubFetch({
       "POST /api/sdk/projects/p1/workspace/staging/collection/posts/": () => ({
@@ -190,6 +230,13 @@ describe("createServer tools", () => {
     expect(JSON.parse(textOf(result))._id).toBe("d1");
   });
 
+  /**
+   * update_document should PUT to the specific document URL (project +
+   * workspace + collection + document_id) with `data` as the body — the
+   * backend treats this as a partial merge, so the tool just needs to
+   * forward whatever keys the caller supplied, not fetch-then-merge
+   * itself.
+   */
   it("update_document PUTs the data payload", async () => {
     const calls = stubFetch({
       "PUT /api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/": () => ({
@@ -216,6 +263,16 @@ describe("createServer tools", () => {
     });
   });
 
+  /**
+   * update_document_status must PATCH the dedicated
+   * .../document/{id}/status/ endpoint with {"_status": status} — this is
+   * the real, purpose-built /api/sdk/* status endpoint (with its own
+   * validation that status is "draft" or "published"), not a workaround.
+   * A prior /api/cms/-targeting version of this tool PATCHed a status/
+   * route that never existed there at all (only under /api/sdk/*), so
+   * this pins down the exact method + path so that regression can't
+   * silently return.
+   */
   it("update_document_status PATCHes the dedicated status/ endpoint", async () => {
     const calls = stubFetch({
       "PATCH /api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/status/": () => ({
@@ -243,6 +300,12 @@ describe("createServer tools", () => {
     expect(JSON.parse(textOf(result))._status).toBe("published");
   });
 
+  /**
+   * delete_document should DELETE the document URL and, since the backend
+   * returns an empty 204 body for deletes, synthesize its own
+   * {"deleted": document_id} result rather than trying to parse JSON out
+   * of nothing.
+   */
   it("delete_document DELETEs and reports the deleted id", async () => {
     const calls = stubFetch({
       "DELETE /api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/": () => undefined,
@@ -262,6 +325,14 @@ describe("createServer tools", () => {
     expect(JSON.parse(textOf(result))).toEqual({ deleted: "d1" });
   });
 
+  /**
+   * All four rtdb tools share the same /api/sdk/projects/{id}/rtdb/{path}
+   * URL shape but differ by HTTP method (GET/PUT/PATCH/DELETE) — this
+   * drives all four in one test and asserts the method sequence matches
+   * exactly, plus that every one of them actually sent the API key (a
+   * single tool forgetting the header wouldn't necessarily fail on its
+   * own if the stub didn't care, so this checks every call, not just one).
+   */
   it("rtdb_get/rtdb_set/rtdb_update/rtdb_delete hit /api/sdk/*/rtdb/* with the right methods", async () => {
     const calls = stubFetch({
       "GET /api/sdk/projects/p1/rtdb/settings/homepage": () => ({ title: "Home" }),
@@ -292,6 +363,14 @@ describe("createServer tools", () => {
     expect(JSON.parse(textOf(deleteResult))).toEqual({ deleted: "settings/homepage" });
   });
 
+  /**
+   * request() throws on a non-ok fetch response (e.g. a 401 for a
+   * rejected/missing API key), and the MCP SDK's callTool() catches a
+   * thrown error from a tool handler and reports it as
+   * `{isError: true}` rather than letting it escape and kill the
+   * connection — this is what an MCP client actually sees when, say, the
+   * configured API key gets revoked mid-session.
+   */
   it("surfaces a non-ok HTTP response (e.g. a rejected API key) as a tool error", async () => {
     stubFetch({
       "GET /api/sdk/projects/p1/schema/": () =>

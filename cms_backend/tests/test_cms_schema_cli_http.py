@@ -149,7 +149,29 @@ def _seed_post_schema_via_api(base_url: str, jwt_headers: dict, project_id: str)
 
 
 def test_schema_export_import_http_round_trip(live_server, tmp_path):
-    """`dashtro export/import schema --base-url` round-trips a schema + collection into a different project via the live HTTP API."""
+    """
+    `dashtro export/import schema --base-url` round-trips a schema +
+    collection into a different project — the same scenario
+    test_cms_schema_cli.py's direct-DB test covers, but here every call
+    goes over a real socket to a real running uvicorn instance with a real
+    API key, exercising the exact code path (urllib requests, X-API-Key
+    auth, JSON bodies) an external `dashtro ... --base-url ...` invocation
+    would use.
+
+    This is also the test that caught two real backend bugs this session:
+    routers/sdk_schema.py's get_schema_names crashing on every call
+    (AttributeError from iterating a dict as a list), and
+    /api/sdk/projects/{id}/collections/ having no POST/PUT at all, so
+    import could never restore a collection. Both are fixed now, and this
+    test would fail loudly again if either regressed.
+
+    A second import into the *same* destination project (further down)
+    forces the schema-field and collection writes through their PUT
+    (update) branches instead of POST (create) — proving update_collection
+    in particular, whose original version had no existence check,
+    validation, or merge logic, now behaves correctly on a second pass
+    rather than corrupting or duplicating state.
+    """
     cms_schema = live_server["cms_schema"]
     base_url, api_key = live_server["base_url"], live_server["api_key"]
 
@@ -186,9 +208,38 @@ def test_schema_export_import_http_round_trip(live_server, tmp_path):
         }
         assert names == {"posts": "Post"}
 
+    # Re-import the same backup into the same project: collections.py's
+    # _import_collections now finds "posts" already exists and takes the PUT
+    # (update_collection) branch instead of POST (create_collection) — proving
+    # the update path works too, not just create.
+    cms_schema.cmd_import_http(base_url, dst_id, backup_dir, api_key=api_key)
+
+    with httpx.Client(base_url=base_url) as client:
+        collections_resp = client.get(
+            f"/api/sdk/projects/{dst_id}/collections/", headers={"X-API-Key": api_key}
+        )
+        assert collections_resp.status_code == 200, collections_resp.text
+        collections = collections_resp.json()["_schema_collections"]
+        assert (
+            len(collections) == 1
+        ), "re-import should update the existing collection, not duplicate it"
+        assert collections[0]["_collection_name"] == "posts"
+        assert collections[0]["_schema_name"] == "Post"
+
 
 def test_documents_and_media_export_import_http_round_trip(live_server, tmp_path):
-    """`dashtro export/import documents|media --base-url` round-trips a document and its referenced upload back into the same project."""
+    """
+    `dashtro export/import documents|media --base-url` against a real
+    running server: a document (with an image field pointing at a real
+    uploaded file) is exported, its referenced media is exported alongside
+    it, and then both are re-imported into the *same* project without
+    anything being deleted first — the update path, not just create.
+
+    Uses a non-production workspace ("staging") since production is
+    read-only for writes; creating the document directly in production
+    would 403 before the test ever got to the export/import logic under
+    test.
+    """
     cms_schema = live_server["cms_schema"]
     base_url, api_key, jwt_headers = (
         live_server["base_url"],

@@ -31,6 +31,13 @@ function runInit(): ReturnType<typeof spawnSync> {
 }
 
 describe("dashtro-mcp init", () => {
+  /**
+   * `dashtro-mcp init` with no pre-existing .mcp.json in the cwd should
+   * write one from scratch, containing the full `dashtro` server entry —
+   * command, args, and the CMS_API_URL/CMS_API_KEY env placeholders a
+   * user then fills in by hand. Checks the whole object rather than
+   * individual keys so a stray extra/missing field would fail loudly.
+   */
   it("writes a fresh .mcp.json with the dashtro server entry", () => {
     const result = runInit();
 
@@ -46,6 +53,13 @@ describe("dashtro-mcp init", () => {
     });
   });
 
+  /**
+   * A user is likely to already have other MCP servers configured in
+   * .mcp.json (this repo itself, other tools, etc.) — `init` must merge
+   * its "dashtro" entry into the existing mcpServers object rather than
+   * overwriting the whole file, or it would silently disconnect every
+   * other configured server the next time the client reads .mcp.json.
+   */
   it("merges into an existing .mcp.json without dropping other servers", () => {
     cwd = mkdtempSync(join(tmpdir(), "dashtro-mcp-cli-"));
     writeFileSync(
@@ -61,6 +75,12 @@ describe("dashtro-mcp init", () => {
     expect(written.mcpServers.dashtro.command).toBe("npx");
   });
 
+  /**
+   * Anything other than `init` or no-args-at-all (which starts the
+   * server) should exit non-zero with a clear "Unknown command" message
+   * on stderr, rather than e.g. silently falling through to starting the
+   * MCP server with a bogus argument.
+   */
   it("rejects an unknown subcommand", () => {
     cwd = mkdtempSync(join(tmpdir(), "dashtro-mcp-cli-"));
     const result = spawnSync(process.execPath, [CLI, "bogus"], { cwd, encoding: "utf8" });

@@ -22,7 +22,14 @@ def run(coro):
 
 
 def test_list_and_get_schema(project):
-    """list_schema returns the seeded schema name; get_schema returns its field definitions."""
+    """
+    list_schema should surface the 'Post' schema the `project` fixture
+    seeded via the JWT-authenticated admin API, and get_schema should
+    return its field definitions (here, the 'title' field) — proving the
+    read-only schema tools correctly translate cms_backend's
+    _schema_names/schema_jsonify response shapes into what the MCP tool
+    hands back to a client.
+    """
     listed = json.loads(run(server.list_schema(project["project_id"])))
     assert "Post" in listed["schema_names"]
 
@@ -31,13 +38,30 @@ def test_list_and_get_schema(project):
 
 
 def test_list_collections(project):
-    """list_collections returns the seeded collection with its schema association."""
+    """
+    list_collections should return the 'posts' collection the `project`
+    fixture seeded, correctly associated with its 'Post' schema — the tool
+    unwraps the backend's {"_schema_collections": [...]} envelope into a
+    bare list, so this also guards against that unwrapping breaking.
+    """
     result = json.loads(run(server.list_collections(project["project_id"])))
     assert any(c["_collection_name"] == "posts" and c["_schema_name"] == "Post" for c in result)
 
 
 def test_document_lifecycle(project):
-    """create → list → get → update → publish → delete a document, checking state at each step."""
+    """
+    Drives every document-related MCP tool through a single realistic
+    sequence: create → list → get → update → change status to published →
+    delete, asserting on real response state after each step rather than
+    just checking each call didn't raise.
+
+    In particular, update_document_status here exercises the fix from this
+    session: it now PATCHes /api/sdk/.../document/{id}/status/, the real
+    purpose-built endpoint sdk_documents.py exposes, instead of the
+    previous PUT-with-_status-in-body workaround that was needed only
+    because the equivalent /api/cms/ PATCH endpoint never actually
+    existed.
+    """
     pid, ws, coll = project["project_id"], project["workspace_name"], project["collection_name"]
 
     created = json.loads(run(server.create_document(pid, ws, coll, data={"title": "Hello"})))
@@ -69,7 +93,13 @@ def test_document_lifecycle(project):
 
 
 def test_rtdb_crud(project):
-    """set → get → merge-update → delete a realtime-database node."""
+    """
+    set → get → merge-update → delete against a single Realtime Database
+    path. rtdb_update in particular should shallow-merge into the existing
+    node (asserted by checking both the original 'title' key and the newly
+    merged-in 'subtitle' key survive together) rather than replacing the
+    whole node the way rtdb_set does.
+    """
     pid = project["project_id"]
 
     run(server.rtdb_set(pid, "settings/homepage", {"title": "Home"}))
@@ -86,15 +116,30 @@ def test_rtdb_crud(project):
 
 
 def test_get_document_404_bubbles_as_http_error(project):
-    """A nonexistent document raises httpx.HTTPStatusError rather than returning null/empty."""
+    """
+    cms_mcp/server.py's HTTP helpers all call raise_for_status() — a 404
+    from the backend should surface as httpx.HTTPStatusError out of the
+    tool call, not silently return None/empty, since an MCP client (and
+    the human on the other end of it) needs to be able to tell "document
+    doesn't exist" apart from "document exists and is empty."
+    """
     pid, ws, coll = project["project_id"], project["workspace_name"], project["collection_name"]
     with pytest.raises(httpx.HTTPStatusError):
         run(server.get_document(pid, ws, coll, "does-not-exist"))
 
 
 def test_tools_use_api_key_not_jwt(project, monkeypatch):
-    """The whole point of this server is API-key auth — a JWT in CMS_API_KEY's
-    place must be rejected the same as it would for any external SDK caller."""
+    """
+    The entire point of this session's auth migration was that MCP clients
+    only ever get what an API key is scoped to, never a user's JWT — so
+    this asserts the negative space directly: an empty CMS_API_KEY and an
+    invalid one both get a real 401 from the backend's require_api_key
+    dependency, the same as any other unauthenticated/misauthenticated
+    /api/sdk/* caller would. `project` still seeded real data with a valid
+    key beforehand (via mcp_env's JWT-authenticated setup calls), so a 401
+    here can only mean the auth check itself is working, not that there's
+    simply nothing to fetch.
+    """
     pid = project["project_id"]
 
     monkeypatch.setattr(server, "CMS_API_KEY", "")

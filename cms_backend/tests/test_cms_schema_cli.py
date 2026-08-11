@@ -97,7 +97,17 @@ def _seed_post_schema(db, project_id: str) -> str:
 
 
 def test_schema_export_import_round_trip(cms_schema, db, tmp_path):
-    """A schema + collection exported from one project imports cleanly into a different, empty project."""
+    """
+    Baseline round-trip for `dashtro export schema` / `dashtro import schema`
+    in direct-DB mode: export the seeded 'Post' schema + 'posts' collection
+    to a backup dir, then import that backup into a second, completely
+    empty project.
+
+    Importing into a *different* project (not the one exported from) is the
+    important part — it proves the on-disk backup format is self-contained
+    and doesn't secretly depend on data still present in the source
+    project, which a same-project round-trip could hide.
+    """
     _seed_post_schema(db, "proj-src")
     backup_dir = tmp_path / "backup"
 
@@ -121,8 +131,22 @@ def test_schema_export_import_round_trip(cms_schema, db, tmp_path):
 
 
 def test_schema_import_preserves_nested_and_reference_on_update(cms_schema, db, tmp_path):
-    """_nested_schema/_reference_schema are environment-specific wiring — import
-    must update everything else about a field but never touch those two keys."""
+    """
+    _nested_schema and _reference_schema are environment-specific wiring
+    (which concrete schema/collection a reference field points at) rather
+    than portable field definition — a backup file created against one
+    environment shouldn't be able to clobber that wiring in another when
+    imported, since the target schema/reference names it points at may not
+    even exist there.
+
+    Seeds a destination field whose _nested_schema/_reference_schema are
+    already set to values the backup file doesn't know about, imports over
+    it, and asserts those two keys are untouched while every other field
+    (here, _description) is overwritten by whatever the backup carried —
+    including overwriting it with a blank value, proving this isn't a
+    "only overwrite if non-empty" merge, just a "preserve these two keys
+    specifically" merge.
+    """
     _seed_post_schema(db, "proj-src")
     backup_dir = tmp_path / "backup"
     cms_schema.cmd_export("proj-src", backup_dir)
@@ -161,7 +185,18 @@ def test_schema_import_preserves_nested_and_reference_on_update(cms_schema, db, 
 
 
 def test_documents_export_import_round_trip(cms_schema, db, tmp_path):
-    """A document exported from one project imports into a different project with the same schema."""
+    """
+    Baseline round-trip for `dashtro export documents` / `dashtro import
+    documents` in direct-DB mode: a document (plus the collection's
+    _meta_data bookkeeping — _document_sequence, _document_statuses) is
+    exported from one project and imported into a second project that has
+    the same schema/collection already seeded.
+
+    Checks both the document content (title, _status survive intact) and
+    the meta document (_document_sequence includes the new id) — a bug in
+    either half would let a document exist without being listable, or vice
+    versa.
+    """
     coll_id = _seed_post_schema(db, "proj-src")
     db.upsert_document(
         "proj-src", PRODUCTION, coll_id, "doc-1", {"title": "Hello", "_status": "draft"}
@@ -198,7 +233,20 @@ def test_documents_export_import_round_trip(cms_schema, db, tmp_path):
 
 
 def test_documents_import_merge_preserves_fields_absent_from_backup(cms_schema, db, tmp_path):
-    """--merge overwrites fields present in the backup but leaves fields the target already had and the backup doesn't mention."""
+    """
+    `dashtro import documents --merge` is meant for restoring into a
+    project that already has live data you don't want to lose — as opposed
+    to the default replace mode, which is a full overwrite.
+
+    Seeds the destination document with a field ("subtitle") the backup
+    was never exported with, then imports with merge=True and checks that:
+    (1) fields the backup *does* carry (title) win and overwrite the
+    target's value, and (2) fields the backup doesn't mention (subtitle)
+    survive untouched. A merge implementation that either overwrote
+    everything or dropped everything not in the backup would both pass a
+    naive "did the title update" check, so this test asserts on both
+    fields specifically.
+    """
     coll_id = _seed_post_schema(db, "proj-src")
     db.upsert_document(
         "proj-src", PRODUCTION, coll_id, "doc-1", {"title": "Hello", "_status": "draft"}
@@ -240,7 +288,20 @@ def test_documents_import_merge_preserves_fields_absent_from_backup(cms_schema, 
 
 
 def test_media_export_import_round_trip(cms_schema, db, tmp_path):
-    """A media file referenced by an exported document is copied to the backup dir, then restored from it."""
+    """
+    `dashtro export media` doesn't take a --project-id — it works by
+    scanning the documents a prior `export documents` already wrote to the
+    backup dir for `/api/sdk/media/files/<name>` URLs, and only copies
+    files actually referenced by exported content (uploads have no project
+    association in storage, so this scan is the only way to know which
+    files a given backup needs).
+
+    Exports a document with an image field pointing at a real uploaded
+    file, exports media (checking the file lands in the backup dir), then
+    deletes the original from the upload dir and imports media back —
+    proving both the "find what's referenced" and the "copy it back"
+    halves work, not just one of them.
+    """
     coll_id = _seed_post_schema(db, "proj-src")
     db.upsert_document(
         "proj-src",
