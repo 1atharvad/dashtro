@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL } from '@ts/config';
-import { authFetch } from '@ts/utils/auth';
+import { authFetch, getToken } from '@ts/utils/auth';
 import { UserContext } from './userContextValue';
 import type { CurrentUser } from '@ts/types/constants';
 
@@ -8,6 +8,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<CurrentUser | null>(null);
 
   const refreshUser = useCallback(async () => {
+    if (!getToken()) return;
     try {
       const r = await authFetch(`${API_BASE_URL}/auth/`);
       const data = r.ok ? await r.json() : null;
