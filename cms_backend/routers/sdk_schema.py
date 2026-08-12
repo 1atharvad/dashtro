@@ -1,6 +1,7 @@
 """SDK schema endpoints for import/export via API key authentication."""
 
 import uuid
+from datetime import UTC, datetime
 
 from api.utils import get_audit_client, get_data_client
 from api.utils.actor import get_client_ip
@@ -10,7 +11,15 @@ from api.utils.schema import schema_jsonify
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from models.collection import SchemaCollectionIn
+from models.project import ProjectIn
 from pydantic import ValidationError
+
+PRODUCTION = "production"
+
+
+def _now_iso() -> str:
+    return datetime.now(tz=UTC).isoformat()
+
 
 router = APIRouter()
 db_audit = get_audit_client()
@@ -372,6 +381,95 @@ def delete_collection(
         project_id=project_id,
         ip_address=get_client_ip(request),
     )
+
+
+@router.post("/projects/", status_code=201)
+def create_project(
+    body: dict,
+    request: Request,
+    key_info: dict = Depends(require_api_key("write")),
+):
+    """Create a project through the API-key surface.
+
+    Only an unscoped key (one with no `project_id` bound to it) can do this —
+    a key already scoped to a specific project has no business minting new
+    ones. Mirrors routers/projects.py's JWT-authenticated create_project,
+    including the auto-created "production" workspace.
+    """
+    if key_info.get("project_id"):
+        raise HTTPException(status_code=403, detail="API key is scoped to a single project")
+
+    try:
+        data = ProjectIn.model_validate(body)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=e.errors()) from e
+
+    db = get_data_client()
+    project_id = uuid.uuid4().hex[:20]
+    now = _now_iso()
+    project_data = {
+        "name": data.name,
+        "description": data.description,
+        "created_at": now,
+        "updated_at": now,
+    }
+    db.upsert_project(project_id, project_data)
+    db.upsert_workspace(project_id, PRODUCTION, {"is_production": True, "created_at": now})
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="create_project",
+        resource_type="project",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=project_id,
+        resource_name=data.name,
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
+    return {"_id": project_id, **project_data}
+
+
+@router.put("/projects/{project_id}/")
+def update_project(
+    project_id: str,
+    body: dict,
+    request: Request,
+    key_info: dict = Depends(require_api_key("write")),
+):
+    """Update a project's name/description through the API-key surface."""
+    check_key_scope(key_info, project_id, None)
+    db = get_data_client()
+
+    existing = db.get_project(project_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    try:
+        data = ProjectIn.model_validate(body)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=e.errors()) from e
+
+    updated = {
+        "name": data.name,
+        "description": data.description,
+        "created_at": existing.get("created_at", _now_iso()),
+        "updated_at": _now_iso(),
+    }
+    db.upsert_project(project_id, updated)
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="update_project",
+        resource_type="project",
+        user_id=user_id,
+        user_email=user_email,
+        resource_id=project_id,
+        resource_name=data.name,
+        project_id=project_id,
+        ip_address=get_client_ip(request),
+    )
+    return {"_id": project_id, **updated}
 
 
 @router.delete("/projects/{project_id}/", status_code=204)

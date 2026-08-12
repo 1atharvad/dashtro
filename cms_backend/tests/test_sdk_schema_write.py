@@ -307,6 +307,119 @@ def test_collection_delete_404s_on_unknown_id(client, auth_headers):
     assert resp.status_code == 404, resp.text
 
 
+def test_project_create_via_unscoped_key_and_audit_log(client, auth_headers):
+    """
+    create_project is only meaningful for an unscoped key (one with no
+    project_id bound to it) — a key already locked to a single project has
+    no business minting a second one, so this exercises the happy path: an
+    unscoped write key creates a project, gets back a fresh _id plus a
+    "production" workspace (mirroring routers/projects.py's JWT-side
+    create_project), and the write lands in the audit log with the API key
+    as actor. A GET through the JWT admin surface afterward confirms the
+    project is really there, not just that the response looked right.
+    """
+    api_key = _create_api_key(client, auth_headers)
+    headers = {"X-API-Key": api_key}
+
+    create_resp = client.post(
+        "/api/sdk/projects/",
+        json={"name": "New Blog", "description": "created via API key"},
+        headers=headers,
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    project = create_resp.json()
+    assert project["name"] == "New Blog"
+    project_id = project["_id"]
+
+    get_resp = client.get(f"/api/cms/projects/{project_id}/", headers=auth_headers)
+    assert get_resp.status_code == 200, get_resp.text
+
+    ws_resp = client.get(f"/api/cms/projects/{project_id}/workspaces/", headers=auth_headers)
+    workspace_names = [ws["workspace_name"] for ws in ws_resp.json()]
+    assert "production" in workspace_names
+
+    action_names = [a for a, _ in _audit_actions(client, auth_headers, project_id)]
+    assert "create_project" in action_names
+
+
+def test_project_create_rejects_project_scoped_key(client, auth_headers):
+    """
+    A key already scoped to one project must not be usable to spin up an
+    unrelated second project — create_project has no project_id in its URL
+    to scope-check against, so it needs its own explicit guard
+    (key_info.get("project_id")) rather than relying on check_key_scope.
+    This is the regression test for that guard.
+    """
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers, project_id=project_id)
+
+    resp = client.post(
+        "/api/sdk/projects/",
+        json={"name": "Should Not Exist"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 403, resp.text
+
+
+def test_project_update_renames_it_and_is_audit_logged(client, auth_headers):
+    """
+    update_project is the third leg of full CRUD for projects through the
+    API-key surface (create/update/delete). Renames a project, checks the
+    new name is visible through the JWT-authenticated GET afterward (proof
+    the write actually persisted, not just that the response echoed back
+    what was sent), and checks the write is audit-logged as update_project
+    with the API key as actor.
+    """
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers, project_id=project_id)
+    headers = {"X-API-Key": api_key}
+
+    update_resp = client.put(
+        f"/api/sdk/projects/{project_id}/",
+        json={"name": "Renamed Blog", "description": "renamed via API key"},
+        headers=headers,
+    )
+    assert update_resp.status_code == 200, update_resp.text
+    assert update_resp.json()["name"] == "Renamed Blog"
+
+    get_resp = client.get(f"/api/cms/projects/{project_id}/", headers=auth_headers)
+    assert get_resp.json()["name"] == "Renamed Blog"
+
+    action_names = [a for a, _ in _audit_actions(client, auth_headers, project_id)]
+    assert "update_project" in action_names
+
+
+def test_project_update_404s_on_unknown_id(client, auth_headers):
+    """update_project 404s on an unknown project_id rather than creating one under the radar."""
+    api_key = _create_api_key(client, auth_headers)
+
+    resp = client.put(
+        "/api/sdk/projects/does-not-exist/",
+        json={"name": "Ghost"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 404, resp.text
+
+
+def test_project_update_rejects_key_scoped_to_other_project(client, auth_headers):
+    """
+    Same guard as test_project_delete_rejects_key_scoped_to_other_project,
+    but for update_project: a key scoped to one project must not be able to
+    rename a different project via check_key_scope's normal project_id
+    check.
+    """
+    project_id = _create_project(client, auth_headers)
+    other_project_id = _create_project(client, auth_headers, name="Other")
+    api_key = _create_api_key(client, auth_headers, project_id=other_project_id)
+
+    resp = client.put(
+        f"/api/sdk/projects/{project_id}/",
+        json={"name": "Hijacked"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 403, resp.text
+
+
 def test_project_delete_removes_it_and_is_audit_logged(client, auth_headers):
     """
     delete_project mirrors delete_collection: it's the piece that lets a
@@ -314,7 +427,9 @@ def test_project_delete_removes_it_and_is_audit_logged(client, auth_headers):
     also be torn down through that same key, instead of only via the
     JWT-authenticated admin UI. Checks the project disappears from
     GET /api/cms/projects/{id}/ and the delete is audit-logged with the
-    API key as actor.
+    API key as actor. Runs after the create/update tests above since
+    delete is the terminal operation in a project's lifecycle — there's
+    nothing left to test on a project once it's gone.
     """
     project_id = _create_project(client, auth_headers)
     api_key = _create_api_key(client, auth_headers, project_id=project_id)
