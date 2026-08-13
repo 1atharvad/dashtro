@@ -181,7 +181,10 @@ async def duplicate_project(project_id: str, request: Request):
         db.upsert_workspace(
             new_project_id,
             workspace_name,
-            {"is_production": ws.get("is_production", False), "created_at": ws.get("created_at", now)},
+            {
+                "is_production": ws.get("is_production", False),
+                "created_at": ws.get("created_at", now),
+            },
         )
         for doc in db.fetch_all_workspace_documents(project_id, workspace_name):
             db.upsert_document(
@@ -197,7 +200,9 @@ async def duplicate_project(project_id: str, request: Request):
         for collection_id in collection_ids:
             meta = await db.fetch_document(project_id, workspace_name, collection_id, "_meta_data")
             if meta:
-                db.upsert_document(new_project_id, workspace_name, collection_id, "_meta_data", meta)
+                db.upsert_document(
+                    new_project_id, workspace_name, collection_id, "_meta_data", meta
+                )
 
     rtdb_tree = db.get_rtdb(project_id)
     if rtdb_tree:
