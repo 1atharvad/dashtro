@@ -10,9 +10,9 @@
  * just point at a deployed (e.g. Docker) instance.
  *
  * That also means tools with no API-key-authorized equivalent aren't
- * exposed here: listing all projects, listing/pushing workspaces, and
- * document version history are all admin (JWT-only) operations on the
- * /api/cms/* surface.
+ * exposed here: listing all projects, listing/renaming individual schema
+ * fields, push-to-production, and document version history are all admin
+ * (JWT-only) operations on the /api/cms/* surface.
  *
  * Configuration (env vars):
  *   CMS_API_URL — base URL of the CMS backend's SDK API, e.g.
@@ -77,6 +77,54 @@ function dump(obj: unknown): { content: [{ type: "text"; text: string }] } {
 export function createServer(): McpServer {
   const server = new McpServer({ name: "DashTro CMS", version: "0.1.0" });
 
+  // Projects
+
+  server.registerTool(
+    "create_project",
+    {
+      description:
+        "Create a new project, complete with its \"production\" workspace. Only works with an unscoped API key (one not already bound to a single project) — a key locked to one project can't create another.",
+      inputSchema: { name: z.string(), description: z.string().default("") },
+    },
+    async ({ name, description }) => dump(await post("/projects/", { name, description })),
+  );
+
+  server.registerTool(
+    "update_project",
+    {
+      description: "Rename a project or change its description.",
+      inputSchema: { project_id: z.string(), name: z.string(), description: z.string().default("") },
+    },
+    async ({ project_id, name, description }) =>
+      dump(await put(`/projects/${project_id}/`, { name, description })),
+  );
+
+  server.registerTool(
+    "delete_project",
+    {
+      description:
+        "Permanently delete a project, including every workspace, schema field, collection, and document in it. Irreversible.",
+      inputSchema: { project_id: z.string() },
+    },
+    async ({ project_id }) => {
+      await del(`/projects/${project_id}/`);
+      return dump({ deleted: project_id });
+    },
+  );
+
+  // Workspaces
+
+  server.registerTool(
+    "create_workspace",
+    {
+      description:
+        "Create a non-production workspace to write draft content into. A project's auto-created \"production\" workspace is read-only for direct document writes, so a workspace created here is where create_document and update_document actually need to target.",
+      inputSchema: { project_id: z.string(), workspace_name: z.string() },
+    },
+    async ({ project_id, workspace_name }) =>
+      dump(await post(`/projects/${project_id}/workspaces/`, { workspace_name })),
+  );
+
   // Schema
 
   server.registerTool(
@@ -101,6 +149,44 @@ export function createServer(): McpServer {
       dump(await get(`/projects/${project_id}/schema/${schema_name}/`)),
   );
 
+  server.registerTool(
+    "create_schema_field",
+    {
+      description:
+        "Add a field to a schema (creating the schema itself the first time a field references it). field_type is e.g. 'String', 'Number', 'Boolean', 'RichText', 'ReferenceDocument'. Set display_name=true to make this field the one shown as a document's label in lists.",
+      inputSchema: {
+        project_id: z.string(),
+        schema_name: z.string(),
+        field_name: z.string(),
+        field_type: z.string(),
+        index: z.number().int().default(1),
+        display_name: z.boolean().default(false),
+      },
+    },
+    async ({ project_id, schema_name, field_name, field_type, index, display_name }) =>
+      dump(
+        await post(`/projects/${project_id}/schema/`, {
+          _index: index,
+          _name: field_name,
+          _type: field_type,
+          _schema_name: schema_name,
+          _display_name: display_name,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "delete_schema_field",
+    {
+      description: "Delete a schema field by its id (from create_schema_field's response or get_schema).",
+      inputSchema: { project_id: z.string(), field_id: z.string() },
+    },
+    async ({ project_id, field_id }) => {
+      await del(`/projects/${project_id}/schema/${field_id}/`);
+      return dump({ deleted: field_id });
+    },
+  );
+
   // Collections
 
   server.registerTool(
@@ -112,6 +198,35 @@ export function createServer(): McpServer {
     async ({ project_id }) => {
       const data = (await get(`/projects/${project_id}/collections/`)) as Record<string, unknown>;
       return dump(data._schema_collections ?? []);
+    },
+  );
+
+  server.registerTool(
+    "create_collection",
+    {
+      description:
+        "Create a collection backed by an existing schema (create its fields with create_schema_field first). Documents are then written into this collection via create_document.",
+      inputSchema: { project_id: z.string(), collection_name: z.string(), schema_name: z.string() },
+    },
+    async ({ project_id, collection_name, schema_name }) =>
+      dump(
+        await post(`/projects/${project_id}/collections/`, {
+          _index: 1,
+          _collection_name: collection_name,
+          _schema_name: schema_name,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "delete_collection",
+    {
+      description: "Permanently delete a collection and its documents across every workspace. Irreversible.",
+      inputSchema: { project_id: z.string(), collection_id: z.string() },
+    },
+    async ({ project_id, collection_id }) => {
+      await del(`/projects/${project_id}/collections/${collection_id}/`);
+      return dump({ deleted: collection_id });
     },
   );
 

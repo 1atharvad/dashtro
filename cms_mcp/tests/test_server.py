@@ -21,6 +21,75 @@ def run(coro):
     return asyncio.run(coro)
 
 
+def test_project_and_authoring_lifecycle(mcp_env):
+    """
+    The full authoring path an MCP client (Claude) actually needs to set up
+    a project from nothing: create_project, create_workspace,
+    create_schema_field (x2), create_collection, create_document, then tear
+    it all down with delete_collection and delete_project — all driven
+    through the MCP tools themselves rather than the JWT-authenticated
+    fixture helpers `project` uses, since this is exactly the path that was
+    missing before this session (the MCP server previously had no tools at
+    all for creating a project, workspace, schema field, or collection —
+    only for operating on ones that already existed).
+
+    Uses mcp_env directly (not the `project` fixture) because create_project
+    only works with an unscoped API key, and needs to be the one creating
+    the project itself to prove the whole chain works end-to-end.
+    """
+    project = json.loads(run(server.create_project("Blog", "A demo blog")))
+    project_id = project["_id"]
+    assert project["name"] == "Blog"
+
+    renamed = json.loads(run(server.update_project(project_id, "Renamed Blog", "Still a demo")))
+    assert renamed["name"] == "Renamed Blog"
+
+    ws = json.loads(run(server.create_workspace(project_id, "staging")))
+    assert ws["workspace_name"] == "staging"
+
+    title_field = json.loads(
+        run(
+            server.create_schema_field(
+                project_id, "Post", "title", "String", index=1, display_name=True
+            )
+        )
+    )
+    assert title_field["_name"] == "title"
+    body_field = json.loads(
+        run(server.create_schema_field(project_id, "Post", "body", "RichText", index=2))
+    )
+    assert body_field["_name"] == "body"
+
+    schema_names = json.loads(run(server.list_schema(project_id)))
+    assert "Post" in schema_names["schema_names"]
+
+    collection = json.loads(run(server.create_collection(project_id, "posts", "Post")))
+    assert collection["_collection_name"] == "posts"
+
+    doc = json.loads(
+        run(
+            server.create_document(
+                project_id, "staging", "posts", data={"title": "Hello", "body": "World"}
+            )
+        )
+    )
+    assert doc["title"] == "Hello"
+
+    run(server.delete_schema_field(project_id, body_field["_id"]))
+    run(server.delete_collection(project_id, collection["_id"]))
+
+    listed = json.loads(run(server.list_collections(project_id)))
+    assert listed == []
+
+    run(server.delete_project(project_id))
+    # get_schema_names doesn't 404 on an unknown project_id (it just reads
+    # whatever schema rows exist for that id, which is now none) — the real
+    # proof delete_project cascaded is that the "Post" schema is gone too,
+    # not just that this call didn't error.
+    schema_after_delete = json.loads(run(server.list_schema(project_id)))
+    assert schema_after_delete["schema_names"] == []
+
+
 def test_list_and_get_schema(project):
     """
     list_schema should surface the 'Post' schema the `project` fixture

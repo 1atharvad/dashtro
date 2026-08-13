@@ -7,8 +7,9 @@ client) can read and write project content directly. Uses API-key auth only
 what the configured API key is scoped to (project/collections/read-write).
 
 That also means tools with no API-key-authorized equivalent aren't exposed
-here: listing all projects, listing/pushing workspaces, and document version
-history are all admin (JWT-only) operations on the /api/cms/* surface.
+here: listing all projects, listing/renaming individual schema fields,
+push-to-production, and document version history are all admin (JWT-only)
+operations on the /api/cms/* surface.
 
 Configuration (env vars):
   CMS_API_URL  — base URL of the CMS backend's SDK API, e.g.
@@ -90,6 +91,53 @@ def _dump(obj) -> str:
     return json.dumps(obj, indent=2, default=str)
 
 
+# ── Projects ──────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def create_project(name: str, description: str = "") -> str:
+    """
+    Create a new project, complete with its "production" workspace.
+    Only works with an unscoped API key (one not already bound to a single
+    project) — a key locked to one project can't create another.
+    """
+    return _dump(await _post("/projects/", data={"name": name, "description": description}))
+
+
+@mcp.tool()
+async def update_project(project_id: str, name: str, description: str = "") -> str:
+    """Rename a project or change its description."""
+    return _dump(
+        await _put(f"/projects/{project_id}/", data={"name": name, "description": description})
+    )
+
+
+@mcp.tool()
+async def delete_project(project_id: str) -> str:
+    """
+    Permanently delete a project, including every workspace, schema field,
+    collection, and document in it. Irreversible.
+    """
+    await _delete(f"/projects/{project_id}/")
+    return _dump({"deleted": project_id})
+
+
+# ── Workspaces ────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def create_workspace(project_id: str, workspace_name: str) -> str:
+    """
+    Create a non-production workspace to write draft content into.
+    A project's auto-created "production" workspace is read-only for direct
+    document writes, so a workspace created here is where create_document
+    and update_document actually need to target.
+    """
+    return _dump(
+        await _post(f"/projects/{project_id}/workspaces/", data={"workspace_name": workspace_name})
+    )
+
+
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 
@@ -106,6 +154,42 @@ async def get_schema(project_id: str, schema_name: str) -> str:
     return _dump(await _get(f"/projects/{project_id}/schema/{schema_name}/"))
 
 
+@mcp.tool()
+async def create_schema_field(
+    project_id: str,
+    schema_name: str,
+    field_name: str,
+    field_type: str,
+    index: int = 1,
+    display_name: bool = False,
+) -> str:
+    """
+    Add a field to a schema (creating the schema itself the first time a
+    field references it). field_type is e.g. 'String', 'Number', 'Boolean',
+    'RichText', 'ReferenceDocument'. Set display_name=True to make this
+    field the one shown as a document's label in lists.
+    """
+    return _dump(
+        await _post(
+            f"/projects/{project_id}/schema/",
+            data={
+                "_index": index,
+                "_name": field_name,
+                "_type": field_type,
+                "_schema_name": schema_name,
+                "_display_name": display_name,
+            },
+        )
+    )
+
+
+@mcp.tool()
+async def delete_schema_field(project_id: str, field_id: str) -> str:
+    """Delete a schema field by its id (from create_schema_field's response or get_schema)."""
+    await _delete(f"/projects/{project_id}/schema/{field_id}/")
+    return _dump({"deleted": field_id})
+
+
 # ── Collections ───────────────────────────────────────────────────────────────
 
 
@@ -114,6 +198,31 @@ async def list_collections(project_id: str) -> str:
     """List all collections in a project with their schema associations."""
     data = await _get(f"/projects/{project_id}/collections/")
     return _dump(data.get("_schema_collections", []))
+
+
+@mcp.tool()
+async def create_collection(project_id: str, collection_name: str, schema_name: str) -> str:
+    """
+    Create a collection backed by an existing schema (create its fields
+    with create_schema_field first). Documents are then written into this
+    collection via create_document.
+    """
+    return _dump(
+        await _post(
+            f"/projects/{project_id}/collections/",
+            data={"_index": 1, "_collection_name": collection_name, "_schema_name": schema_name},
+        )
+    )
+
+
+@mcp.tool()
+async def delete_collection(project_id: str, collection_id: str) -> str:
+    """
+    Permanently delete a collection and its documents across every
+    workspace. Irreversible.
+    """
+    await _delete(f"/projects/{project_id}/collections/{collection_id}/")
+    return _dump({"deleted": collection_id})
 
 
 # ── Documents ─────────────────────────────────────────────────────────────────

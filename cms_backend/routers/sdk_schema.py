@@ -11,7 +11,7 @@ from api.utils.schema import schema_jsonify
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from models.collection import SchemaCollectionIn
-from models.project import ProjectIn
+from models.project import ProjectIn, WorkspaceIn
 from pydantic import ValidationError
 
 PRODUCTION = "production"
@@ -470,6 +470,54 @@ def update_project(
         ip_address=get_client_ip(request),
     )
     return {"_id": project_id, **updated}
+
+
+@router.post("/projects/{project_id}/workspaces/", status_code=201)
+def create_workspace(
+    project_id: str,
+    body: dict,
+    request: Request,
+    key_info: dict = Depends(require_api_key("write")),
+):
+    """Create a non-production workspace through the API-key surface.
+
+    Mirrors routers/projects.py's JWT-authenticated create_workspace. This is
+    what makes document writes reachable through an API key at all: the
+    "production" workspace create_project auto-creates is read-only
+    (sdk_documents.py's create_document rejects direct writes to it), so a
+    key that only has create_project/create_collection has nowhere to
+    actually write a document without this.
+    """
+    check_key_scope(key_info, project_id, None)
+    db = get_data_client()
+
+    if not db.get_project(project_id):
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    try:
+        data = WorkspaceIn.model_validate(body)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=e.errors()) from e
+
+    if db.get_workspace(project_id, data.workspace_name):
+        raise HTTPException(status_code=400, detail="Workspace name already exists.")
+
+    now = _now_iso()
+    workspace_data = {"is_production": False, "created_at": now}
+    db.upsert_workspace(project_id, data.workspace_name, workspace_data)
+
+    user_id, user_email = _key_actor(key_info)
+    db_audit.log(
+        action="create_workspace",
+        resource_type="workspace",
+        user_id=user_id,
+        user_email=user_email,
+        resource_name=data.workspace_name,
+        project_id=project_id,
+        workspace_name=data.workspace_name,
+        ip_address=get_client_ip(request),
+    )
+    return {"workspace_name": data.workspace_name, **workspace_data}
 
 
 @router.delete("/projects/{project_id}/", status_code=204)

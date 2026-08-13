@@ -16,11 +16,14 @@ same "no fallbacks in tests" spirit as cms_backend/tests/conftest.py's
 exercise the real request/response shapes the backend returns, not a
 hand-maintained mock of them.
 
-Provisioning a project/schema/collection still requires a JWT (only an
-authenticated CMS user can create those — there's no API-key-authorized way
-to), so `mcp_env` signs up an owner for that, then mints an unrestricted
-read+write API key through the JWT-authenticated endpoint and patches
-`cms_mcp.server.CMS_API_KEY` to it — exactly what the MCP tools use.
+`mcp_env` signs up an owner via JWT auth, then mints an unrestricted (unscoped,
+read+write) API key through the JWT-authenticated endpoint and patches
+`cms_mcp.server.CMS_API_KEY` to it — exactly what the MCP tools use. The
+`project` fixture below still provisions its fixture data via JWT for
+speed/determinism, but the MCP tools themselves (create_project,
+create_workspace, create_schema_field, create_collection, ...) are equally
+capable of doing all of that through the API-key surface alone — see
+test_project_and_authoring_lifecycle for a test that does exactly that.
 
 SQLite only (mirrors the default backend test run) — no TEST_DB_TYPE toggle
 here since these tests are about the MCP↔HTTP↔router contract, not the

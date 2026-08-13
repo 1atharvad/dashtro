@@ -130,13 +130,21 @@ def test_live_schema_field_crud(live_client, live_project):
 
 def test_live_collection_and_document_crud(live_client, live_project):
     """
-    End-to-end lifecycle for a collection and a document inside it, all
-    against the "production" workspace create_project auto-creates: create
-    the backing schema field, create the collection, write a document into
-    it, read it back, update it, then delete the collection (which should
+    End-to-end lifecycle for a workspace, a collection, and a document
+    inside it: create_project's auto-created "production" workspace is
+    intentionally read-only for direct document writes (push-to-production
+    is the only way content reaches it), so this creates its own scratch
+    workspace via create_workspace first, then creates the backing schema
+    field, creates the collection, writes a document into that workspace,
+    reads it back, updates it, then deletes the collection (which should
     take the document with it) — verified by re-listing collections and
     confirming it's gone.
     """
+    create_ws_resp = live_client.post(
+        f"/projects/{live_project}/workspaces/", json={"workspace_name": "staging"}
+    )
+    assert create_ws_resp.status_code == 201, create_ws_resp.text
+
     live_client.post(
         f"/projects/{live_project}/schema/",
         json={"_index": 1, "_name": "title", "_type": "String", "_schema_name": "Post"},
@@ -151,19 +159,19 @@ def test_live_collection_and_document_crud(live_client, live_project):
 
     doc_id = uuid.uuid4().hex[:12]
     create_doc_resp = live_client.post(
-        f"/projects/{live_project}/workspace/production/collection/posts/",
+        f"/projects/{live_project}/workspace/staging/collection/posts/",
         json={"_id": doc_id, "title": "Hello from the live suite"},
     )
-    assert create_doc_resp.status_code == 200, create_doc_resp.text
+    assert create_doc_resp.status_code == 201, create_doc_resp.text
 
     get_doc_resp = live_client.get(
-        f"/projects/{live_project}/workspace/production/collection/posts/document/{doc_id}/"
+        f"/projects/{live_project}/workspace/staging/collection/posts/document/{doc_id}/"
     )
     assert get_doc_resp.status_code == 200, get_doc_resp.text
     assert get_doc_resp.json()["title"] == "Hello from the live suite"
 
     update_doc_resp = live_client.put(
-        f"/projects/{live_project}/workspace/production/collection/posts/document/{doc_id}/",
+        f"/projects/{live_project}/workspace/staging/collection/posts/document/{doc_id}/",
         json={"title": "Updated"},
     )
     assert update_doc_resp.status_code == 200, update_doc_resp.text

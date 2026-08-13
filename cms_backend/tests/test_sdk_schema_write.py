@@ -420,6 +420,82 @@ def test_project_update_rejects_key_scoped_to_other_project(client, auth_headers
     assert resp.status_code == 403, resp.text
 
 
+def test_workspace_create_and_audit_log(client, auth_headers):
+    """
+    create_workspace is what makes document writes reachable through the
+    API-key surface at all: create_project's auto-created "production"
+    workspace is intentionally read-only for direct writes
+    (sdk_documents.py's _guard_production_write), so a key with no other
+    way to make a non-production workspace could never write a document.
+    Checks the new workspace shows up via the JWT-authenticated
+    list_workspaces afterward and that the write is audit-logged.
+    """
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers, project_id=project_id)
+
+    create_resp = client.post(
+        f"/api/sdk/projects/{project_id}/workspaces/",
+        json={"workspace_name": "staging"},
+        headers={"X-API-Key": api_key},
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    assert create_resp.json()["workspace_name"] == "staging"
+
+    list_resp = client.get(f"/api/cms/projects/{project_id}/workspaces/", headers=auth_headers)
+    workspace_names = [ws["workspace_name"] for ws in list_resp.json()]
+    assert "staging" in workspace_names
+
+    action_names = [a for a, _ in _audit_actions(client, auth_headers, project_id)]
+    assert "create_workspace" in action_names
+
+
+def test_workspace_create_rejects_duplicate_name(client, auth_headers):
+    """create_workspace rejects a name that already exists, matching the JWT-side behavior."""
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers, project_id=project_id)
+    headers = {"X-API-Key": api_key}
+
+    first = client.post(
+        f"/api/sdk/projects/{project_id}/workspaces/",
+        json={"workspace_name": "staging"},
+        headers=headers,
+    )
+    assert first.status_code == 201, first.text
+
+    dupe = client.post(
+        f"/api/sdk/projects/{project_id}/workspaces/",
+        json={"workspace_name": "staging"},
+        headers=headers,
+    )
+    assert dupe.status_code == 400, dupe.text
+
+
+def test_workspace_create_404s_on_unknown_project(client, auth_headers):
+    """create_workspace 404s when the project itself doesn't exist."""
+    api_key = _create_api_key(client, auth_headers)
+
+    resp = client.post(
+        "/api/sdk/projects/does-not-exist/workspaces/",
+        json={"workspace_name": "staging"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 404, resp.text
+
+
+def test_workspace_create_rejects_key_scoped_to_other_project(client, auth_headers):
+    """A key scoped to one project must not be able to create a workspace in a different project."""
+    project_id = _create_project(client, auth_headers)
+    other_project_id = _create_project(client, auth_headers, name="Other")
+    api_key = _create_api_key(client, auth_headers, project_id=other_project_id)
+
+    resp = client.post(
+        f"/api/sdk/projects/{project_id}/workspaces/",
+        json={"workspace_name": "staging"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 403, resp.text
+
+
 def test_project_delete_removes_it_and_is_audit_logged(client, auth_headers):
     """
     delete_project mirrors delete_collection: it's the piece that lets a
