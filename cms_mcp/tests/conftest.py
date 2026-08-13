@@ -31,7 +31,10 @@ storage backend.
 """
 
 import asyncio
+import socket
 import sys
+import threading
+import time
 
 import httpx
 import pytest
@@ -163,6 +166,93 @@ async def _create_project_fixture_data(jwt_token: str) -> dict:
         assert coll.status_code == 201, coll.text
 
     return {"project_id": project_id, "workspace_name": "staging", "collection_name": "posts"}
+
+
+def _free_port() -> int:
+    """Ask the OS for an unused localhost port to bind the test uvicorn server to."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+@pytest.fixture
+def live_server(tmp_path, monkeypatch):
+    """A real cms_backend server on a real socket, for tests that launch an MCP
+    server as an actual subprocess (test_stdio_protocol.py).
+
+    Unlike `mcp_env`'s in-process ASGITransport patch, a subprocess can't
+    share this process's Python objects — it needs a real, connectable
+    CMS_API_URL. Mirrors cms_backend/tests/test_cms_schema_cli_http.py's
+    `live_server` fixture (background uvicorn thread on a free port), kept
+    as a separate copy here since pytest fixtures aren't shared across
+    test-directory conftest.py files without an explicit plugin/import.
+
+    Yields {"base_url", "api_key"} — api_key is an unscoped read+write key,
+    minted through the real JWT-authenticated signup/login/api-keys flow.
+    """
+    monkeypatch.setenv("JWT_SECRET_KEY", TEST_JWT_SECRET)
+    monkeypatch.setenv("DEBUG", "False")
+    monkeypatch.setenv("CORS_ORIGINS", "http://localhost")
+    monkeypatch.setenv("MEDIA_UPLOAD_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setenv("DB_TYPE", "sqlite")
+    monkeypatch.setenv("SQLITE_DB_PATH", str(tmp_path / "test.sqlite3"))
+
+    _evict_cms_modules()
+    _reset_db_singleton()
+
+    import main
+    import uvicorn
+
+    port = _free_port()
+    config = uvicorn.Config(main.app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    deadline = time.monotonic() + 10
+    while not server.started and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert server.started, "uvicorn server did not start in time"
+
+    base_url = f"http://127.0.0.1:{port}"
+    creds = asyncio.run(_signup_and_provision_api_key_http(base_url))
+
+    yield {"base_url": base_url, "api_key": creds["api_key"]}
+
+    server.should_exit = True
+    thread.join(timeout=5)
+    _reset_db_singleton()
+    _evict_cms_modules()
+
+
+async def _signup_and_provision_api_key_http(base_url: str) -> dict:
+    """Same as _signup_and_provision_api_key, but over a real socket (base_url) instead of ASGITransport."""
+    async with httpx.AsyncClient(base_url=base_url) as client:
+        email, password = "owner@example.com", "correct-horse-battery-staple"
+        signup = await client.post(
+            "/api/cms/auth/signup/",
+            json={"email": email, "password": password, "first_name": "Owner", "last_name": "User"},
+        )
+        assert signup.status_code == 200, signup.text
+        login = await client.post(
+            "/api/cms/auth/login/", json={"email": email, "password": password}
+        )
+        assert login.status_code == 200, login.text
+        jwt_token = login.json()["idToken"]
+
+        key_resp = await client.post(
+            "/api/cms/auth/api-keys/",
+            json={
+                "label": "mcp-stdio-test-key",
+                "project_id": None,
+                "collections": None,
+                "scopes": ["read", "write"],
+            },
+            headers={"Authorization": f"Bearer {jwt_token}"},
+        )
+        assert key_resp.status_code == 200, key_resp.text
+
+    return {"jwt_token": jwt_token, "api_key": key_resp.json()["key"]}
 
 
 @pytest.fixture

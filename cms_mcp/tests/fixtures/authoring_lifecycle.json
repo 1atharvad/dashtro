@@ -1,0 +1,23 @@
+{
+  "project": {
+    "name": "Stdio Protocol Test",
+    "description": "from pytest"
+  },
+  "workspace": {
+    "workspace_name": "staging"
+  },
+  "schema_field": {
+    "schema_name": "Post",
+    "field_name": "title",
+    "field_type": "String",
+    "index": 1,
+    "display_name": true
+  },
+  "collection": {
+    "collection_name": "posts",
+    "schema_name": "Post"
+  },
+  "document": {
+    "title": "Hello over real stdio"
+  }
+}

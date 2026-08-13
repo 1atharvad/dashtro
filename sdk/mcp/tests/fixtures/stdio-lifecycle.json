@@ -1,0 +1,9 @@
+{
+  "project": {
+    "name": "Stdio Test",
+    "description": "via real JSON-RPC"
+  },
+  "workspace": {
+    "workspace_name": "staging"
+  }
+}
