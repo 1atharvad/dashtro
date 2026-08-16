@@ -26,6 +26,14 @@ import { z } from "zod";
 
 const CMS_API_URL = process.env.CMS_API_URL ?? "http://localhost:7312/api/sdk";
 const CMS_API_KEY = process.env.CMS_API_KEY ?? "";
+const CMS_PROJECT_ID = process.env.CMS_PROJECT_ID ?? "";
+
+/** Resolve project_id: explicit arg > env var > throw. */
+function resolveProjectId(explicit?: string): string {
+  const id = explicit ?? CMS_PROJECT_ID;
+  if (!id) throw new Error("project_id is required (provide as argument or set CMS_PROJECT_ID env var)");
+  return id;
+}
 
 // ── HTTP helpers ────────────────────────────────────────────────────────────
 
@@ -93,10 +101,10 @@ export function createServer(): McpServer {
     "update_project",
     {
       description: "Rename a project or change its description.",
-      inputSchema: { project_id: z.string(), name: z.string(), description: z.string().default("") },
+      inputSchema: { project_id: z.string().optional(), name: z.string(), description: z.string().default("") },
     },
     async ({ project_id, name, description }) =>
-      dump(await put(`/projects/${project_id}/`, { name, description })),
+      dump(await put(`/projects/${resolveProjectId(project_id)}/`, { name, description })),
   );
 
   server.registerTool(
@@ -104,11 +112,12 @@ export function createServer(): McpServer {
     {
       description:
         "Permanently delete a project, including every workspace, schema field, collection, and document in it. Irreversible.",
-      inputSchema: { project_id: z.string() },
+      inputSchema: { project_id: z.string().optional() },
     },
     async ({ project_id }) => {
-      await del(`/projects/${project_id}/`);
-      return dump({ deleted: project_id });
+      const pid = resolveProjectId(project_id);
+      await del(`/projects/${pid}/`);
+      return dump({ deleted: pid });
     },
   );
 
@@ -119,10 +128,10 @@ export function createServer(): McpServer {
     {
       description:
         "Create a non-production workspace to write draft content into. A project's auto-created \"production\" workspace is read-only for direct document writes, so a workspace created here is where create_document and update_document actually need to target.",
-      inputSchema: { project_id: z.string(), workspace_name: z.string() },
+      inputSchema: { project_id: z.string().optional(), workspace_name: z.string() },
     },
     async ({ project_id, workspace_name }) =>
-      dump(await post(`/projects/${project_id}/workspaces/`, { workspace_name })),
+      dump(await post(`/projects/${resolveProjectId(project_id)}/workspaces/`, { workspace_name })),
   );
 
   // Schema
@@ -131,10 +140,11 @@ export function createServer(): McpServer {
     "list_schema",
     {
       description: "List all schema names defined in a project.",
-      inputSchema: { project_id: z.string() },
+      inputSchema: { project_id: z.string().optional() },
     },
     async ({ project_id }) => {
-      const data = (await get(`/projects/${project_id}/schema/`)) as Record<string, unknown>;
+      const pid = resolveProjectId(project_id);
+      const data = (await get(`/projects/${pid}/schema/`)) as Record<string, unknown>;
       return dump({ schema_names: data._schema_names ?? [] });
     },
   );
@@ -143,10 +153,10 @@ export function createServer(): McpServer {
     "get_schema",
     {
       description: "Get the field definitions for a named schema, including field types and defaults.",
-      inputSchema: { project_id: z.string(), schema_name: z.string() },
+      inputSchema: { project_id: z.string().optional(), schema_name: z.string() },
     },
     async ({ project_id, schema_name }) =>
-      dump(await get(`/projects/${project_id}/schema/${schema_name}/`)),
+      dump(await get(`/projects/${resolveProjectId(project_id)}/schema/${schema_name}/`)),
   );
 
   server.registerTool(
@@ -155,7 +165,7 @@ export function createServer(): McpServer {
       description:
         "Add a field to a schema (creating the schema itself the first time a field references it). field_type is e.g. 'String', 'Number', 'Boolean', 'RichText', 'ReferenceDocument'. Set display_name=true to make this field the one shown as a document's label in lists.",
       inputSchema: {
-        project_id: z.string(),
+        project_id: z.string().optional(),
         schema_name: z.string(),
         field_name: z.string(),
         field_type: z.string(),
@@ -165,7 +175,7 @@ export function createServer(): McpServer {
     },
     async ({ project_id, schema_name, field_name, field_type, index, display_name }) =>
       dump(
-        await post(`/projects/${project_id}/schema/`, {
+        await post(`/projects/${resolveProjectId(project_id)}/schema/`, {
           _index: index,
           _name: field_name,
           _type: field_type,
@@ -179,10 +189,11 @@ export function createServer(): McpServer {
     "delete_schema_field",
     {
       description: "Delete a schema field by its id (from create_schema_field's response or get_schema).",
-      inputSchema: { project_id: z.string(), field_id: z.string() },
+      inputSchema: { project_id: z.string().optional(), field_id: z.string() },
     },
     async ({ project_id, field_id }) => {
-      await del(`/projects/${project_id}/schema/${field_id}/`);
+      const pid = resolveProjectId(project_id);
+      await del(`/projects/${pid}/schema/${field_id}/`);
       return dump({ deleted: field_id });
     },
   );
@@ -193,10 +204,11 @@ export function createServer(): McpServer {
     "list_collections",
     {
       description: "List all collections in a project with their schema associations.",
-      inputSchema: { project_id: z.string() },
+      inputSchema: { project_id: z.string().optional() },
     },
     async ({ project_id }) => {
-      const data = (await get(`/projects/${project_id}/collections/`)) as Record<string, unknown>;
+      const pid = resolveProjectId(project_id);
+      const data = (await get(`/projects/${pid}/collections/`)) as Record<string, unknown>;
       return dump(data._schema_collections ?? []);
     },
   );
@@ -206,11 +218,11 @@ export function createServer(): McpServer {
     {
       description:
         "Create a collection backed by an existing schema (create its fields with create_schema_field first). Documents are then written into this collection via create_document.",
-      inputSchema: { project_id: z.string(), collection_name: z.string(), schema_name: z.string() },
+      inputSchema: { project_id: z.string().optional(), collection_name: z.string(), schema_name: z.string() },
     },
     async ({ project_id, collection_name, schema_name }) =>
       dump(
-        await post(`/projects/${project_id}/collections/`, {
+        await post(`/projects/${resolveProjectId(project_id)}/collections/`, {
           _index: 1,
           _collection_name: collection_name,
           _schema_name: schema_name,
@@ -222,10 +234,11 @@ export function createServer(): McpServer {
     "delete_collection",
     {
       description: "Permanently delete a collection and its documents across every workspace. Irreversible.",
-      inputSchema: { project_id: z.string(), collection_id: z.string() },
+      inputSchema: { project_id: z.string().optional(), collection_id: z.string() },
     },
     async ({ project_id, collection_id }) => {
-      await del(`/projects/${project_id}/collections/${collection_id}/`);
+      const pid = resolveProjectId(project_id);
+      await del(`/projects/${pid}/collections/${collection_id}/`);
       return dump({ deleted: collection_id });
     },
   );
@@ -237,11 +250,12 @@ export function createServer(): McpServer {
     {
       description:
         "List all documents in a collection. Returns document IDs, their display labels, and publish statuses (draft/published).",
-      inputSchema: { project_id: z.string(), workspace_name: z.string(), collection_name: z.string() },
+      inputSchema: { project_id: z.string().optional(), workspace_name: z.string(), collection_name: z.string() },
     },
     async ({ project_id, workspace_name, collection_name }) => {
+      const pid = resolveProjectId(project_id);
       const data = (await get(
-        `/projects/${project_id}/workspace/${workspace_name}/collection/${collection_name}/`,
+        `/projects/${pid}/workspace/${workspace_name}/collection/${collection_name}/`,
       )) as Record<string, unknown>;
       return dump({
         schema_name: data._schema_name,
@@ -258,7 +272,7 @@ export function createServer(): McpServer {
       description:
         "Fetch a single document with referenced documents inlined. depth controls how many levels of ReferenceDocument fields are resolved (default 3).",
       inputSchema: {
-        project_id: z.string(),
+        project_id: z.string().optional(),
         workspace_name: z.string(),
         collection_name: z.string(),
         document_id: z.string(),
@@ -268,7 +282,7 @@ export function createServer(): McpServer {
     async ({ project_id, workspace_name, collection_name, document_id, depth }) =>
       dump(
         await get(
-          `/projects/${project_id}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/`,
+          `/projects/${resolveProjectId(project_id)}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/`,
           { depth },
         ),
       ),
@@ -280,7 +294,7 @@ export function createServer(): McpServer {
       description:
         "Create a new document in a collection. data keys must match the collection's schema field names. New documents default to _status='draft'. Production workspace is read-only.",
       inputSchema: {
-        project_id: z.string(),
+        project_id: z.string().optional(),
         workspace_name: z.string(),
         collection_name: z.string(),
         data: z.record(z.string(), z.unknown()),
@@ -289,7 +303,7 @@ export function createServer(): McpServer {
     async ({ project_id, workspace_name, collection_name, data }) =>
       dump(
         await post(
-          `/projects/${project_id}/workspace/${workspace_name}/collection/${collection_name}/`,
+          `/projects/${resolveProjectId(project_id)}/workspace/${workspace_name}/collection/${collection_name}/`,
           data,
         ),
       ),
@@ -301,7 +315,7 @@ export function createServer(): McpServer {
       description:
         "Update fields on an existing document. Only include keys you want to change. The previous state is automatically saved as a version before the update is applied. Production workspace is read-only.",
       inputSchema: {
-        project_id: z.string(),
+        project_id: z.string().optional(),
         workspace_name: z.string(),
         collection_name: z.string(),
         document_id: z.string(),
@@ -311,7 +325,7 @@ export function createServer(): McpServer {
     async ({ project_id, workspace_name, collection_name, document_id, data }) =>
       dump(
         await put(
-          `/projects/${project_id}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/`,
+          `/projects/${resolveProjectId(project_id)}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/`,
           data,
         ),
       ),
@@ -323,7 +337,7 @@ export function createServer(): McpServer {
       description:
         "Change a document's publish status. status must be 'draft' or 'published'. Production workspace is read-only.",
       inputSchema: {
-        project_id: z.string(),
+        project_id: z.string().optional(),
         workspace_name: z.string(),
         collection_name: z.string(),
         document_id: z.string(),
@@ -333,7 +347,7 @@ export function createServer(): McpServer {
     async ({ project_id, workspace_name, collection_name, document_id, status }) =>
       dump(
         await patch(
-          `/projects/${project_id}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/status/`,
+          `/projects/${resolveProjectId(project_id)}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/status/`,
           { _status: status },
         ),
       ),
@@ -344,15 +358,16 @@ export function createServer(): McpServer {
     {
       description: "Permanently delete a document from a collection. Production workspace is read-only.",
       inputSchema: {
-        project_id: z.string(),
+        project_id: z.string().optional(),
         workspace_name: z.string(),
         collection_name: z.string(),
         document_id: z.string(),
       },
     },
     async ({ project_id, workspace_name, collection_name, document_id }) => {
+      const pid = resolveProjectId(project_id);
       await del(
-        `/projects/${project_id}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/`,
+        `/projects/${pid}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/`,
       );
       return dump({ deleted: document_id });
     },
@@ -365,9 +380,9 @@ export function createServer(): McpServer {
     {
       description:
         "Read a node (or the whole tree if path is empty) from a project's Realtime Database. path is a '/'-delimited key path, e.g. 'settings/homepage'.",
-      inputSchema: { project_id: z.string(), path: z.string().default("") },
+      inputSchema: { project_id: z.string().optional(), path: z.string().default("") },
     },
-    async ({ project_id, path }) => dump(await get(`/projects/${project_id}/rtdb/${path}`)),
+    async ({ project_id, path }) => dump(await get(`/projects/${resolveProjectId(project_id)}/rtdb/${path}`)),
   );
 
   server.registerTool(
@@ -375,30 +390,31 @@ export function createServer(): McpServer {
     {
       description:
         "Overwrite the node at path with value (any JSON-serializable data). An empty path targets the tree root.",
-      inputSchema: { project_id: z.string(), path: z.string(), value: z.unknown() },
+      inputSchema: { project_id: z.string().optional(), path: z.string(), value: z.unknown() },
     },
     async ({ project_id, path, value }) =>
-      dump(await put(`/projects/${project_id}/rtdb/${path}`, value)),
+      dump(await put(`/projects/${resolveProjectId(project_id)}/rtdb/${path}`, value)),
   );
 
   server.registerTool(
     "rtdb_update",
     {
       description: "Shallow-merge value (a JSON object) into the existing node at path.",
-      inputSchema: { project_id: z.string(), path: z.string(), value: z.record(z.string(), z.unknown()) },
+      inputSchema: { project_id: z.string().optional(), path: z.string(), value: z.record(z.string(), z.unknown()) },
     },
     async ({ project_id, path, value }) =>
-      dump(await patch(`/projects/${project_id}/rtdb/${path}`, value)),
+      dump(await patch(`/projects/${resolveProjectId(project_id)}/rtdb/${path}`, value)),
   );
 
   server.registerTool(
     "rtdb_delete",
     {
       description: "Delete the node at path (or the entire tree if path is empty). Irreversible.",
-      inputSchema: { project_id: z.string(), path: z.string().default("") },
+      inputSchema: { project_id: z.string().optional(), path: z.string().default("") },
     },
     async ({ project_id, path }) => {
-      await del(`/projects/${project_id}/rtdb/${path}`);
+      const pid = resolveProjectId(project_id);
+      await del(`/projects/${pid}/rtdb/${path}`);
       return dump({ deleted: path || "/" });
     },
   );

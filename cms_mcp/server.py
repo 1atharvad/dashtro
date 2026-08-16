@@ -16,6 +16,7 @@ Configuration (env vars):
                  http://localhost:7312/api/sdk
   CMS_API_KEY  — API key for authenticated requests, scoped per collection
                  (read/write) from the CMS's settings page
+  CMS_PROJECT_ID — default project ID (optional, used when project_id not provided)
 """
 
 import json
@@ -27,6 +28,15 @@ from mcp.server.fastmcp import FastMCP
 
 CMS_API_URL = os.environ.get("CMS_API_URL", "http://localhost:7312/api/sdk")
 CMS_API_KEY = os.environ.get("CMS_API_KEY", "")
+CMS_PROJECT_ID = os.environ.get("CMS_PROJECT_ID", "")
+
+
+def _resolve_project_id(explicit: str | None) -> str:
+    """Resolve project_id: explicit arg > env var > raise."""
+    pid = explicit or CMS_PROJECT_ID
+    if not pid:
+        raise ValueError("project_id is required (provide as argument or set CMS_PROJECT_ID env var)")
+    return pid
 
 mcp = FastMCP("DashTro CMS")
 
@@ -105,61 +115,62 @@ async def create_project(name: str, description: str = "") -> str:
 
 
 @mcp.tool()
-async def update_project(project_id: str, name: str, description: str = "") -> str:
+async def update_project(project_id: str | None = None, name: str = "", description: str = "") -> str:
     """Rename a project or change its description."""
-    return _dump(
-        await _put(f"/projects/{project_id}/", data={"name": name, "description": description})
-    )
+    pid = _resolve_project_id(project_id)
+    return _dump(await _put(f"/projects/{pid}/", data={"name": name, "description": description}))
 
 
 @mcp.tool()
-async def delete_project(project_id: str) -> str:
+async def delete_project(project_id: str | None = None) -> str:
     """
     Permanently delete a project, including every workspace, schema field,
     collection, and document in it. Irreversible.
     """
-    await _delete(f"/projects/{project_id}/")
-    return _dump({"deleted": project_id})
+    pid = _resolve_project_id(project_id)
+    await _delete(f"/projects/{pid}/")
+    return _dump({"deleted": pid})
 
 
 # ── Workspaces ────────────────────────────────────────────────────────────────
 
 
 @mcp.tool()
-async def create_workspace(project_id: str, workspace_name: str) -> str:
+async def create_workspace(project_id: str | None = None, workspace_name: str = "") -> str:
     """
     Create a non-production workspace to write draft content into.
     A project's auto-created "production" workspace is read-only for direct
     document writes, so a workspace created here is where create_document
     and update_document actually need to target.
     """
-    return _dump(
-        await _post(f"/projects/{project_id}/workspaces/", data={"workspace_name": workspace_name})
-    )
+    pid = _resolve_project_id(project_id)
+    return _dump(await _post(f"/projects/{pid}/workspaces/", data={"workspace_name": workspace_name}))
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 
 @mcp.tool()
-async def list_schema(project_id: str) -> str:
+async def list_schema(project_id: str | None = None) -> str:
     """List all schema names defined in a project."""
-    data = await _get(f"/projects/{project_id}/schema/")
+    pid = _resolve_project_id(project_id)
+    data = await _get(f"/projects/{pid}/schema/")
     return _dump({"schema_names": data.get("_schema_names", [])})
 
 
 @mcp.tool()
-async def get_schema(project_id: str, schema_name: str) -> str:
+async def get_schema(project_id: str | None = None, schema_name: str = "") -> str:
     """Get the field definitions for a named schema, including field types and defaults."""
-    return _dump(await _get(f"/projects/{project_id}/schema/{schema_name}/"))
+    pid = _resolve_project_id(project_id)
+    return _dump(await _get(f"/projects/{pid}/schema/{schema_name}/"))
 
 
 @mcp.tool()
 async def create_schema_field(
-    project_id: str,
-    schema_name: str,
-    field_name: str,
-    field_type: str,
+    project_id: str | None = None,
+    schema_name: str = "",
+    field_name: str = "",
+    field_type: str = "",
     index: int = 1,
     display_name: bool = False,
 ) -> str:
@@ -169,9 +180,10 @@ async def create_schema_field(
     'RichText', 'ReferenceDocument'. Set display_name=True to make this
     field the one shown as a document's label in lists.
     """
+    pid = _resolve_project_id(project_id)
     return _dump(
         await _post(
-            f"/projects/{project_id}/schema/",
+            f"/projects/{pid}/schema/",
             data={
                 "_index": index,
                 "_name": field_name,
@@ -184,9 +196,10 @@ async def create_schema_field(
 
 
 @mcp.tool()
-async def delete_schema_field(project_id: str, field_id: str) -> str:
+async def delete_schema_field(project_id: str | None = None, field_id: str = "") -> str:
     """Delete a schema field by its id (from create_schema_field's response or get_schema)."""
-    await _delete(f"/projects/{project_id}/schema/{field_id}/")
+    pid = _resolve_project_id(project_id)
+    await _delete(f"/projects/{pid}/schema/{field_id}/")
     return _dump({"deleted": field_id})
 
 
@@ -194,34 +207,37 @@ async def delete_schema_field(project_id: str, field_id: str) -> str:
 
 
 @mcp.tool()
-async def list_collections(project_id: str) -> str:
+async def list_collections(project_id: str | None = None) -> str:
     """List all collections in a project with their schema associations."""
-    data = await _get(f"/projects/{project_id}/collections/")
+    pid = _resolve_project_id(project_id)
+    data = await _get(f"/projects/{pid}/collections/")
     return _dump(data.get("_schema_collections", []))
 
 
 @mcp.tool()
-async def create_collection(project_id: str, collection_name: str, schema_name: str) -> str:
+async def create_collection(project_id: str | None = None, collection_name: str = "", schema_name: str = "") -> str:
     """
     Create a collection backed by an existing schema (create its fields
     with create_schema_field first). Documents are then written into this
     collection via create_document.
     """
+    pid = _resolve_project_id(project_id)
     return _dump(
         await _post(
-            f"/projects/{project_id}/collections/",
+            f"/projects/{pid}/collections/",
             data={"_index": 1, "_collection_name": collection_name, "_schema_name": schema_name},
         )
     )
 
 
 @mcp.tool()
-async def delete_collection(project_id: str, collection_id: str) -> str:
+async def delete_collection(project_id: str | None = None, collection_id: str = "") -> str:
     """
     Permanently delete a collection and its documents across every
     workspace. Irreversible.
     """
-    await _delete(f"/projects/{project_id}/collections/{collection_id}/")
+    pid = _resolve_project_id(project_id)
+    await _delete(f"/projects/{pid}/collections/{collection_id}/")
     return _dump({"deleted": collection_id})
 
 
@@ -229,13 +245,14 @@ async def delete_collection(project_id: str, collection_id: str) -> str:
 
 
 @mcp.tool()
-async def list_documents(project_id: str, workspace_name: str, collection_name: str) -> str:
+async def list_documents(project_id: str | None = None, workspace_name: str = "", collection_name: str = "") -> str:
     """
     List all documents in a collection.
     Returns document IDs, their display labels, and publish statuses (draft/published).
     """
+    pid = _resolve_project_id(project_id)
     data = await _get(
-        f"/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/"
+        f"/projects/{pid}/workspace/{workspace_name}/collection/{collection_name}/"
     )
     return _dump(
         {
@@ -249,19 +266,20 @@ async def list_documents(project_id: str, workspace_name: str, collection_name: 
 
 @mcp.tool()
 async def get_document(
-    project_id: str,
-    workspace_name: str,
-    collection_name: str,
-    document_id: str,
+    project_id: str | None = None,
+    workspace_name: str = "",
+    collection_name: str = "",
+    document_id: str = "",
     depth: int = 3,
 ) -> str:
     """
     Fetch a single document with referenced documents inlined.
     depth controls how many levels of ReferenceDocument fields are resolved (default 3).
     """
+    pid = _resolve_project_id(project_id)
     return _dump(
         await _get(
-            f"/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/",
+            f"/projects/{pid}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/",
             params={"depth": depth},
         )
     )
@@ -269,60 +287,63 @@ async def get_document(
 
 @mcp.tool()
 async def create_document(
-    project_id: str,
-    workspace_name: str,
-    collection_name: str,
-    data: dict,
+    project_id: str | None = None,
+    workspace_name: str = "",
+    collection_name: str = "",
+    data: dict | None = None,
 ) -> str:
     """
     Create a new document in a collection.
     data keys must match the collection's schema field names.
     New documents default to _status='draft'. Production workspace is read-only.
     """
+    pid = _resolve_project_id(project_id)
     return _dump(
         await _post(
-            f"/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/",
-            data=data,
+            f"/projects/{pid}/workspace/{workspace_name}/collection/{collection_name}/",
+            data=data or {},
         )
     )
 
 
 @mcp.tool()
 async def update_document(
-    project_id: str,
-    workspace_name: str,
-    collection_name: str,
-    document_id: str,
-    data: dict,
+    project_id: str | None = None,
+    workspace_name: str = "",
+    collection_name: str = "",
+    document_id: str = "",
+    data: dict | None = None,
 ) -> str:
     """
     Update fields on an existing document. Only include keys you want to change.
     The previous state is automatically saved as a version before the update is applied.
     Production workspace is read-only.
     """
+    pid = _resolve_project_id(project_id)
     return _dump(
         await _put(
-            f"/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/",
-            data=data,
+            f"/projects/{pid}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/",
+            data=data or {},
         )
     )
 
 
 @mcp.tool()
 async def update_document_status(
-    project_id: str,
-    workspace_name: str,
-    collection_name: str,
-    document_id: str,
-    status: str,
+    project_id: str | None = None,
+    workspace_name: str = "",
+    collection_name: str = "",
+    document_id: str = "",
+    status: str = "",
 ) -> str:
     """
     Change a document's publish status. status must be 'draft' or 'published'.
     Production workspace is read-only.
     """
+    pid = _resolve_project_id(project_id)
     return _dump(
         await _patch(
-            f"/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/status/",
+            f"/projects/{pid}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/status/",
             data={"_status": status},
         )
     )
@@ -330,17 +351,18 @@ async def update_document_status(
 
 @mcp.tool()
 async def delete_document(
-    project_id: str,
-    workspace_name: str,
-    collection_name: str,
-    document_id: str,
+    project_id: str | None = None,
+    workspace_name: str = "",
+    collection_name: str = "",
+    document_id: str = "",
 ) -> str:
     """
     Permanently delete a document from a collection.
     Production workspace is read-only.
     """
+    pid = _resolve_project_id(project_id)
     await _delete(
-        f"/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/"
+        f"/projects/{pid}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/"
     )
     return _dump({"deleted": document_id})
 
@@ -349,33 +371,37 @@ async def delete_document(
 
 
 @mcp.tool()
-async def rtdb_get(project_id: str, path: str = "") -> str:
+async def rtdb_get(project_id: str | None = None, path: str = "") -> str:
     """
     Read a node (or the whole tree if path is empty) from a project's Realtime Database.
     path is a '/'-delimited key path, e.g. 'settings/homepage'.
     """
-    return _dump(await _get(f"/projects/{project_id}/rtdb/{path}"))
+    pid = _resolve_project_id(project_id)
+    return _dump(await _get(f"/projects/{pid}/rtdb/{path}"))
 
 
 @mcp.tool()
-async def rtdb_set(project_id: str, path: str, value: Any) -> str:
+async def rtdb_set(project_id: str | None = None, path: str = "", value: Any = None) -> str:
     """
     Overwrite the node at path with value (any JSON-serializable data).
     An empty path targets the tree root.
     """
-    return _dump(await _put(f"/projects/{project_id}/rtdb/{path}", data=value))
+    pid = _resolve_project_id(project_id)
+    return _dump(await _put(f"/projects/{pid}/rtdb/{path}", data=value))
 
 
 @mcp.tool()
-async def rtdb_update(project_id: str, path: str, value: dict) -> str:
+async def rtdb_update(project_id: str | None = None, path: str = "", value: dict | None = None) -> str:
     """Shallow-merge value (a JSON object) into the existing node at path."""
-    return _dump(await _patch(f"/projects/{project_id}/rtdb/{path}", data=value))
+    pid = _resolve_project_id(project_id)
+    return _dump(await _patch(f"/projects/{pid}/rtdb/{path}", data=value or {}))
 
 
 @mcp.tool()
-async def rtdb_delete(project_id: str, path: str = "") -> str:
+async def rtdb_delete(project_id: str | None = None, path: str = "") -> str:
     """Delete the node at path (or the entire tree if path is empty). Irreversible."""
-    await _delete(f"/projects/{project_id}/rtdb/{path}")
+    pid = _resolve_project_id(project_id)
+    await _delete(f"/projects/{pid}/rtdb/{path}")
     return _dump({"deleted": path or "/"})
 
 
