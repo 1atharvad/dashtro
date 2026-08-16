@@ -75,9 +75,9 @@ const put = (path: string, data: unknown) => request("PUT", path, { data });
 const patch = (path: string, data: unknown) => request("PATCH", path, { data });
 const del = (path: string) => request("DELETE", path);
 
-/** Serialize obj to pretty-printed JSON for a tool's text response. */
+/** Serialize obj to compact JSON for a tool's text response. */
 function dump(obj: unknown): { content: [{ type: "text"; text: string }] } {
-  return { content: [{ type: "text", text: JSON.stringify(obj, null, 2) }] };
+  return { content: [{ type: "text", text: JSON.stringify(obj) }] };
 }
 
 // ── Server ──────────────────────────────────────────────────────────────────

@@ -97,8 +97,8 @@ async def _delete(path: str) -> None:
 
 
 def _dump(obj) -> str:
-    """Serialize obj to pretty-printed JSON for a tool's text response."""
-    return json.dumps(obj, indent=2, default=str)
+    """Serialize obj to compact JSON for a tool's text response."""
+    return json.dumps(obj, default=str, separators=(",", ":"))
 
 
 # ── Projects ──────────────────────────────────────────────────────────────────
