@@ -1,6 +1,6 @@
 {
   "name": "@dashtro/mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for Dashtro CMS — run via npx, points at your Dashtro instance's URL, no other install required",
   "license": "MIT",
   "author": "Atharva Devasthali",
