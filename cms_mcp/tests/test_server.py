@@ -113,7 +113,7 @@ def test_list_collections(project):
     unwraps the backend's {"_schema_collections": [...]} envelope into a
     bare list, so this also guards against that unwrapping breaking.
     """
-    result = json.loads(run(server.list_collections(project["project_id"])))
+    result = json.loads(run(server.list_collections(project["project_id"], minimal=False)))
     assert any(c["_collection_name"] == "posts" and c["_schema_name"] == "Post" for c in result)
 
 
@@ -138,12 +138,12 @@ def test_document_lifecycle(project):
     assert created["title"] == "Hello"
     assert created["_status"] == "draft"
 
-    listed = json.loads(run(server.list_documents(pid, ws, coll)))
+    listed = json.loads(run(server.list_documents(pid, ws, coll, minimal=False)))
     assert doc_id in listed["document_ids"]
     assert listed["document_statuses"][doc_id] == "draft"
     assert listed["document_labels"][doc_id] == "Hello"
 
-    fetched = json.loads(run(server.get_document(pid, ws, coll, doc_id)))
+    fetched = json.loads(run(server.get_document(pid, ws, coll, doc_id, minimal=False)))
     assert fetched["title"] == "Hello"
 
     updated = json.loads(
@@ -153,7 +153,7 @@ def test_document_lifecycle(project):
 
     status = json.loads(run(server.update_document_status(pid, ws, coll, doc_id, "published")))
     assert status["_status"] == "published"
-    listed_after_status = json.loads(run(server.list_documents(pid, ws, coll)))
+    listed_after_status = json.loads(run(server.list_documents(pid, ws, coll, minimal=False)))
     assert listed_after_status["document_statuses"][doc_id] == "published"
 
     run(server.delete_document(pid, ws, coll, doc_id))

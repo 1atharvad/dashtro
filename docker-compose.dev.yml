@@ -28,9 +28,11 @@ services:
     build:
       context: ./cms_backend
       dockerfile: Dockerfile
+    # Run by default with SQLite. Use --profile postgres for PostgreSQL.
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
     volumes:
       - ./cms_backend:/app
       - uploads_data:/app/uploads
@@ -68,8 +70,9 @@ services:
     networks:
       - internal
 
-  # Local PostgreSQL database for development
+  # Local PostgreSQL database for development (use --profile postgres to enable)
   postgres:
+    profiles: ["postgres"]
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${DB_NAME}

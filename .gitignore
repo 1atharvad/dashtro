@@ -31,3 +31,7 @@ __pycache__
 sdk/python/build/
 cms_backend/db.sqlite3
 backup/
+.claude
+# Added by code-review-graph
+.code-review-graph/
+.mcp.json

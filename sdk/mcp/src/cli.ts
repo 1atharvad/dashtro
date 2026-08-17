@@ -35,7 +35,7 @@ function runInit(): never {
 }
 
 async function runServer(): Promise<void> {
-  const server = createServer();
+  const server = await createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

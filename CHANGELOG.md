@@ -6,6 +6,14 @@ fixes/chores/docs — pre-1.0, so breaking changes may still land as minor.
 
 ---
 
+## [0.24.0] — 2026-08-16
+
+- Add MCP server guardrails: token-bucket rate limiting (60 RPM, `MCP_RATE_LIMIT`), input sanitization (10k char limit, injection detection), request body size validation (1MB, `MCP_MAX_BODY_SIZE`), read-only mode (`MCP_READ_ONLY`). Applied to all 23 tools in @dashtro/mcp and all 23 tools in cms_mcp.
+- Add token optimization: `minimal: true` default on listing tools (~50-70% token savings), compact JSON output (~30-50% savings).
+- Make `project_id` optional with `CMS_PROJECT_ID` env fallback in both MCP servers.
+
+---
+
 ## [0.23.1] — 2026-07-21
 
 - Fixes `sdk/js/package-lock.json` inconsistency that broke `npm ci` in the

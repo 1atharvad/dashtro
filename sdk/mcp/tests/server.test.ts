@@ -49,7 +49,7 @@ function stubFetch(routes: Record<string, Handler>): Call[] {
 }
 
 async function connectedClient(): Promise<{ client: Client; close: () => Promise<void> }> {
-  const server = createServer();
+  const server = await createServer();
   const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test-client", version: "0.0.0" });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);

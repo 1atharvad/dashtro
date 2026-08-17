@@ -55,7 +55,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501", "B008", "E402", "UP038"]
+ignore = ["E501", "B008", "E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["cms_backend", "cms_mcp"]
