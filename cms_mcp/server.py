@@ -207,11 +207,14 @@ async def delete_schema_field(project_id: str | None = None, field_id: str = "")
 
 
 @mcp.tool()
-async def list_collections(project_id: str | None = None) -> str:
-    """List all collections in a project with their schema associations."""
+async def list_collections(project_id: str | None = None, minimal: bool = True) -> str:
+    """List collections in a project. minimal=True (default) returns only names and schema."""
     pid = _resolve_project_id(project_id)
     data = await _get(f"/projects/{pid}/collections/")
-    return _dump(data.get("_schema_collections", []))
+    cols = data.get("_schema_collections", [])
+    if minimal:
+        return _dump([{"name": c.get("_collection_name"), "schema": c.get("_schema_name")} for c in cols])
+    return _dump(cols)
 
 
 @mcp.tool()
@@ -245,23 +248,25 @@ async def delete_collection(project_id: str | None = None, collection_id: str = 
 
 
 @mcp.tool()
-async def list_documents(project_id: str | None = None, workspace_name: str = "", collection_name: str = "") -> str:
+async def list_documents(project_id: str | None = None, workspace_name: str = "", collection_name: str = "", minimal: bool = True) -> str:
     """
-    List all documents in a collection.
-    Returns document IDs, their display labels, and publish statuses (draft/published).
+    List documents in a collection. minimal=True (default) returns only IDs and labels.
     """
     pid = _resolve_project_id(project_id)
     data = await _get(
         f"/projects/{pid}/workspace/{workspace_name}/collection/{collection_name}/"
     )
-    return _dump(
-        {
-            "schema_name": data.get("_schema_name"),
+    if minimal:
+        return _dump({
             "document_ids": data.get("_document_ids", []),
             "document_labels": data.get("_document_labels", {}),
-            "document_statuses": data.get("_document_statuses", {}),
-        }
-    )
+        })
+    return _dump({
+        "schema_name": data.get("_schema_name"),
+        "document_ids": data.get("_document_ids", []),
+        "document_labels": data.get("_document_labels", {}),
+        "document_statuses": data.get("_document_statuses", {}),
+    })
 
 
 @mcp.tool()
@@ -270,17 +275,17 @@ async def get_document(
     workspace_name: str = "",
     collection_name: str = "",
     document_id: str = "",
+    minimal: bool = True,
     depth: int = 3,
 ) -> str:
     """
-    Fetch a single document with referenced documents inlined.
-    depth controls how many levels of ReferenceDocument fields are resolved (default 3).
+    Fetch a document. minimal=True (default) skips reference inlining (depth=0).
     """
     pid = _resolve_project_id(project_id)
     return _dump(
         await _get(
             f"/projects/{pid}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/",
-            params={"depth": depth},
+            params={"depth": 0 if minimal else depth},
         )
     )
 

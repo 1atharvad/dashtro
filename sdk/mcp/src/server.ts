@@ -203,13 +203,17 @@ export function createServer(): McpServer {
   server.registerTool(
     "list_collections",
     {
-      description: "List all collections in a project with their schema associations.",
-      inputSchema: { project_id: z.string().optional() },
+      description: "List collections in a project. minimal=true (default) returns only names and schema.",
+      inputSchema: { project_id: z.string().optional(), minimal: z.boolean().default(true) },
     },
-    async ({ project_id }) => {
+    async ({ project_id, minimal }) => {
       const pid = resolveProjectId(project_id);
       const data = (await get(`/projects/${pid}/collections/`)) as Record<string, unknown>;
-      return dump(data._schema_collections ?? []);
+      const cols = (data._schema_collections ?? []) as Array<{ _collection_name: string; _schema_name: string }>;
+      if (minimal) {
+        return dump(cols.map((c) => ({ name: c._collection_name, schema: c._schema_name })));
+      }
+      return dump(cols);
     },
   );
 
@@ -248,15 +252,25 @@ export function createServer(): McpServer {
   server.registerTool(
     "list_documents",
     {
-      description:
-        "List all documents in a collection. Returns document IDs, their display labels, and publish statuses (draft/published).",
-      inputSchema: { project_id: z.string().optional(), workspace_name: z.string(), collection_name: z.string() },
+      description: "List documents in a collection. minimal=true (default) returns only IDs and labels.",
+      inputSchema: {
+        project_id: z.string().optional(),
+        workspace_name: z.string(),
+        collection_name: z.string(),
+        minimal: z.boolean().default(true),
+      },
     },
-    async ({ project_id, workspace_name, collection_name }) => {
+    async ({ project_id, workspace_name, collection_name, minimal }) => {
       const pid = resolveProjectId(project_id);
       const data = (await get(
         `/projects/${pid}/workspace/${workspace_name}/collection/${collection_name}/`,
       )) as Record<string, unknown>;
+      if (minimal) {
+        return dump({
+          document_ids: data._document_ids ?? [],
+          document_labels: data._document_labels ?? {},
+        });
+      }
       return dump({
         schema_name: data._schema_name,
         document_ids: data._document_ids ?? [],
@@ -269,21 +283,21 @@ export function createServer(): McpServer {
   server.registerTool(
     "get_document",
     {
-      description:
-        "Fetch a single document with referenced documents inlined. depth controls how many levels of ReferenceDocument fields are resolved (default 3).",
+      description: "Fetch a document. minimal=true (default) skips reference inlining (depth=0).",
       inputSchema: {
         project_id: z.string().optional(),
         workspace_name: z.string(),
         collection_name: z.string(),
         document_id: z.string(),
+        minimal: z.boolean().default(true),
         depth: z.number().int().default(3),
       },
     },
-    async ({ project_id, workspace_name, collection_name, document_id, depth }) =>
+    async ({ project_id, workspace_name, collection_name, document_id, minimal, depth }) =>
       dump(
         await get(
           `/projects/${resolveProjectId(project_id)}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/`,
-          { depth },
+          { depth: minimal ? 0 : depth },
         ),
       ),
   );

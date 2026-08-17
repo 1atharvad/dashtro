@@ -122,7 +122,7 @@ describe("createServer tools", () => {
    * unwrap the backend's {"_schema_collections": [...]} envelope into a
    * bare array — the shape the tool actually hands back to an MCP client.
    */
-  it("list_collections unwraps _schema_collections", async () => {
+  it("list_collections unwraps _schema_collections (full mode)", async () => {
     stubFetch({
       "GET /api/sdk/projects/p1/collections/": () => ({
         _schema_collections: [{ _collection_name: "posts", _schema_name: "Post" }],
@@ -131,7 +131,7 @@ describe("createServer tools", () => {
 
     const result = await client.callTool({
       name: "list_collections",
-      arguments: { project_id: "p1" },
+      arguments: { project_id: "p1", minimal: false },
     });
 
     expect(JSON.parse(textOf(result))).toEqual([
@@ -147,7 +147,7 @@ describe("createServer tools", () => {
    * the four kept keys are renamed/passed through correctly and nothing
    * extra leaks into the tool result.
    */
-  it("list_documents shapes ids/labels/statuses from the collection response", async () => {
+  it("list_documents shapes ids/labels/statuses from the collection response (full mode)", async () => {
     stubFetch({
       "GET /api/sdk/projects/p1/workspace/staging/collection/posts/": () => ({
         _schema_name: "Post",
@@ -159,7 +159,7 @@ describe("createServer tools", () => {
 
     const result = await client.callTool({
       name: "list_documents",
-      arguments: { project_id: "p1", workspace_name: "staging", collection_name: "posts" },
+      arguments: { project_id: "p1", workspace_name: "staging", collection_name: "posts", minimal: false },
     });
 
     expect(JSON.parse(textOf(result))).toEqual({
@@ -177,7 +177,7 @@ describe("createServer tools", () => {
    * re-checks the X-API-Key header lands correctly on a parameterized
    * call, not just the simple no-arg list_schema case above.
    */
-  it("get_document sends the API key and passes depth as a query param", async () => {
+  it("get_document sends the API key and passes depth as a query param (full mode)", async () => {
     const calls = stubFetch({
       "GET /api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/": () => ({
         title: "Hello",
@@ -192,6 +192,7 @@ describe("createServer tools", () => {
         collection_name: "posts",
         document_id: "d1",
         depth: 2,
+        minimal: false,
       },
     });
 
