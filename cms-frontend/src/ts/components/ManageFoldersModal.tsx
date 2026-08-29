@@ -5,7 +5,7 @@ import {
   TextField, Tooltip, Typography,
 } from '@mui/material';
 import { Check, X, Trash2, Pencil, FolderPlus } from 'lucide-react';
-import { Button } from 'advi-ui';
+import { Button, toast } from 'advi-ui';
 import { useCategory } from '@/hooks/useCategory';
 
 export const ManageFoldersModal = ({
@@ -33,7 +33,10 @@ export const ManageFoldersModal = ({
   const handleAdd = () => {
     const name = newName.trim();
     if (!name) return;
-    addCategory(name);
+    addCategory(name).catch(err => {
+      console.error(err);
+      toast.error('Failed to create folder');
+    });
     setNewName('');
   };
 
@@ -44,7 +47,12 @@ export const ManageFoldersModal = ({
   };
 
   const commitEdit = () => {
-    if (editName.trim() && editingId) updateCategory(editingId, editName.trim());
+    if (editName.trim() && editingId) {
+      updateCategory(editingId, editName.trim()).catch(err => {
+        console.error(err);
+        toast.error('Failed to rename folder');
+      });
+    }
     setEditingId(null);
   };
 
@@ -131,7 +139,13 @@ export const ManageFoldersModal = ({
                     ) : confirmDelete === cat.id ? (
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
                         <Tooltip title="Confirm delete — schemas move to General">
-                          <IconButton size="small" color="error" onClick={() => { removeCategory(cat.id); setConfirmDelete(null); }}>
+                          <IconButton size="small" color="error" onClick={() => {
+                            removeCategory(cat.id).catch(err => {
+                              console.error(err);
+                              toast.error('Failed to delete folder');
+                            });
+                            setConfirmDelete(null);
+                          }}>
                             <Check className="h-4 w-4" />
                           </IconButton>
                         </Tooltip>

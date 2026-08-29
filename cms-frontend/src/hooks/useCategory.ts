@@ -1,39 +1,31 @@
-import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import type { RootState, AppDispatch, Category } from '@ts/types/constants';
+import type { Category } from '@ts/types/constants';
 import {
-  fetchCategories,
-  createCategory as createCategoryAction,
-  updateCategory as updateCategoryAction,
-  deleteCategory as deleteCategoryAction,
-  setSchemaCategory as setSchemaCategoryAction,
-} from '@/redux/categorySlice';
+  useCategoriesQuery,
+  useCreateCategoryMutation,
+  useUpdateCategoryMutation,
+  useDeleteCategoryMutation,
+  useSetSchemaCategoryMutation,
+} from '@ts/api/categories';
 
 export const useCategory = (projectId: string) => {
-  const dispatch = useDispatch<AppDispatch>();
-  const { byProject, loading } = useSelector((state: RootState) => state.categories);
-  const projectData = byProject[projectId];
+  const { data, isLoading: loading } = useCategoriesQuery(projectId);
+  const createMutation = useCreateCategoryMutation(projectId);
+  const updateMutation = useUpdateCategoryMutation(projectId);
+  const deleteMutation = useDeleteCategoryMutation(projectId);
+  const setSchemaCategoryMutation = useSetSchemaCategoryMutation(projectId);
 
-  useEffect(() => {
-    if (projectId && !projectData) {
-      dispatch(fetchCategories(projectId));
-    }
-  }, [dispatch, projectId, projectData]);
+  const categories: Category[] = data?.categories ?? [];
+  const categoryMap: Record<string, string> = data?.category_map ?? {};
 
-  const categories: Category[] = projectData?.categories ?? [];
-  const categoryMap: Record<string, string> = projectData?.category_map ?? {};
-
-  const addCategory = (name: string) =>
-    dispatch(createCategoryAction({ projectId, name }));
+  const addCategory = (name: string) => createMutation.mutateAsync(name);
 
   const updateCategory = (categoryId: string, name: string) =>
-    dispatch(updateCategoryAction({ projectId, categoryId, name }));
+    updateMutation.mutateAsync({ categoryId, name });
 
-  const removeCategory = (categoryId: string) =>
-    dispatch(deleteCategoryAction({ projectId, categoryId }));
+  const removeCategory = (categoryId: string) => deleteMutation.mutateAsync(categoryId);
 
   const assignSchemaCategory = (schemaName: string, categoryId: string) =>
-    dispatch(setSchemaCategoryAction({ projectId, schemaName, categoryId }));
+    setSchemaCategoryMutation.mutateAsync({ schemaName, categoryId });
 
   const getCategoryForSchema = (schemaName: string): string =>
     categoryMap[schemaName] ?? '';
@@ -47,7 +39,7 @@ export const useCategory = (projectId: string) => {
   return {
     categories,
     categoryMap,
-    loading: loading && !projectData,
+    loading,
     addCategory,
     updateCategory,
     removeCategory,

@@ -4,8 +4,7 @@ import {
   Divider, Fab, IconButton, InputBase, ListItemIcon, Menu, MenuItem,
   Popover, Tooltip, Typography,
 } from "@mui/material";
-import { Button } from 'advi-ui';
-import { unwrapResult } from '@reduxjs/toolkit';
+import { Button, toast } from 'advi-ui';
 import { Plus, X, FolderOpen, GripVertical, MoreHorizontal, Trash2, Lock, Unlock, Download, Upload } from 'lucide-react';
 import { Badge } from 'advi-ui';
 import { Loading } from 'advi-ui';
@@ -82,6 +81,12 @@ export const SchemaComponent = ({
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
   const [folderFilter, setFolderFilter] = useState('');
   const filterInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAssignCategory = (schemaName: string, categoryId: string) =>
+    assignSchemaCategory(schemaName, categoryId).catch(err => {
+      console.error(err);
+      toast.error('Failed to update folder');
+    });
 
   const currentCategoryId = getCategoryForSchema(componentName);
   const currentCategoryName = categories.find(c => c.id === currentCategoryId)?.name ?? 'General';
@@ -269,10 +274,10 @@ export const SchemaComponent = ({
       if (lastFolderName) {
         const existing = categories.find(c => c.name === lastFolderName);
         if (existing) {
-          assignSchemaCategory(componentName, existing.id);
+          handleAssignCategory(componentName, existing.id);
         } else {
-          const result = unwrapResult(await addCategory(lastFolderName));
-          if (result.category?.id) assignSchemaCategory(componentName, result.category.id);
+          const result = await addCategory(lastFolderName);
+          if (result?.id) handleAssignCategory(componentName, result.id);
         }
       }
 
@@ -308,7 +313,7 @@ export const SchemaComponent = ({
       <X
         className="h-3 w-3"
         style={{ opacity: 0.6, cursor: 'pointer', marginLeft: 2 }}
-        onClick={(e) => { e.stopPropagation(); assignSchemaCategory(componentName, ''); }}
+        onClick={(e) => { e.stopPropagation(); handleAssignCategory(componentName, ''); }}
       />
     </Badge>
   ) : (
@@ -357,7 +362,7 @@ export const SchemaComponent = ({
               .map(cat => (
                 <Box
                   key={cat.id}
-                  onClick={() => { assignSchemaCategory(componentName, cat.id); closeFolderMenu(); }}
+                  onClick={() => { handleAssignCategory(componentName, cat.id); closeFolderMenu(); }}
                   sx={{
                     display: 'flex', alignItems: 'center', gap: 1,
                     px: 1.5, py: 0.75, cursor: 'pointer',

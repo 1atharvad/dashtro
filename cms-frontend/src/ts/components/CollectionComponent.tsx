@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { Box, Divider, Fab, MenuItem, Paper, TextField, Typography } from "@mui/material";
-import { Button } from 'advi-ui';
+import { Button, toast } from 'advi-ui';
 import { Plus as AddIcon } from 'lucide-react';
 import { Loading } from 'advi-ui';
 import { CollectionEntry } from '@ts/components/CollectionEntry';
@@ -38,7 +38,12 @@ const NewSchemaModalBtn = () => {
     event.stopPropagation();
     const error = handleValidation();
     if (error.length === 0) {
-      if (categoryId) assignSchemaCategory(labelValue, categoryId);
+      if (categoryId) {
+        assignSchemaCategory(labelValue, categoryId).catch(err => {
+          console.error(err);
+          toast.error('Failed to update folder');
+        });
+      }
       setCloseModal(true);
       navigate(`/projects/${project_id}/schema/${labelValue}/`);
       setTimeout(setCloseModal.bind(null, false), 0);

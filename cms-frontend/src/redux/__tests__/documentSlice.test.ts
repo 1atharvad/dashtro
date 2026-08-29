@@ -12,7 +12,7 @@ import reducer, {
   fetchCollection,
   createDocument,
   deleteDocument,
-} from "./documentSlice";
+} from "@/redux/documentSlice";
 import type { DocumentData } from "@ts/types/constants";
 
 const initialState = {
