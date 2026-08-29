@@ -1,23 +1,15 @@
 import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchSchema, updateSchemaNames } from '@/redux/schemaPresetSlice';
-import type { RootState, AppDispatch, SchemaVariablesSchema } from '@ts/types/constants';
+import { useSchemaPresetQuery, useSchemaPresetCache } from '@ts/api/schemaPresets';
+import type { SchemaVariablesSchema } from '@ts/types/constants';
 
 export const useSchemaMetaData = (projectId: string) => {
-  const dispatch = useDispatch<AppDispatch>();
-  const { byProject, loading, error } = useSelector((state: RootState) => state.schema_preset);
-  const projectData = byProject[projectId];
+  const { data, isLoading: loading, error } = useSchemaPresetQuery(projectId);
+  const { setSchemaNames } = useSchemaPresetCache(projectId);
 
-  // Derive directly from Redux so all hook instances stay in sync immediately —
-  // no local state copy that lags by a render cycle on add/remove.
-  const schemaNames: string[] = projectData?._schema_names ?? [];
-  const schemaVariables: SchemaVariablesSchema = projectData?._schema_variables ?? {};
-
-  useEffect(() => {
-    if (projectId && !projectData) {
-      dispatch(fetchSchema(projectId));
-    }
-  }, [dispatch, projectId, projectData]);
+  // Derive directly from the query cache so all hook instances stay in sync
+  // immediately — no local state copy that lags by a render cycle on add/remove.
+  const schemaNames: string[] = data?._schema_names ?? [];
+  const schemaVariables: SchemaVariablesSchema = data?._schema_variables ?? {};
 
   useEffect(() => {
     if (error) console.error("Error fetching schema metadata:", error);
@@ -25,13 +17,13 @@ export const useSchemaMetaData = (projectId: string) => {
 
   const addNewSchemeName = (schemaName: string) => {
     if (!schemaNames.includes(schemaName)) {
-      dispatch(updateSchemaNames({ projectId, names: [...schemaNames, schemaName] }));
+      setSchemaNames([...schemaNames, schemaName]);
     }
   };
 
   const removeSchemaName = (schemaName: string) => {
-    dispatch(updateSchemaNames({ projectId, names: schemaNames.filter(n => n !== schemaName) }));
+    setSchemaNames(schemaNames.filter(n => n !== schemaName));
   };
 
-  return { schemaNames, addNewSchemeName, removeSchemaName, schemaVariables, loading: loading || !projectData };
+  return { schemaNames, addNewSchemeName, removeSchemaName, schemaVariables, loading };
 };
