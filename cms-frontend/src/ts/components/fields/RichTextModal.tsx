@@ -11,7 +11,7 @@ import { Button } from 'advi-ui';
 import { Pencil, X, Eye } from 'lucide-react';
 import { useRichTextComponentsQuery } from '@ts/api/richTextComponents';
 import type { RichTextComponent } from '@ts/types/constants';
-import { RichTextWrapperRenderer } from '@ts/config/richTextWrapper';
+import { RichTextWrapperRenderer } from '@ts/components/RichTextWrapper';
 
 // Legacy array values become newline-joined text — literal text, no HTML parsing.
 const toEditorText = (value: string | string[]): string =>

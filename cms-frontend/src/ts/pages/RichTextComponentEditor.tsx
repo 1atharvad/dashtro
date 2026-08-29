@@ -8,8 +8,8 @@ import { LiveProvider, LivePreview, LiveError } from 'react-live';
 import {
   useRichTextComponentsQuery, useUpdateRichTextComponentMutation, useDeleteRichTextComponentMutation,
 } from '@ts/api/richTextComponents';
-import { ADVI_WRAPPER_COMPONENTS } from '@ts/config/adviWrapperComponents';
-import { DEFAULT_SAMPLE_HTML } from '@ts/config/richTextComponentDefaults';
+import { ADVI_WRAPPER_COMPONENTS } from '@ts/utils/adviWrapperComponents';
+import { DEFAULT_SAMPLE_HTML } from '@ts/utils/richTextComponentDefaults';
 import { AppHeader } from '@ts/components/AppHeader';
 import { PageForm } from '@ts/components/PageForm';
 import { ModalContentBtn } from '@ts/components/ModalContentBtn';

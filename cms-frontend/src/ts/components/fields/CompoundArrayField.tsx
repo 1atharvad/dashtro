@@ -14,7 +14,7 @@ import { FileField } from '@ts/components/fields/FileField';
 import { ImageField } from '@ts/components/fields/ImageField';
 import { LinkField } from '@ts/components/fields/LinkField';
 import { CompoundField } from '@ts/components/fields/CompoundField';
-import { getCompoundDef, getCompoundDefault } from '@ts/config/fieldRegistry';
+import { getCompoundDef, getCompoundDefault } from '@ts/utils/fieldRegistry';
 
 type Item = Record<string, unknown>;
 

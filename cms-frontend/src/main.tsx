@@ -13,7 +13,7 @@ import { CustomThemeProvider } from '@ts/theme/ThemeProvider';
 import { UserProvider } from '@ts/context/UserContext';
 import { ToastProvider } from 'advi-ui';
 
-import { fetchFieldRegistry } from '@ts/config/fieldRegistry';
+import { fetchFieldRegistry } from '@ts/utils/fieldRegistry';
 
 const root_path = import.meta.env.VITE_ROOT_PATH || '';
 store.dispatch(setRootPath(root_path));

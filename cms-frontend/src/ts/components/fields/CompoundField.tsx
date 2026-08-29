@@ -1,5 +1,5 @@
 import { Box, Checkbox, FormControlLabel, TextField } from '@mui/material';
-import { getCompoundDef } from '@ts/config/fieldRegistry';
+import { getCompoundDef } from '@ts/utils/fieldRegistry';
 
 /**
  * Generic renderer for compound field types that don't have a dedicated

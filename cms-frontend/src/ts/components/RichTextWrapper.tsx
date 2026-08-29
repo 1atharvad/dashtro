@@ -1,7 +1,7 @@
 import MarkdownPreview from '@uiw/react-markdown-preview';
 import { LiveProvider, LivePreview, LiveError } from 'react-live';
 import rehypeRaw from 'rehype-raw';
-import { ADVI_WRAPPER_COMPONENTS } from '@ts/config/adviWrapperComponents';
+import { ADVI_WRAPPER_COMPONENTS } from '@ts/utils/adviWrapperComponents';
 import { MermaidDiagram } from '@ts/components/MermaidDiagram';
 import type { RichTextComponent } from '@ts/types/constants';
 

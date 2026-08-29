@@ -10,7 +10,7 @@ import { LinkDrawer } from '@ts/components/LinkDrawer';
 import { ProjectSwitcher } from '@ts/components/ProjectSwitcher';
 import { PageWrapper } from '@ts/components/PageForm';
 import { ModalContentBtn } from '@ts/components/ModalContentBtn';
-import { DEFAULT_COMPONENT_CSS, DEFAULT_COMPONENT_SOURCE, DEFAULT_SAMPLE_HTML } from '@ts/config/richTextComponentDefaults';
+import { DEFAULT_COMPONENT_CSS, DEFAULT_COMPONENT_SOURCE, DEFAULT_SAMPLE_HTML } from '@ts/utils/richTextComponentDefaults';
 import '@/scss/DocCollection.scss';
 import '@/scss/RichTextComponents.scss';
 

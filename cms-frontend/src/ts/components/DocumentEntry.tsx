@@ -11,7 +11,7 @@ import { CompoundArrayField } from '@ts/components/fields/CompoundArrayField';
 import { NestedDocumentArrayField } from '@ts/components/fields/NestedDocumentArrayField';
 import { ReferenceDocumentField } from '@ts/components/fields/ReferenceDocumentField';
 import { SimpleArrayField } from '@ts/components/fields/SimpleArrayField';
-import { getCompoundDef, getCompoundDefault, getRegistry, isCompoundField, onRegistryReady } from '@ts/config/fieldRegistry';
+import { getCompoundDef, getCompoundDefault, getRegistry, isCompoundField, onRegistryReady } from '@ts/utils/fieldRegistry';
 import type { SchemaFieldItem, DocumentData } from '@ts/types/constants';
 
 export const DocumentEntry = ({
