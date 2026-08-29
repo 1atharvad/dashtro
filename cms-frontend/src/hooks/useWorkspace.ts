@@ -1,51 +1,38 @@
-import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchWorkspaces, createWorkspace, deleteWorkspace, pushToProd, clearPushSuccess,
-  fetchWorkspaceDiff, pullFromProd,
-} from '@/redux/workspaceSlice';
-import type { RootState, AppDispatch } from '@ts/types/constants';
+  useWorkspacesQuery,
+  useCreateWorkspaceMutation,
+  useDeleteWorkspaceMutation,
+  usePushToProdMutation,
+  usePullFromProdMutation,
+  useWorkspaceDiff,
+} from '@ts/api/workspaces';
 
 export const useWorkspaceData = (projectId: string) => {
-  const dispatch = useDispatch<AppDispatch>();
-  const { byProject, diffByWorkspace, loading, error, pushSuccess } =
-    useSelector((state: RootState) => state.workspaces);
-  const workspaces = byProject[projectId] ?? [];
+  const { data: workspaces = [], isLoading: loading, error } = useWorkspacesQuery(projectId);
+  const createMutation = useCreateWorkspaceMutation(projectId);
+  const deleteMutation = useDeleteWorkspaceMutation(projectId);
+  const pushMutation = usePushToProdMutation(projectId);
+  const pullMutation = usePullFromProdMutation(projectId);
+  const { fetchDiff, getCachedDiff } = useWorkspaceDiff(projectId);
 
-  const getCachedDiff = (workspaceName: string) => diffByWorkspace[`${projectId}:${workspaceName}`];
+  const addWorkspace = (workspaceName: string) => createMutation.mutateAsync(workspaceName);
 
-  useEffect(() => {
-    if (projectId) dispatch(fetchWorkspaces(projectId));
-  }, [dispatch, projectId]);
+  const removeWorkspace = (workspaceName: string) => deleteMutation.mutateAsync(workspaceName);
 
-  const addWorkspace = (workspaceName: string) =>
-    dispatch(createWorkspace({ projectId, workspaceName }));
-
-  const removeWorkspace = (workspaceName: string) =>
-    dispatch(deleteWorkspace({ projectId, workspaceName }));
-
-  const pushWorkspaceToProd = (workspaceName: string) =>
-    dispatch(pushToProd({ projectId, workspaceName }));
-
-  const resetPushSuccess = () => dispatch(clearPushSuccess());
-
-  const fetchDiff = (workspaceName: string) =>
-    dispatch(fetchWorkspaceDiff({ projectId, workspaceName })).unwrap();
+  const pushWorkspaceToProd = (workspaceName: string) => pushMutation.mutateAsync(workspaceName);
 
   const pullWorkspaceFromProd = (
     workspaceName: string,
     resolutions: Record<string, 'production' | 'workspace'>
-  ) => dispatch(pullFromProd({ projectId, workspaceName, resolutions })).unwrap();
+  ) => pullMutation.mutateAsync({ workspaceName, resolutions });
 
   return {
     workspaces,
     loading,
-    error,
-    pushSuccess,
+    error: error?.message ?? null,
     addWorkspace,
     removeWorkspace,
     pushWorkspaceToProd,
-    resetPushSuccess,
     fetchDiff,
     getCachedDiff,
     pullWorkspaceFromProd,

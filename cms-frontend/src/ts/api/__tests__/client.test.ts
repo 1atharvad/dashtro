@@ -75,11 +75,41 @@ describe("apiRequest", () => {
     expect(result).toBeUndefined();
   });
 
-  it("throws a descriptive error when the response is not ok", async () => {
+  it("throws a generic error when the response is not ok and has no JSON body", async () => {
     mockedAuthFetch.mockResolvedValue({ ok: false, status: 404 } as Response);
 
     await expect(apiRequest("/projects/missing/")).rejects.toThrow(
       "Request failed: 404 /projects/missing/"
     );
+  });
+
+  it("throws the backend's string detail message when the error body has one", async () => {
+    mockedAuthFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ detail: "workspace name already exists" }),
+    } as Response);
+
+    await expect(apiRequest("/workspaces/")).rejects.toThrow("workspace name already exists");
+  });
+
+  it("joins pydantic validation errors from an array detail into one message", async () => {
+    mockedAuthFetch.mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ detail: [{ msg: "field required" }, { msg: "too long" }] }),
+    } as Response);
+
+    await expect(apiRequest("/workspaces/")).rejects.toThrow("field required too long");
+  });
+
+  it("falls back to the generic message when the error body has no usable detail", async () => {
+    mockedAuthFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ some: "unrelated shape" }),
+    } as Response);
+
+    await expect(apiRequest("/workspaces/")).rejects.toThrow("Request failed: 500 /workspaces/");
   });
 });

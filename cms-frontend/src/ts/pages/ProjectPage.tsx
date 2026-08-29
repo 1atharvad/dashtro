@@ -6,7 +6,7 @@ import {
   Grid, IconButton, TextField, Tooltip, Typography
 } from '@mui/material';
 import { Plus, ArrowRight, Pencil, MoreVertical, LayoutTemplate, Database } from 'lucide-react';
-import { Button, Menu as AdviMenu } from 'advi-ui';
+import { Button, Menu as AdviMenu, toast } from 'advi-ui';
 import { useProjectData } from '@/hooks/useProject';
 import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { AppHeader } from '@ts/components/AppHeader';
@@ -42,7 +42,10 @@ export const ProjectPage = () => {
 
   const handleAddWorkspace = () => {
     if (!newWsName.trim() || newWsNameError) return;
-    addWorkspace(newWsName.trim());
+    addWorkspace(newWsName.trim()).catch(err => {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Failed to create workspace');
+    });
     setNewWsName('');
     setNewWsNameError('');
     setAddingWs(false);
@@ -205,7 +208,12 @@ export const ProjectPage = () => {
             <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
               <Button variant="secondary" className="border-current" onClick={() => setConfirmArchive(null)}>Cancel</Button>
               <Button variant="destructive" onClick={() => {
-                if (confirmArchive) removeWorkspace(confirmArchive);
+                if (confirmArchive) {
+                  removeWorkspace(confirmArchive).catch(err => {
+                    console.error(err);
+                    toast.error(err instanceof Error ? err.message : 'Failed to delete workspace');
+                  });
+                }
                 setConfirmArchive(null);
               }}>Archive</Button>
             </DialogActions>
