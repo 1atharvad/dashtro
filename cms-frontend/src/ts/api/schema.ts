@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@ts/api/client';
+import { apiRequest, stripEmpty } from '@ts/api/client';
 import type { SchemaFieldItem, NewSchemaFieldInput } from '@ts/types/constants';
 
 export const schemaKeys = {
   detail: (projectId: string, schemaName: string) => ['schema', projectId, schemaName] as const,
 };
 
-export function useSchemaQuery(projectId: string, schemaName: string, enabled: boolean) {
+export const useSchemaQuery = (projectId: string, schemaName: string, enabled: boolean) => {
   return useQuery({
     queryKey: schemaKeys.detail(projectId, schemaName),
     queryFn: () =>
@@ -14,15 +14,9 @@ export function useSchemaQuery(projectId: string, schemaName: string, enabled: b
         .then(data => data[schemaName] ?? []),
     enabled: enabled && !!projectId && !!schemaName,
   });
-}
+};
 
-const stripEmpty = (input: NewSchemaFieldInput): Record<string, unknown> =>
-  Object.entries(input).reduce((acc: Record<string, unknown>, [key, value]) => {
-    if (value !== '') acc[key] = value;
-    return acc;
-  }, {});
-
-export function useCreateSchemaFieldMutation(projectId: string) {
+export const useCreateSchemaFieldMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (newSchema: NewSchemaFieldInput) =>
@@ -40,9 +34,9 @@ export function useCreateSchemaFieldMutation(projectId: string) {
       );
     },
   });
-}
+};
 
-export function useUpdateSchemaFieldMutation(projectId: string) {
+export const useUpdateSchemaFieldMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ schemaId, updatedSchema }: { schemaId: string; updatedSchema: NewSchemaFieldInput }) =>
@@ -62,9 +56,9 @@ export function useUpdateSchemaFieldMutation(projectId: string) {
       );
     },
   });
-}
+};
 
-export function useDeleteSchemaFieldMutation(projectId: string) {
+export const useDeleteSchemaFieldMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ schemaId }: { schemaId: string; schemaName: string }) =>
@@ -86,4 +80,4 @@ export function useDeleteSchemaFieldMutation(projectId: string) {
       );
     },
   });
-}
+};

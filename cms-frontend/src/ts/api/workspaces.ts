@@ -10,15 +10,15 @@ export const workspaceKeys = {
     ['workspaceDiff', projectId, workspaceName] as const,
 };
 
-export function useWorkspacesQuery(projectId: string) {
+export const useWorkspacesQuery = (projectId: string) => {
   return useQuery({
     queryKey: workspaceKeys.byProject(projectId),
     queryFn: () => apiRequest<Workspace[]>(`/projects/${projectId}/workspaces/`),
     enabled: !!projectId,
   });
-}
+};
 
-export function useCreateWorkspaceMutation(projectId: string) {
+export const useCreateWorkspaceMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (workspaceName: string) =>
@@ -28,9 +28,9 @@ export function useCreateWorkspaceMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: workspaceKeys.byProject(projectId) }),
   });
-}
+};
 
-export function useDeleteWorkspaceMutation(projectId: string) {
+export const useDeleteWorkspaceMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (workspaceName: string) =>
@@ -40,9 +40,9 @@ export function useDeleteWorkspaceMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: workspaceKeys.byProject(projectId) }),
   });
-}
+};
 
-export function usePushToProdMutation(projectId: string) {
+export const usePushToProdMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (workspaceName: string) =>
@@ -53,9 +53,9 @@ export function usePushToProdMutation(projectId: string) {
       queryClient.invalidateQueries({ queryKey: workspaceKeys.diff(projectId, workspaceName) });
     },
   });
-}
+};
 
-export function usePullFromProdMutation(projectId: string) {
+export const usePullFromProdMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -73,7 +73,7 @@ export function usePullFromProdMutation(projectId: string) {
       queryClient.invalidateQueries({ queryKey: workspaceKeys.diff(projectId, workspaceName) });
     },
   });
-}
+};
 
 /**
  * Fetch-on-demand, not fetch-on-mount: callers imperatively request a diff
@@ -81,7 +81,7 @@ export function usePullFromProdMutation(projectId: string) {
  * queryClient.fetchQuery both returns the result and populates the shared
  * cache, so getCachedDiff can read it synchronously from another component.
  */
-export function useWorkspaceDiff(projectId: string) {
+export const useWorkspaceDiff = (projectId: string) => {
   const queryClient = useQueryClient();
 
   const fetchDiff = (workspaceName: string) =>
@@ -96,4 +96,4 @@ export function useWorkspaceDiff(projectId: string) {
     queryClient.getQueryData<WorkspaceDiff>(workspaceKeys.diff(projectId, workspaceName));
 
   return { fetchDiff, getCachedDiff };
-}
+};

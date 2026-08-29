@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@ts/api/client';
+import { apiRequest, stripEmpty } from '@ts/api/client';
 import type {
   SchemaCollectionItem, NewCollectionInput, CollectionsResponse,
 } from '@ts/types/constants';
@@ -8,22 +8,15 @@ export const collectionKeys = {
   byProject: (projectId: string) => ['collections', projectId] as const,
 };
 
-export function useCollectionsQuery(projectId: string) {
+export const useCollectionsQuery = (projectId: string) => {
   return useQuery({
     queryKey: collectionKeys.byProject(projectId),
     queryFn: () => apiRequest<CollectionsResponse>(`/projects/${projectId}/collections/`),
     enabled: !!projectId,
   });
-}
+};
 
-// Strips empty-string fields so the backend sees only intentionally-set values.
-const stripEmpty = (input: NewCollectionInput): Record<string, string | number> =>
-  Object.entries(input).reduce((acc: Record<string, string | number>, [key, value]) => {
-    if (value !== '') acc[key] = value as string | number;
-    return acc;
-  }, {});
-
-export function useCreateCollectionMutation(projectId: string) {
+export const useCreateCollectionMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (newCollection: NewCollectionInput) =>
@@ -33,9 +26,9 @@ export function useCreateCollectionMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: collectionKeys.byProject(projectId) }),
   });
-}
+};
 
-export function useUpdateCollectionMutation(projectId: string) {
+export const useUpdateCollectionMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -47,9 +40,9 @@ export function useUpdateCollectionMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: collectionKeys.byProject(projectId) }),
   });
-}
+};
 
-export function useDeleteCollectionMutation(projectId: string) {
+export const useDeleteCollectionMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (collectionId: string) =>
@@ -59,4 +52,4 @@ export function useDeleteCollectionMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: collectionKeys.byProject(projectId) }),
   });
-}
+};

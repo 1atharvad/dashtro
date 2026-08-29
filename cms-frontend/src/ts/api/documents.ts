@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@ts/api/client';
+import { apiRequest, stripEmpty } from '@ts/api/client';
 import type { DocumentData, NewDocumentInput, CollectionMeta, DocumentVersion } from '@ts/types/constants';
 
 const base = (projectId: string, workspaceName: string, collectionName: string) =>
@@ -14,19 +14,19 @@ export const documentKeys = {
     ['documents', 'versions', projectId, workspaceName, collectionName, documentId] as const,
 };
 
-export function useCollectionMetaQuery(
+export const useCollectionMetaQuery = (
   projectId: string, workspaceName: string, collectionName: string, enabled: boolean
-) {
+) => {
   return useQuery({
     queryKey: documentKeys.collection(projectId, workspaceName, collectionName),
     queryFn: () => apiRequest<CollectionMeta>(`${base(projectId, workspaceName, collectionName)}/`),
     enabled: enabled && !!projectId && !!collectionName,
   });
-}
+};
 
-export function useDocumentQuery(
+export const useDocumentQuery = (
   projectId: string, workspaceName: string, collectionName: string, documentId: string, enabled: boolean
-) {
+) => {
   return useQuery({
     queryKey: documentKeys.detail(projectId, workspaceName, collectionName, documentId),
     queryFn: () => apiRequest<DocumentData>(
@@ -34,15 +34,9 @@ export function useDocumentQuery(
     ),
     enabled: enabled && !!projectId && !!collectionName && !!documentId,
   });
-}
+};
 
-const stripEmpty = (input: NewDocumentInput): Record<string, unknown> =>
-  Object.entries(input).reduce((acc: Record<string, unknown>, [key, value]) => {
-    if (value !== '') acc[key] = value;
-    return acc;
-  }, {});
-
-export function useCreateDocumentMutation(projectId: string, workspaceName: string, collectionName: string) {
+export const useCreateDocumentMutation = (projectId: string, workspaceName: string, collectionName: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (newDocument: NewDocumentInput) =>
@@ -57,11 +51,11 @@ export function useCreateDocumentMutation(projectId: string, workspaceName: stri
       }
     },
   });
-}
+};
 
-export function useUpdateDocumentMutation(
+export const useUpdateDocumentMutation = (
   projectId: string, workspaceName: string, collectionName: string, documentId: string
-) {
+) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (updatedDocument: NewDocumentInput) =>
@@ -78,9 +72,9 @@ export function useUpdateDocumentMutation(
       );
     },
   });
-}
+};
 
-export function useDeleteDocumentMutation(projectId: string, workspaceName: string, collectionName: string) {
+export const useDeleteDocumentMutation = (projectId: string, workspaceName: string, collectionName: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (documentId: string) =>
@@ -104,11 +98,11 @@ export function useDeleteDocumentMutation(projectId: string, workspaceName: stri
       );
     },
   });
-}
+};
 
-export function useDocumentVersionsQuery(
+export const useDocumentVersionsQuery = (
   projectId: string, workspaceName: string, collectionName: string, documentId: string
-) {
+) => {
   return useQuery({
     queryKey: documentKeys.versions(projectId, workspaceName, collectionName, documentId),
     queryFn: () => apiRequest<DocumentVersion[]>(
@@ -116,11 +110,11 @@ export function useDocumentVersionsQuery(
     ),
     enabled: false,
   });
-}
+};
 
-export function useRestoreDocumentVersionMutation(
+export const useRestoreDocumentVersionMutation = (
   projectId: string, workspaceName: string, collectionName: string
-) {
+) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ documentId, versionId }: { documentId: string; versionId: string }) =>
@@ -134,16 +128,16 @@ export function useRestoreDocumentVersionMutation(
       queryClient.setQueryData(documentKeys.detail(projectId, workspaceName, collectionName, documentId), entry);
     },
   });
-}
+};
 
-export function usePushCollectionToProdMutation(projectId: string, workspaceName: string, collectionName: string) {
+export const usePushCollectionToProdMutation = (projectId: string, workspaceName: string, collectionName: string) => {
   return useMutation({
     mutationFn: () =>
       apiRequest<unknown>(`${base(projectId, workspaceName, collectionName)}/push-to-prod/`, { method: 'POST' }),
   });
-}
+};
 
-export function usePullCollectionFromProdMutation(projectId: string, workspaceName: string, collectionName: string) {
+export const usePullCollectionFromProdMutation = (projectId: string, workspaceName: string, collectionName: string) => {
   return useMutation({
     mutationFn: (resolutions: Record<string, 'production' | 'workspace'>) =>
       apiRequest<unknown>(`${base(projectId, workspaceName, collectionName)}/pull-from-production/`, {
@@ -151,9 +145,9 @@ export function usePullCollectionFromProdMutation(projectId: string, workspaceNa
         body: JSON.stringify({ resolutions }),
       }),
   });
-}
+};
 
-export function usePushDocumentToProdMutation(projectId: string, workspaceName: string, collectionName: string) {
+export const usePushDocumentToProdMutation = (projectId: string, workspaceName: string, collectionName: string) => {
   return useMutation({
     mutationFn: (documentId: string) =>
       apiRequest<unknown>(
@@ -161,11 +155,11 @@ export function usePushDocumentToProdMutation(projectId: string, workspaceName: 
         { method: 'POST' }
       ),
   });
-}
+};
 
-export function usePullDocumentFromProdMutation(
+export const usePullDocumentFromProdMutation = (
   projectId: string, workspaceName: string, collectionName: string
-) {
+) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (documentId: string) =>
@@ -189,4 +183,4 @@ export function usePullDocumentFromProdMutation(
       );
     },
   });
-}
+};

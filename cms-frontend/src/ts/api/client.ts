@@ -4,7 +4,7 @@ import { authFetch } from '@ts/utils/auth';
 // FastAPI returns either a plain string detail (e.g. duplicate name) or a list
 // of pydantic validation errors (e.g. bad name format) — surface either as text,
 // falling back to a generic message when the body isn't in that shape at all.
-async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
+const extractErrorMessage = async (res: Response, fallback: string): Promise<string> => {
   try {
     const body = await res.json();
     const detail = body?.detail;
@@ -16,12 +16,19 @@ async function extractErrorMessage(res: Response, fallback: string): Promise<str
     // no JSON body, or the response has no .json() at all (e.g. a test mock)
   }
   return fallback;
-}
+};
 
-export async function apiRequest<T>(
+// Drops empty-string fields so the backend only sees intentionally-set values.
+export const stripEmpty = <T extends object>(input: T): Record<string, unknown> =>
+  Object.entries(input).reduce((acc: Record<string, unknown>, [key, value]) => {
+    if (value !== '') acc[key] = value;
+    return acc;
+  }, {});
+
+export const apiRequest = async <T>(
   path: string,
   init?: RequestInit & { parseJson?: boolean }
-): Promise<T> {
+): Promise<T> => {
   const { parseJson = true, ...requestInit } = init ?? {};
   const res = await authFetch(`${API_BASE_URL}${path}`, {
     ...requestInit,
@@ -32,4 +39,4 @@ export async function apiRequest<T>(
   }
   if (!parseJson) return undefined as T;
   return res.json();
-}
+};

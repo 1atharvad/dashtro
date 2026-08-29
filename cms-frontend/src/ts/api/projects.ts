@@ -5,32 +5,32 @@ export type Project = { _id: string; name: string; description: string; created_
 
 export const projectKeys = { all: ['projects'] as const };
 
-export function useProjectsQuery() {
+export const useProjectsQuery = () => {
   return useQuery({
     queryKey: projectKeys.all,
     queryFn: () => apiRequest<Project[]>('/projects/'),
   });
-}
+};
 
-export function useCreateProjectMutation() {
+export const useCreateProjectMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { name: string; description?: string }) =>
       apiRequest<Project>('/projects/', { method: 'POST', body: JSON.stringify(input) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: projectKeys.all }),
   });
-}
+};
 
-export function useUpdateProjectMutation() {
+export const useUpdateProjectMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ projectId, data }: { projectId: string; data: { name: string; description?: string } }) =>
       apiRequest<Project>(`/projects/${projectId}/`, { method: 'PUT', body: JSON.stringify(data) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: projectKeys.all }),
   });
-}
+};
 
-export function useDeleteProjectMutation() {
+export const useDeleteProjectMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (projectId: string) => {
@@ -39,13 +39,13 @@ export function useDeleteProjectMutation() {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: projectKeys.all }),
   });
-}
+};
 
-export function useDuplicateProjectMutation() {
+export const useDuplicateProjectMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) =>
       apiRequest<Project>(`/projects/${projectId}/duplicate/`, { method: 'POST' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: projectKeys.all }),
   });
-}
+};

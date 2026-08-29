@@ -6,13 +6,13 @@ export const schemaPresetKeys = {
   byProject: (projectId: string) => ['schemaPreset', projectId] as const,
 };
 
-export function useSchemaPresetQuery(projectId: string) {
+export const useSchemaPresetQuery = (projectId: string) => {
   return useQuery({
     queryKey: schemaPresetKeys.byProject(projectId),
     queryFn: () => apiRequest<SchemaListResponse>(`/projects/${projectId}/schema/`),
     enabled: !!projectId,
   });
-}
+};
 
 /**
  * addNewSchemeName/removeSchemaName are local cache patches, not server
@@ -20,7 +20,7 @@ export function useSchemaPresetQuery(projectId: string) {
  * some other mutation (elsewhere) creates/deletes a schema field, without
  * waiting on a refetch.
  */
-export function useSchemaPresetCache(projectId: string) {
+export const useSchemaPresetCache = (projectId: string) => {
   const queryClient = useQueryClient();
   const key = schemaPresetKeys.byProject(projectId);
 
@@ -31,4 +31,4 @@ export function useSchemaPresetCache(projectId: string) {
   };
 
   return { setSchemaNames };
-}
+};

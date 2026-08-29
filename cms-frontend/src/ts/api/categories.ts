@@ -8,15 +8,15 @@ export const categoryKeys = {
   byProject: (projectId: string) => ['categories', projectId] as const,
 };
 
-export function useCategoriesQuery(projectId: string) {
+export const useCategoriesQuery = (projectId: string) => {
   return useQuery({
     queryKey: categoryKeys.byProject(projectId),
     queryFn: () => apiRequest<ProjectCategories>(`/projects/${projectId}/schema-categories/`),
     enabled: !!projectId,
   });
-}
+};
 
-export function useCreateCategoryMutation(projectId: string) {
+export const useCreateCategoryMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) =>
@@ -26,9 +26,9 @@ export function useCreateCategoryMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: categoryKeys.byProject(projectId) }),
   });
-}
+};
 
-export function useUpdateCategoryMutation(projectId: string) {
+export const useUpdateCategoryMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ categoryId, name }: { categoryId: string; name: string }) =>
@@ -38,9 +38,9 @@ export function useUpdateCategoryMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: categoryKeys.byProject(projectId) }),
   });
-}
+};
 
-export function useDeleteCategoryMutation(projectId: string) {
+export const useDeleteCategoryMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (categoryId: string) =>
@@ -50,9 +50,9 @@ export function useDeleteCategoryMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: categoryKeys.byProject(projectId) }),
   });
-}
+};
 
-export function useSetSchemaCategoryMutation(projectId: string) {
+export const useSetSchemaCategoryMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ schemaName, categoryId }: { schemaName: string; categoryId: string }) =>
@@ -63,4 +63,4 @@ export function useSetSchemaCategoryMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: categoryKeys.byProject(projectId) }),
   });
-}
+};

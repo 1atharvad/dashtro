@@ -6,15 +6,15 @@ export const richTextComponentKeys = {
   byProject: (projectId: string) => ['richTextComponents', projectId] as const,
 };
 
-export function useRichTextComponentsQuery(projectId: string) {
+export const useRichTextComponentsQuery = (projectId: string) => {
   return useQuery({
     queryKey: richTextComponentKeys.byProject(projectId),
     queryFn: () => apiRequest<RichTextComponent[]>(`/projects/${projectId}/rich-text-components/`),
     enabled: !!projectId,
   });
-}
+};
 
-export function useCreateRichTextComponentMutation(projectId: string) {
+export const useCreateRichTextComponentMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { name: string; source: string; css?: string; sampleHtml?: string }) =>
@@ -29,9 +29,9 @@ export function useCreateRichTextComponentMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: richTextComponentKeys.byProject(projectId) }),
   });
-}
+};
 
-export function useUpdateRichTextComponentMutation(projectId: string) {
+export const useUpdateRichTextComponentMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { componentId: string; name: string; source: string; css: string; sampleHtml: string }) =>
@@ -46,9 +46,9 @@ export function useUpdateRichTextComponentMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: richTextComponentKeys.byProject(projectId) }),
   });
-}
+};
 
-export function useDeleteRichTextComponentMutation(projectId: string) {
+export const useDeleteRichTextComponentMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (componentId: string) =>
@@ -58,4 +58,4 @@ export function useDeleteRichTextComponentMutation(projectId: string) {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: richTextComponentKeys.byProject(projectId) }),
   });
-}
+};
