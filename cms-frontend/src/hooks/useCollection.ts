@@ -1,20 +1,18 @@
 import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { createCollection, fetchCollections, updateCollection, deleteCollection } from '@/redux/collectionSlice';
-import type { SchemaCollectionItem, CollectionUiSchema, NewCollectionInput, RootState, AppDispatch } from '@ts/types/constants';
+import {
+  useCollectionsQuery, useCreateCollectionMutation, useUpdateCollectionMutation, useDeleteCollectionMutation,
+} from '@ts/api/collections';
+import type { SchemaCollectionItem, CollectionUiSchema, NewCollectionInput } from '@ts/types/constants';
 import { toast } from 'advi-ui';
 
 export const useCollectionData = (projectId: string) => {
-  const dispatch = useDispatch<AppDispatch>();
-  const { byProject, loading, error } = useSelector((state: RootState) => state.collections);
-  const projectData = byProject[projectId];
+  const { data, isLoading: loading, error } = useCollectionsQuery(projectId);
+  const createMutation = useCreateCollectionMutation(projectId);
+  const updateMutation = useUpdateCollectionMutation(projectId);
+  const deleteMutation = useDeleteCollectionMutation(projectId);
 
-  const collections: SchemaCollectionItem[] = projectData?._schema_collections ?? [];
-  const collectionStructure: CollectionUiSchema = projectData?._collection_schema_variables ?? {};
-
-  useEffect(() => {
-    if (projectId) dispatch(fetchCollections(projectId));
-  }, [dispatch, projectId]);
+  const collections: SchemaCollectionItem[] = data?._schema_collections ?? [];
+  const collectionStructure: CollectionUiSchema = data?._collection_schema_variables ?? {};
 
   useEffect(() => {
     if (error) console.error("Error fetching collections:", error);
@@ -23,7 +21,7 @@ export const useCollectionData = (projectId: string) => {
   const addCollectionData = (newCollectionDetails: NewCollectionInput[]) => {
     Promise.all(
       newCollectionDetails.map(newCollection =>
-        dispatch(createCollection({ projectId, newCollection }))
+        createMutation.mutateAsync(newCollection)
           .catch(err => { console.error(err); toast.error('Failed to create collection'); })
       )
     ).then(() => toast.success('Collection created'));
@@ -32,17 +30,16 @@ export const useCollectionData = (projectId: string) => {
   const updateCollectionData = (updatedCollectionDetails: Record<string, NewCollectionInput>) => {
     Promise.all(
       Object.entries(updatedCollectionDetails).map(([collectionId, updatedCollection]) =>
-        dispatch(updateCollection({ projectId, collectionId, updatedCollection }))
+        updateMutation.mutateAsync({ collectionId, updatedCollection })
           .catch(err => { console.error(err); toast.error('Failed to update collection'); })
       )
     ).then(() => toast.success('Collection saved'));
   };
 
-  const deleteCollectionData = (collectionId: string) => {
-    dispatch(deleteCollection({ projectId, collectionId }))
+  const deleteCollectionData = (collectionId: string) =>
+    deleteMutation.mutateAsync(collectionId)
       .then(() => toast.success('Collection deleted'))
       .catch(err => { console.error(err); toast.error('Failed to delete collection'); });
-  };
 
   return { collections, collectionStructure, loading, addCollectionData, updateCollectionData, deleteCollectionData };
 };

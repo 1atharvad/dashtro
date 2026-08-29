@@ -136,8 +136,8 @@ export const CollectionComponent = () => {
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    addCollectionData(newCollectionEntry);
-    updateCollectionData(updatedCollectionDetails);
+    if (newCollectionEntry.length !== 0) addCollectionData(newCollectionEntry);
+    if (Object.keys(updatedCollectionDetails).length !== 0) updateCollectionData(updatedCollectionDetails);
     setUpdatedCollectionDetails({});
     setOpenedPanel([]);
   };
