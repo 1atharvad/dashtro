@@ -100,6 +100,20 @@ describe("useDocumentData — addDocumentData", () => {
     );
   });
 
+  it("seeds the new document's detail cache so navigating to it doesn't refetch (regression: used to require an extra GET)", async () => {
+    mockedAuthFetch.mockResolvedValue({ ok: true, json: async () => doc } as Response);
+    const queryClient = createTestQueryClient();
+
+    const { result } = renderHook(
+      () => useDocumentData(projectId, collectionName, workspaceName, "new"),
+      { wrapper: withQueryClient(queryClient) }
+    );
+
+    await result.current.addDocumentData({ title: "Hello" });
+
+    expect(queryClient.getQueryData(documentKeys.detail(projectId, workspaceName, collectionName, "doc-1"))).toEqual(doc);
+  });
+
   it("shows an error toast and returns undefined when creation fails", async () => {
     mockedAuthFetch.mockResolvedValue({ ok: false, status: 400 } as Response);
     const queryClient = createTestQueryClient();

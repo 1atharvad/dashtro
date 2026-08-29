@@ -50,9 +50,12 @@ export function useCreateDocumentMutation(projectId: string, workspaceName: stri
         method: 'POST',
         body: JSON.stringify(stripEmpty(newDocument)),
       }),
-    onSuccess: () => queryClient.invalidateQueries({
-      queryKey: documentKeys.collection(projectId, workspaceName, collectionName),
-    }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: documentKeys.collection(projectId, workspaceName, collectionName) });
+      if (data._id) {
+        queryClient.setQueryData(documentKeys.detail(projectId, workspaceName, collectionName, data._id), data);
+      }
+    },
   });
 }
 
