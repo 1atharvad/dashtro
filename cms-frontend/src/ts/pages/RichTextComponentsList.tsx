@@ -1,11 +1,11 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
 import { Box, Divider, Paper, TextField, Typography } from '@mui/material';
 import { ChevronRight, Component, LayoutTemplate, Plus } from 'lucide-react';
 import { AsideItem, Button, toast } from 'advi-ui';
-import type { AppDispatch, RootState } from '@ts/types/constants';
-import { createRichTextComponent, fetchRichTextComponents } from '@/redux/richTextComponentSlice';
+import {
+  useRichTextComponentsQuery, useCreateRichTextComponentMutation,
+} from '@ts/api/richTextComponents';
 import { LinkDrawer } from '@ts/components/LinkDrawer';
 import { ProjectSwitcher } from '@ts/components/ProjectSwitcher';
 import { PageWrapper } from '@ts/components/PageForm';
@@ -22,7 +22,7 @@ const PASCAL_CASE_NAME = /^[A-Z][a-zA-Z]*$/;
 const NewComponentModalBtn = ({ existingNames }: { existingNames: string[] }) => {
   const { project_id } = useParams<{ project_id: string }>();
   const navigate = useNavigate();
-  const dispatch = useDispatch<AppDispatch>();
+  const createMutation = useCreateRichTextComponentMutation(project_id ?? '');
   const [closeModal, setCloseModal] = useState(false);
   const [nameValue, setNameValue] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -52,15 +52,13 @@ const NewComponentModalBtn = ({ existingNames }: { existingNames: string[] }) =>
       toast.error(message);
       return;
     }
-    dispatch(createRichTextComponent({
-      projectId: project_id,
+    createMutation.mutateAsync({
       name: trimmedName,
       source: DEFAULT_COMPONENT_SOURCE,
       css: DEFAULT_COMPONENT_CSS,
       sampleHtml: DEFAULT_SAMPLE_HTML,
-    }))
-      .unwrap()
-      .then(({ component }) => {
+    })
+      .then((component) => {
         setCloseModal(true);
         navigate(`/projects/${project_id}/schema/components/${component.id}/`);
         setTimeout(() => setCloseModal(false), 0);
@@ -108,14 +106,7 @@ const NewComponentModalBtn = ({ existingNames }: { existingNames: string[] }) =>
 export const RichTextComponentsList = () => {
   const { project_id } = useParams<{ project_id: string }>();
   const navigate = useNavigate();
-  const dispatch = useDispatch<AppDispatch>();
-  const components = useSelector(
-    (state: RootState) => state.richTextComponents.byProject[project_id ?? ''] ?? []
-  );
-
-  useEffect(() => {
-    if (project_id) dispatch(fetchRichTextComponents(project_id));
-  }, [dispatch, project_id]);
+  const { data: components = [] } = useRichTextComponentsQuery(project_id ?? '');
 
   const toEditor = (id: string) => navigate(`/projects/${project_id}/schema/components/${id}/`);
 

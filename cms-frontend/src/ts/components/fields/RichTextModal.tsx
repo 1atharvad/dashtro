@@ -1,7 +1,6 @@
 import '@uiw/react-md-editor/markdown-editor.css';
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
 import MDEditor from '@uiw/react-md-editor';
 import {
   Box, Dialog, DialogActions, DialogContent,
@@ -10,8 +9,8 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { Button } from 'advi-ui';
 import { Pencil, X, Eye } from 'lucide-react';
-import type { AppDispatch, RootState, RichTextComponent } from '@ts/types/constants';
-import { fetchRichTextComponents } from '@/redux/richTextComponentSlice';
+import { useRichTextComponentsQuery } from '@ts/api/richTextComponents';
+import type { RichTextComponent } from '@ts/types/constants';
 import { RichTextWrapperRenderer } from '@ts/config/richTextWrapper';
 
 // Legacy array values become newline-joined text — literal text, no HTML parsing.
@@ -103,16 +102,7 @@ export const RichTextModal = ({
 }) => {
   const [open, setOpen] = useState(false);
   const { project_id } = useParams<{ project_id: string }>();
-  const dispatch = useDispatch<AppDispatch>();
-  const byProject = useSelector((state: RootState) => state.richTextComponents.byProject);
-  const customComponents = useMemo(
-    () => byProject[project_id ?? ''] ?? [],
-    [byProject, project_id]
-  );
-
-  useEffect(() => {
-    if (project_id) dispatch(fetchRichTextComponents(project_id));
-  }, [dispatch, project_id]);
+  const { data: customComponents = [] } = useRichTextComponentsQuery(project_id ?? '');
 
   const editorValue: string | string[] = Array.isArray(value) ? value : (typeof value === 'string' ? value : '');
   const previewSource = editorValue ? (Array.isArray(editorValue) ? editorValue.join('\n') : editorValue) : '';

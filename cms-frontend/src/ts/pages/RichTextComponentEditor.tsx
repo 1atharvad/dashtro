@@ -1,15 +1,13 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
 import { Box, TextField, Typography } from '@mui/material';
 import { Trash2 } from 'lucide-react';
 import { Button, toast } from 'advi-ui';
 import MonacoEditor from '@monaco-editor/react';
 import { LiveProvider, LivePreview, LiveError } from 'react-live';
-import type { AppDispatch, RootState } from '@ts/types/constants';
 import {
-  fetchRichTextComponents, updateRichTextComponent, deleteRichTextComponent,
-} from '@/redux/richTextComponentSlice';
+  useRichTextComponentsQuery, useUpdateRichTextComponentMutation, useDeleteRichTextComponentMutation,
+} from '@ts/api/richTextComponents';
 import { ADVI_WRAPPER_COMPONENTS } from '@ts/config/adviWrapperComponents';
 import { DEFAULT_SAMPLE_HTML } from '@ts/config/richTextComponentDefaults';
 import { AppHeader } from '@ts/components/AppHeader';
@@ -44,11 +42,9 @@ export const RichTextComponentEditor = () => {
   const { project_id, component_id } = useParams<{ project_id: string; component_id: string }>();
   const isNew = component_id === 'new';
   const navigate = useNavigate();
-  const dispatch = useDispatch<AppDispatch>();
-
-  const components = useSelector(
-    (state: RootState) => state.richTextComponents.byProject[project_id ?? ''] ?? []
-  );
+  const { data: components = [] } = useRichTextComponentsQuery(project_id ?? '');
+  const updateMutation = useUpdateRichTextComponentMutation(project_id ?? '');
+  const deleteMutation = useDeleteRichTextComponentMutation(project_id ?? '');
 
   const existing = useMemo(
     () => (!isNew ? components.find(c => c.id === component_id) ?? null : null),
@@ -106,10 +102,6 @@ export const RichTextComponentEditor = () => {
     document.body.style.userSelect = 'none';
   };
 
-  useEffect(() => {
-    if (project_id) dispatch(fetchRichTextComponents(project_id));
-  }, [dispatch, project_id]);
-
   // Components are now named and created via the modal on the list page,
   // so there's nothing to edit at the "new" route — send the user back.
   useEffect(() => {
@@ -128,15 +120,17 @@ export const RichTextComponentEditor = () => {
   const handleSave = (event: FormEvent) => {
     event.preventDefault();
     if (!project_id || !existing || !name.trim()) return;
-    dispatch(updateRichTextComponent({ projectId: project_id, componentId: existing.id, name, source, css, sampleHtml }))
-      .unwrap()
+    updateMutation.mutateAsync({ componentId: existing.id, name, source, css, sampleHtml })
       .then(() => toast.success('Component saved.'))
       .catch((err: Error) => toast.error(err.message));
   };
 
   const handleDelete = () => {
     if (!project_id || !existing) return;
-    dispatch(deleteRichTextComponent({ projectId: project_id, componentId: existing.id }));
+    deleteMutation.mutateAsync(existing.id).catch(err => {
+      console.error(err);
+      toast.error('Failed to delete component');
+    });
     navigate(`/projects/${project_id}/schema/components/`);
     setDeleteClose(true);
     setTimeout(() => setDeleteClose(false), 0);
