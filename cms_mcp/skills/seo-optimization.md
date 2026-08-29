@@ -5,136 +5,179 @@ Optimize CMS content for search engines using schema, structured data, and on-pa
 
 ---
 
-## Core SEO Fields (Add to Your Schema)
+## Core SEO Fields
 
-```bash
-# Required for every content type
-create_schema_field {field_name: "seo_title", field_type: "String", index: 10, display_name: false}
-create_schema_field {field_name: "meta_description", field_type: "String", index: 11}
-create_schema_field {field_name: "canonical_url", field_type: "String", index: 12}
-create_schema_field {field_name: "og_image", field_type: "ReferenceDocument", index: 13}  # points to media collection
-create_schema_field {field_name: "og_type", field_type: "String", index: 14}  # article, website, product
-create_schema_field {field_name: "twitter_card", field_type: "String", index: 15}  # summary_large_image
-create_schema_field {field_name: "noindex", field_type: "Boolean", index: 16, default: false}
-create_schema_field {field_name: "nofollow", field_type: "Boolean", index: 17, default: false}
-create_schema_field {field_name: "structured_data", field_type: "RichText", index: 18}  # JSON-LD
-```
+Add these fields to content schemas to support SEO:
 
----
-
-## Article/BlogPost Schema (JSON-LD)
-
-```json
-{
-  "@context": "https://schema.org",
-  "@type": "BlogPosting",
-  "headline": "{{seo_title or title}}",
-  "description": "{{meta_description}}",
-  "image": "{{og_image.url}}",
-  "datePublished": "{{published_at}}",
-  "dateModified": "{{updated_at}}",
-  "author": {
-    "@type": "Person",
-    "name": "{{author.name}}",
-    "url": "{{author.url}}"
-  },
-  "publisher": {
-    "@type": "Organization",
-    "name": "Your Brand",
-    "logo": {"@type": "ImageObject", "url": "https://yoursite.com/logo.png"}
-  },
-  "mainEntityOfPage": {"@type": "WebPage", "@id": "{{canonical_url}}"}
-}
-```
+| Field | Type | Purpose | Length |
+|-------|------|---------|--------|
+| `seo_title` | String | HTML `<title>` (search result headline) | 30–60 chars |
+| `meta_description` | String | HTML `<meta description>` (search snippet) | 120–160 chars |
+| `canonical_url` | String | Canonical URL (if content is syndicated or duplicated) | Full URL |
+| `og_image` | ReferenceDocument | Open Graph image (shared on social media) | Points to media doc |
+| `og_type` | String | Open Graph type (article, website, product) | Enum: article, website, product, etc. |
+| `twitter_card` | String | Twitter Card type (summary, summary_large_image) | Enum |
+| `noindex` | Boolean | Prevent indexing by search engines | true/false |
+| `nofollow` | Boolean | Prevent following links on page | true/false |
+| `structured_data` | RichText | JSON-LD schema for rich snippets | JSON string (10k max) |
 
 ---
 
-## Product Schema (E-commerce)
+## Structured Data (JSON-LD)
 
-```json
-{
-  "@context": "https://schema.org",
-  "@type": "Product",
-  "name": "{{title}}",
-  "description": "{{meta_description}}",
-  "image": ["{{og_image.url}}"],
-  "sku": "{{sku}}",
-  "brand": {"@type": "Brand", "name": "{{brand.name}}"},
-  "offers": {
-    "@type": "Offer",
-    "url": "{{canonical_url}}",
-    "priceCurrency": "USD",
-    "price": "{{price}}",
-    "availability": "https://schema.org/InStock"
-  },
-  "aggregateRating": {
-    "@type": "AggregateRating",
-    "ratingValue": "{{rating}}",
-    "reviewCount": "{{review_count}}"
-  }
-}
-```
+Structured data tells search engines what type of content you have.
 
----
+### Article/BlogPost
+For blog posts, use ArticleSchema:
+- Headline, description, image
+- Published date, modified date
+- Author (Person with name)
+- Publisher (Organization)
+- Main entity (WebPage ID = canonical URL)
 
-## MCP Workflow for SEO
+### Product
+For e-commerce products, use ProductSchema:
+- Product name, description, image
+- SKU, brand
+- Offers (price, currency, availability)
+- Ratings (if applicable)
 
-```bash
-# 1. Audit existing content for missing SEO fields
-list_documents {workspace_name: "staging", collection_name: "posts", minimal: false}
-# Filter: where seo_title is empty OR meta_description is empty
+### FAQ
+For FAQs, use FAQPageSchema:
+- Array of Q&A items
+- Each: question + answer
 
-# 2. Bulk update SEO fields
-update_document {document_id: "xxx", data: {
-  seo_title: "Optimized Title | Brand",
-  meta_description: "Compelling 150-char description with keyword",
-  og_image: "media-id-123",
-  structured_data: "{...JSON-LD...}"
-}}
+### Event
+For events, use EventSchema:
+- Event name, description
+- Start/end dates
+- Location, organizer
+- Ticket URL
 
-# 3. Verify structured data renders
-get_document {document_id: "xxx", depth: 1}
-# Check structured_data field outputs valid JSON-LD
-
-# 4. Submit to search consoles via RTDB queue
-rtdb_set {path: "seo/indexing-queue", value: [{"url": "https://site.com/post/xxx", "type": "URL_UPDATED"}]}
-```
+### Local Business
+For brick-and-mortar locations, use LocalBusinessSchema:
+- Name, address, phone
+- Hours of operation
+- Service area
 
 ---
 
-## Keyword Optimization Checklist
+## On-Page SEO Best Practices
 
-- [ ] **Primary keyword** in: title, H1, first 100 words, URL, meta description
-- [ ] **Secondary keywords** in: H2s, image alt text, body naturally
-- [ ] **LSI keywords** (related terms) sprinkled throughout
-- [ ] **Keyword density** 1-2% (avoid stuffing)
-- [ ] **Semantic HTML** — proper heading hierarchy, lists, tables
+### Title & Meta Description
+- **Title**: 30–60 chars, includes primary keyword, brand name (optional)
+- **Meta Description**: 120–160 chars, compelling, includes keyword, calls to action
+- **H1**: One per page, matches title conceptually
+- **Headings**: H1 → H2 → H3 hierarchy (don't skip levels)
+
+### Content
+- **Keyword density**: Primary keyword 1–2% of word count (natural, not stuffed)
+- **Readability**: Short paragraphs (3–4 sentences), subheadings every 300 words
+- **Links**: 2–5 internal links per article (to related content), 1–2 external links (authoritative sources)
+- **Images**: One every 100–200 words, descriptive alt text
+
+### Technical SEO
+- **Canonical URL**: Set for syndicated/duplicate content to avoid penalty
+- **Noindex**: Set on thin/low-value pages (search filters, thank-you pages, duplicates)
+- **Nofollow**: Set on untrusted external links (affiliate, UGC)
+- **Mobile optimization**: Responsive design (verified by frontend team)
+- **Page speed**: <3s load time (verified by performance monitoring)
 
 ---
 
-## Technical SEO via CMS
+## Structured Data Guidelines
 
-| Task | MCP Tool |
-|------|----------|
-| Canonical URLs | `update_document {canonical_url: "..."}` |
-| Robots meta | `update_document {noindex: true, nofollow: true}` |
-| Sitemap generation | `rtdb_get {path: "sitemap/urls"}` → render XML |
-| Redirect mapping | `rtdb_set {path: "redirects/old-url", value: "/new-url"}` |
-| Page speed hints | Add `preload`, `prefetch` in structured_data |
+### When to Use
+- Blog posts: Always use ArticleSchema
+- Products: Always use ProductSchema
+- Events: Always use EventSchema
+- FAQs: Use FAQPageSchema if you have ≥3 Q&A items
+- Local business: Only if you have physical locations
+
+### JSON-LD Best Practices
+- Valid JSON syntax (valid JSON-LD validation tools)
+- Complete: include all recommended properties
+- Accurate: values match actual page content
+- Unique: schema reflects this specific content, not boilerplate
+- Updated: refresh when content changes
+
+### Validation
+Use structured data validators:
+- Google Structured Data Testing Tool
+- Schema.org validator
+- Yoast Schema tool
 
 ---
 
-## Monitoring & Alerts
+## SEO Audit Workflow
 
-```bash
-# Track SEO health in RTDB
-rtdb_set {path: "seo/health", value: {
-  missing_titles: 0,
-  missing_descriptions: 3,
-  broken_canonicals: 1,
-  last_audit: "2026-08-16T10:00:00Z"
-}}
+1. **List all documents** in collection
+2. **Check for missing SEO fields**: seo_title, meta_description, structured_data
+3. **Check title/meta length**: 30–60 chars for title, 120–160 for meta
+4. **Verify structured data validity**: Parse JSON-LD, ensure it matches schema
+5. **Check for duplicate meta descriptions**: Same meta on multiple pages = bad
+6. **Verify canonical URLs**: If set, they should be absolute URLs
+7. **Check noindex/nofollow flags**: Should only be set intentionally
+8. **Report findings** in RTDB or audit log
 
-# Alert if issues > threshold
-# (Run via cron or CI)
-```
+---
+
+## Bulk SEO Updates
+
+### Add Missing Structured Data
+1. List documents lacking `structured_data`
+2. For each, generate appropriate JSON-LD (ArticleSchema, ProductSchema, etc.)
+3. `update_document` with generated structured_data
+
+### Optimize Titles & Descriptions
+1. List documents with missing or short seo_title/meta_description
+2. Generate optimized versions (keyword research needed)
+3. `update_document` with new values
+
+### Fix Duplicate Meta Descriptions
+1. List all documents, extract meta_description values
+2. Find duplicates (group by description)
+3. For duplicates, create unique descriptions (add detail, article number, etc.)
+
+---
+
+## Mobile & Page Speed Considerations
+
+**Mobile SEO:**
+- Responsive design (frontend responsibility)
+- Mobile-first indexing (all content visible on mobile)
+- Touch-friendly links and buttons (UX responsibility)
+
+**Page Speed:**
+- Image optimization (compress before uploading)
+- Lazy loading (implemented by frontend)
+- Caching (server-side, frontend responsibility)
+
+CMS content strategy:
+- Don't bloat documents with unnecessary content
+- Use ReferenceDocument/Collection instead of embedding everything
+- Lazy-load references (`depth: 1` initially, `depth: 2` on demand)
+
+---
+
+## Common SEO Scenarios
+
+| Scenario | Action |
+|----------|--------|
+| Blog post published | Ensure seo_title, meta_description, ArticleSchema set |
+| Product added to catalog | Set ProductSchema, pricing, availability, image |
+| Content updated | Refresh structured_data if data changed (dates, prices, etc.) |
+| Content duplicated (syndication) | Set canonical URL to original source |
+| Search result snippet too short | Expand meta_description to 120+ chars |
+| No rich snippets showing | Validate JSON-LD syntax, ensure schema matches content |
+| Thin/low-value page | Set noindex if not worth ranking |
+
+---
+
+## Monitoring & Reporting
+
+1. **Search Console**: Submit sitemap, monitor impressions/clicks in search results
+2. **Analytics**: Track organic traffic by page, bounce rate, conversion rate
+3. **RTDB tracking**: Store SEO audit results timestamped for trend analysis
+4. **Monthly reports**: Compare SEO metrics month-over-month
+

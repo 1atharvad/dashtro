@@ -1,347 +1,225 @@
 # Rich Text Components Skill
 
 ## Purpose
-Create, manage, and render reusable rich text components in the CMS.
+Create, manage, and structure rich text content with reusable components and consistent formatting.
 
 ---
 
-## Component Architecture
+## Rich Text Structure
 
+A RichText field can contain:
+
+**Native elements:**
+- Paragraphs, headings (H1–H6), lists (ordered/unordered)
+- Inline formatting: bold, italic, underline, strikethrough
+- Links (internal, external)
+- Code spans
+
+**Block components:**
+- Images (with alt text, captions)
+- Videos
+- Code blocks (with language highlighting)
+- Tables
+- Quotes/blockquotes
+- Callouts (info, warning, success, error)
+- Tabs/accordions
+- Custom components (your own)
+
+---
+
+## Component Types
+
+### Simple Components
+- **Image**: Reference to media document + alt text + caption
+- **Quote**: Text + attribution
+- **Code Block**: Language + code + line numbers
+
+### Complex Components
+- **Table**: Headers + rows + cell data
+- **Accordion**: Multiple sections (title + content pairs)
+- **Tabs**: Multiple panels (label + content pairs)
+- **Callout**: Type (info/warning/success/error) + title + body
+
+### Custom Components
+Define your own in RTDB:
+- Name, icon, fields
+- Field types: String, Number, Boolean, ReferenceDocument
+- Render template (for frontend display)
+
+---
+
+## Storing Component Definitions in RTDB
+
+Store a registry of available components so agents know what's possible:
+
+Path: `richtext/components`
+
+For each component, define:
+- `name`: Display name
+- `icon`: UI icon identifier
+- `fields`: Array of field definitions
+  - Each field: name, type, required, default value
+- `render_template`: How the frontend should display it
+- `validation`: Rules (e.g., image max width, code block max lines)
+
+Example structure:
 ```
-RichText Field
-├── Paragraphs, Headings, Lists (native)
-├── Inline: Bold, Italic, Links, Code
-└── Blocks: Components (custom)
-    ├── Image
-    ├── Video
-    ├── Callout
-    ├── CodeBlock
-    ├── Table
-    ├── Embed (Twitter, YouTube, etc.)
-    ├── Accordion
-    ├── Tabs
-    └── Custom (your own)
+richtext/components/image:
+  name: "Image"
+  icon: "image"
+  fields:
+    - {name: "src", type: "ReferenceDocument", required: true}
+    - {name: "alt", type: "String", required: true}
+    - {name: "caption", type: "String"}
+    - {name: "width", type: "Number", default: "100%"}
+
+richtext/components/callout:
+  name: "Callout"
+  icon: "megaphone"
+  fields:
+    - {name: "type", type: "String", enum: ["info", "warning", "success", "error"]}
+    - {name: "title", type: "String"}
+    - {name: "message", type: "String"}
 ```
 
 ---
 
-## Component Registry (RTDB)
+## Using Components in Documents
 
-```bash
-# Define available components
-rtdb_set {path: "richtext/components", value: {
-  "image": {
-    "name": "Image",
-    "icon": "image",
-    "fields": [
-      {"name": "src", "type": "ReferenceDocument", "collection": "media", "required": true},
-      {"name": "alt", "type": "String", "required": true},
-      {"name": "caption", "type": "String"},
-      {"name": "width", "type": "Number"},
-      {"name": "alignment", "type": "String", "enum": ["left", "center", "right", "full"]}
-    ],
-    "render": "ImageComponent"
-  },
-  "callout": {
-    "name": "Callout",
-    "icon": "megaphone",
-    "fields": [
-      {"name": "type", "type": "String", "enum": ["info", "warning", "success", "danger"], "default": "info"},
-      {"name": "title", "type": "String"},
-      {"name": "content", "type": "RichText", "required": true}
-    ],
-    "render": "CalloutComponent"
-  },
-  "codeblock": {
-    "name": "Code Block",
-    "icon": "code",
-    "fields": [
-      {"name": "language", "type": "String", "default": "typescript"},
-      {"name": "code", "type": "String", "required": true},
-      {"name": "filename", "type": "String"},
-      {"name": "highlight_lines", "type": "String"}
-    ],
-    "render": "CodeBlockComponent"
-  },
-  "embed": {
-    "name": "Embed",
-    "icon": "link",
-    "fields": [
-      {"name": "url", "type": "String", "required": true},
-      {"name": "caption", "type": "String"}
-    ],
-    "render": "EmbedComponent"
-  },
-  "accordion": {
-    "name": "Accordion",
-    "icon": "chevron-down",
-    "fields": [
-      {"name": "items", "type": "Array", "items": {
-        "type": "Object",
-        "fields": [
-          {"name": "title", "type": "String", "required": true},
-          {"name": "content", "type": "RichText", "required": true}
-        ]
-      }}
-    ],
-    "render": "AccordionComponent"
+When storing rich text in a document, embed component data inline:
+
+In RichText field:
+```
+This is a paragraph.
+
+[COMPONENT: image]
+{
+  "src": "media-doc-123",
+  "alt": "An example image",
+  "caption": "This is a caption",
+  "width": "800px"
+}
+
+This is another paragraph.
+
+[COMPONENT: callout]
+{
+  "type": "warning",
+  "title": "Watch out",
+  "message": "This is important"
+}
+```
+
+Or in structured JSON format (if your RichText supports it):
+```json
+[
+  {"type": "paragraph", "text": "This is a paragraph."},
+  {
+    "type": "component",
+    "name": "image",
+    "props": {"src": "media-123", "alt": "...", "caption": "..."}
   }
-}}
+]
 ```
 
 ---
 
-## Creating Content with Components
+## Component Validation
 
-### Via MCP (JSON Structure)
-```bash
-create_document {project_id, workspace_name: "staging", collection_name: "posts", data: {
-  title: "Getting Started",
-  body: {
-    "type": "doc",
-    "content": [
-      {"type": "paragraph", "content": [{"type": "text", "text": "Welcome to our guide!"}]},
-      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Step 1: Install"}]},
-      {"type": "codeblock", "attrs": {"language": "bash", "code": "npm install dashtro"}},
-      {"type": "callout", "attrs": {"type": "tip", "title": "Pro Tip", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Use --save-dev for dev dependencies"}]}]}},
-      {"type": "image", "attrs": {"src": "media-123", "alt": "Dashboard screenshot", "caption": "Fig 1: Main dashboard"}}
-    ]
-  }
-}}
-```
+Before storing, validate each component:
+
+1. **Type check**: Component name exists in registry
+2. **Field validation**: All required fields present
+3. **Type validation**: String fields are strings, Number fields are numbers
+4. **Reference validation**: ReferenceDocument fields point to valid documents
+5. **Enum validation**: Enum fields match allowed values
+
+Validation can happen:
+- In MCP server (on `create_document` / `update_document`)
+- In frontend (on editing)
+- Both (defensive approach)
 
 ---
 
-## Component Field Types
+## Component Reusability Patterns
 
-| Type | Use For | Example |
-|------|---------|---------|
-| `ReferenceDocument` | Link to media/posts | `src: "media-123"` |
-| `String` | Text, URLs, enums | `alt: "Screenshot"` |
-| `Number` | Dimensions, order | `width: 800` |
-| `Boolean` | Flags | `lazy_load: true` |
-| `RichText` | Nested content | `content: {...}` |
-| `Array` | Repeating items | `items: [...]` |
-| `Object` | Nested config | `settings: {...}` |
+### Shared Components Library
+Store commonly-used component configurations in RTDB:
+- Path: `richtext/templates/{component_name}/{template_name}`
+- Example: callout template for "important note", "warning box", etc.
 
----
+### Component Versioning
+If component schema changes over time:
+- Store version in component: `{type: "image", version: 2, ...}`
+- Provide migration logic when loading old components
 
-## Rendering Components (Frontend)
-
-```typescript
-// Component map
-const components = {
-  image: ImageComponent,
-  callout: CalloutComponent,
-  codeblock: CodeBlockComponent,
-  embed: EmbedComponent,
-  accordion: AccordionComponent,
-  // ...
-};
-
-// Render function
-function renderRichText(doc, components) {
-  return doc.body.content.map(node => {
-    if (node.type in components) {
-      return <components[node.type] {...node.attrs} />;
-    }
-    // Native nodes (paragraph, heading, list, etc.)
-    return renderNativeNode(node);
-  });
-}
-
-// Example components
-function ImageComponent({ src, alt, caption, alignment }) {
-  const media = useMedia(src); // Fetch from media collection
-  return (
-    <figure className={`image-${alignment}`}>
-      <img src={media.url} alt={alt} loading="lazy" />
-      {caption && <figcaption>{caption}</figcaption>}
-    </figure>
-  );
-}
-
-function CalloutComponent({ type, title, content }) {
-  return (
-    <aside className={`callout callout-${type}`}>
-      {title && <h4>{title}</h4>}
-      <RichTextRenderer content={content} />
-    </aside>
-  );
-}
-
-function CodeBlockComponent({ language, code, filename, highlight_lines }) {
-  const highlighted = highlight(code, language, highlight_lines);
-  return (
-    <figure className="code-block">
-      {filename && <figcaption>{filename}</figcaption>}
-      <pre><code className={`language-${language}`}>{highlighted}</code></pre>
-    </figure>
-  );
-}
-
-function EmbedComponent({ url, caption }) {
-  const [html, setHtml] = useState(null);
-  useEffect(() => {
-    fetchOEmbed(url).then(setHtml); // or use iframely, noembed, etc.
-  }, [url]);
-  return html ? <div className="embed">{html}</div> : <div>Loading...</div>;
-}
-```
+### Disabled Components
+Mark components as disabled in registry if no longer used:
+- Old code blocks → migrate to new code highlighting
+- Old callout style → migrate to new design
 
 ---
 
-## Component Configuration (Per Workspace/Project)
+## Querying Content with Components
 
-```bash
-# Project-level component config
-rtdb_set {path: "richtext/config", value: {
-  enabled_components: ["image", "callout", "codeblock", "embed", "accordion"],
-  default_image_alignment: "center",
-  code_theme: "github-dark",
-  embed_providers: ["youtube", "twitter", "vimeo", "github", "figma"],
-  max_image_width: 1200,
-  image_quality: 80
-}}
+**List all images in a document:**
+- Parse RichText field
+- Find all `[COMPONENT: image]` blocks
+- Extract `src` references
 
-# Workspace override
-rtdb_set {path: "richtext/config/staging", value: {
-  enabled_components: ["image", "callout", "codeblock", "embed", "accordion", "table", "tabs"],
-  // ... staging can have more components for testing
-}}
-```
+**Find all documents using a specific component:**
+- List all documents
+- For each, scan RichText fields for component usage
+- Report which documents use which components
+
+**Find broken component references:**
+- Extract all ReferenceDocument values from components
+- Check if referenced documents still exist
+- Flag broken links
 
 ---
 
-## Adding Custom Components
+## Common Rich Text Scenarios
 
-### 1. Define in Registry
-```bash
-rtdb_update {path: "richtext/components", value: {
-  "pricing-table": {
-    "name": "Pricing Table",
-    "icon": "tag",
-    "fields": [
-      {"name": "plans", "type": "Array", "items": {
-        "type": "Object",
-        "fields": [
-          {"name": "name", "type": "String", "required": true},
-          {"name": "price", "type": "Number", "required": true},
-          {"name": "period", "type": "String", "default": "month"},
-          {"name": "features", "type": "Array", "items": {"type": "String"}},
-          {"name": "cta_text", "type": "String"},
-          {"name": "cta_link", "type": "String"},
-          {"name": "highlighted", "type": "Boolean"}
-        ]
-      }}
-    ],
-    "render": "PricingTableComponent"
-  }
-}}
-```
-
-### 2. Create Frontend Component
-```tsx
-function PricingTableComponent({ plans }) {
-  return (
-    <table className="pricing-table">
-      <thead>
-        <tr>
-          <th>Plan</th>
-          <th>Price</th>
-          <th>Features</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {plans.map((plan, i) => (
-          <tr key={i} className={plan.highlighted ? "highlighted" : ""}>
-            <td>{plan.name}</td>
-            <td>
-              <span className="price">${plan.price}</span>
-              <span className="period">/{plan.period}</span>
-            </td>
-            <td>
-              <ul>{plan.features.map(f => <li key={f}>{f}</li>)}</ul>
-            </td>
-            <td>
-              <a href={plan.cta_link} className="btn">{plan.cta_text}</a>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-```
-
-### 3. Register in Editor
-```typescript
-// In your rich text editor config
-import { PricingTableComponent } from "./components/PricingTable";
-
-const editorComponents = {
-  ...defaultComponents,
-  "pricing-table": PricingTableComponent,
-};
-```
+| Scenario | Implementation |
+|----------|-----------------|
+| Blog post with mixed media | Use Image components for figures + Code blocks for code samples |
+| Tabbed documentation | Use Tabs component with multiple code examples |
+| Warning/Info boxes | Use Callout components with type field |
+| Embedded videos | Store in Video component (ReferenceDocument to media) |
+| Code snippets with syntax highlight | Use Code Block component with language field |
+| Dynamic data (charts, metrics) | Custom component that references data document |
 
 ---
 
-## Component Versioning
+## Frontend Rendering
 
-```bash
-# Track component versions
-rtdb_set {path: "richtext/versions/image", value: {
-  current: "2.1.0",
-  history: [
-    {"version": "2.1.0", "date": "2026-08-16", "changes": "Added lazy loading"},
-    {"version": "2.0.0", "date": "2026-07-01", "changes": "Refactored to use media collection"},
-    {"version": "1.0.0", "date": "2026-05-01", "changes": "Initial release"}
-  ]
-}}
+Frontend must know how to render each component:
 
-# Migration helper
-async function migrate_component_data(old_version, new_version, data) {
-  if (old_version < "2.0.0" && new_version >= "2.0.0") {
-    // Migrate inline image URLs to media references
-    data.src = await upload_to_media_collection(data.src);
-  }
-  return data;
-}
-```
+1. Parse RichText field
+2. For each component, look up its `render_template` in RTDB
+3. Pass component props to template
+4. Render with proper styling/behavior
 
 ---
 
-## Validation
+## Guidelines for Designing Custom Components
 
-```bash
-# Component validation rules
-rtdb_set {path: "richtext/validation", value: {
-  "image": {
-    "required_fields": ["src", "alt"],
-    "max_file_size": 5242880,  // 5MB
-    "allowed_types": ["image/jpeg", "image/png", "image/webp", "image/svg+xml"]
-  },
-  "codeblock": {
-    "max_lines": 200,
-    "allowed_languages": ["typescript", "javascript", "python", "go", "rust", "bash", "json", "yaml"]
-  },
-  "embed": {
-    "allowed_domains": ["youtube.com", "vimeo.com", "twitter.com", "github.com", "figma.com"]
-  }
-}}
-```
+**Keep components focused:**
+- One responsibility (e.g., "display an image" not "display image + text + metadata")
 
----
+**Support responsive design:**
+- Width/height fields should accept responsive units (%, em, pixels)
+- Don't hardcode dimensions
 
-## Best Practices
+**Validate rigorously:**
+- Required fields: always present
+- Optional fields: sensible defaults
+- References: verify targets exist
 
-1. **Keep components simple** — single responsibility
-2. **Use ReferenceDocument for media** — not inline URLs
-3. **Version components** — track changes, migrate data
-4. **Validate on save** — prevent invalid component data
-5. **Preview in editor** — WYSIWYG for content authors
-6. **Document props** — TypeScript interfaces for each component
-7. **Test rendering** — SSR/CSR consistency
-8. **Accessibility** — semantic HTML, ARIA labels
+**Document for agents:**
+- Clear component purpose
+- Which fields are required
+- What values each field accepts
+- Examples in registry
+

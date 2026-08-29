@@ -9,269 +9,147 @@ Manage translated content across multiple languages using MCP.
 
 | Approach | Best For | Pros | Cons |
 |----------|----------|------|------|
-| **Separate collections per locale** | Few locales, different content | Simple queries, isolated workflows | Duplicate schema, sync effort |
-| **Single collection, locale field** | Many locales, same structure | Single schema, easy filtering | Large documents, complex RTDB |
-| **Translation documents** | Professional translation workflow | Clear ownership, versioning | More complex queries |
+| **Separate collections per locale** | Few locales (≤5), different content schedules | Simple queries, isolated workflows, easy to version | Duplicate schemas, manual sync effort |
+| **Single collection + locale field** | Many locales (5+), same content structure | Single schema, easy filtering, centralized | Larger documents, complex RTDB tracking |
+| **Translation documents** | Professional translation workflows | Clear ownership, versioning, editorial control | Complex queries, more setup |
 
 ---
 
 ## Option 1: Separate Collections (Recommended for ≤5 locales)
 
-### Schema (Shared)
-```bash
-# Create once, reference from each locale collection
-create_schema_field {schema_name: "Post", field_name: "title", field_type: "String", index: 1, display_name: true}
-create_schema_field {schema_name: "Post", field_name: "slug", field_type: "String", index: 2}
-create_schema_field {schema_name: "Post", field_name: "body", field_type: "RichText", index: 3}
-create_schema_field {schema_name: "Post", field_name: "locale", field_type: "String", index: 4}  # For reference
-# ... SEO fields, references, etc.
-```
-
-### Collections per Locale
-```bash
-create_collection {collection_name: "posts_en", schema_name: "Post"}
-create_collection {collection_name: "posts_es", schema_name: "Post"}
-create_collection {collection_name: "posts_fr", schema_name: "Post"}
-create_collection {collection_name: "posts_de", schema_name: "Post"}
-```
+### Setup
+1. Create one shared schema (e.g., "Post")
+2. Add optional `locale` field to document data for reference
+3. Create separate collections for each language:
+   - `posts_en` (English)
+   - `posts_es` (Spanish)
+   - `posts_fr` (French)
+   - `posts_de` (German)
+   - etc.
 
 ### Linking Translations
-```bash
-# Add translation reference field
-create_schema_field {schema_name: "Post", field_name: "translations", field_type: "ReferenceCollection", index: 20}
+Add a `translations` field (ReferenceCollection) to the schema. When creating a document in one locale, reference its translations in other locales:
+- English post references Spanish, French, German translations
+- Spanish post references back to English, French, German
 
-# When creating EN post:
-create_document {collection_name: "posts_en", data: {title: "Hello", locale: "en", translations: ["posts_es:doc-123", "posts_fr:doc-456"]}}
+This allows navigation between language versions.
 
-# When creating ES translation:
-create_document {collection_name: "posts_es", data: {title: "Hola", locale: "es", translations: ["posts_en:doc-789"]}}
-```
+### Querying by Locale
+`list_documents` from the locale-specific collection (e.g., `posts_en`) to get English content only.
 
-### Query by Locale
-```bash
-# Get English posts
-list_documents {workspace_name: "production", collection_name: "posts_en", minimal: true}
-
-# Get all locales for a slug (client-side join)
-# 1. list_documents {collection_name: "posts_en"} → find by slug
-# 2. Read translations array
-# 3. Fetch each translation
-```
+**Pros**: Simple queries, each collection is independent
+**Cons**: Must keep translation references in sync manually
 
 ---
 
-## Option 2: Single Collection with Locale Field
+## Option 2: Single Collection + Locale Field
 
-### Schema
-```bash
-create_schema_field {schema_name: "Post", field_name: "title", field_type: "String", index: 1, display_name: true}
-create_schema_field {schema_name: "Post", field_name: "slug", field_type: "String", index: 2}
-create_schema_field {schema_name: "Post", field_name: "locale", field_type: "String", index: 3}  # en, es, fr, de
-create_schema_field {schema_name: "Post", field_name: "body", field_type: "RichText", index: 4}
-create_schema_field {schema_name: "Post", field_name: "translation_group", field_type: "String", index: 5}  # UUID linking translations
-```
+### Setup
+1. Create schema with a `locale` field (String)
+2. One collection (e.g., `posts`) contains all language versions
+3. Add filter when querying: `list_documents` then filter where `locale == "en"`
 
-### Query
-```bash
-# All English posts
-list_documents {collection_name: "posts", minimal: false}
-# Filter client-side: where locale == "en"
+### Document Structure
+Each document has a `locale` field indicating its language. You can also add:
+- `is_translated: true/false` (whether it's an original or translation)
+- `source_document_id` (reference to original if translation)
 
-# All translations of a post
-# Filter: translation_group == "uuid-123"
-```
+### Querying
+Filter by locale in-memory after `list_documents`, or store locale-filtered views in RTDB.
+
+**Pros**: Single schema, centralized data
+**Cons**: Larger documents, filtering complexity
 
 ---
 
-## Option 3: Translation Documents (Professional Workflow)
+## Option 3: Translation Documents
 
-### Schemas
-```bash
-# Source content
-create_schema_field {schema_name: "Post", field_name: "title", field_type: "String", index: 1}
-create_schema_field {schema_name: "Post", field_name: "body", field_type: "RichText", index: 2}
-# ...
+### Setup
+1. Create "Source" schema (original language content)
+2. Create "Translation" schema (metadata about each translation)
+3. Documents in source collection link to translation documents
 
-# Translation job
-create_schema_field {schema_name: "TranslationJob", field_name: "source_doc_id", field_type: "ReferenceDocument", index: 1}
-create_schema_field {schema_name: "TranslationJob", field_name: "source_locale", field_type: "String", index: 2}
-create_schema_field {schema_name: "TranslationJob", field_name: "target_locale", field_type: "String", index: 3}
-create_schema_field {schema_name: "TranslationJob", field_name: "translator", field_type: "ReferenceDocument", index: 4}  # → User
-create_schema_field {schema_name: "TranslationJob", field_name: "status", field_type: "String", index: 5}  # pending, in_progress, review, approved
-create_schema_field {schema_name: "TranslationJob", field_name: "translated_content", field_type: "RichText", index: 6}
-create_schema_field {schema_name: "TranslationJob", field_name: "notes", field_type: "RichText", index: 7}
-
-create_collection {collection_name: "posts", schema_name: "Post"}
-create_collection {collection_name: "translation_jobs", schema_name: "TranslationJob"}
-```
+Each source document has many translation documents, each tracking:
+- Language
+- Translated content
+- Translator
+- Last reviewed
+- Version
 
 ### Workflow
-```bash
-# 1. Create source post
-create_document {collection_name: "posts", data: {title: "Hello", body: "...", locale: "en"}}
+1. Create source document in English
+2. For each language, create a translation document that references the source
+3. Translation document holds translated fields + metadata
 
-# 2. Create translation jobs
-create_document {collection_name: "translation_jobs", data: {
-  source_doc_id: "post-123",
-  source_locale: "en",
-  target_locale: "es",
-  status: "pending"
-}}
-create_document {collection_name: "translation_jobs", data: {
-  source_doc_id: "post-123",
-  source_locale: "en",
-  target_locale: "fr",
-  status: "pending"
-}}
-
-# 3. Translator picks up job
-update_document {document_id: "job-456", data: {status: "in_progress", translator: "user-789"}}
-
-# 4. Translator submits
-update_document {document_id: "job-456", data: {
-  status: "review",
-  translated_content: "Hola...",
-  notes: "Translated marketing terms"
-}}
-
-# 5. Reviewer approves
-update_document {document_id: "job-456", data: {status: "approved"}}
-
-# 6. Auto-create translated post (webhook/worker)
-# On approved: create_document {collection_name: "posts", data: {title: "Hola", body: "...", locale: "es", translation_group: "post-123"}}
-```
+**Pros**: Clear ownership, version control, editorial tracking
+**Cons**: More complex queries, requires reference navigation
 
 ---
 
-## Locale Configuration (RTDB)
+## Common Patterns
 
-```bash
-# Supported locales
-rtdb_set {path: "i18n/locales", value: [
-  {code: "en", name: "English", native: "English", default: true, rtl: false},
-  {code: "es", name: "Spanish", native: "Español", default: false, rtl: false},
-  {code: "fr", name: "French", native: "Français", default: false, rtl: false},
-  {code: "de", name: "German", native: "Deutsch", default: false, rtl: false},
-  {code: "ar", name: "Arabic", native: "العربية", default: false, rtl: true},
-  {code: "ja", name: "Japanese", native: "日本語", default: false, rtl: false}
-]}
+### Content Synchronization
+If locales share common fields (like images, references):
+- Store shared assets in a separate collection
+- Reference from locale documents
+- Update once, applies to all languages
 
-# Fallback chain
-rtdb_set {path: "i18n/fallback", value: {
-  "es": ["en"],
-  "fr": ["en"],
-  "de": ["en"],
-  "ar": ["en"],
-  "ja": ["en"]
-}}
-```
+### Missing Translations
+Flag documents that exist in one locale but not others:
+- List all docs in locale A
+- For each, check if translation reference exists in locale B
+- Report gaps
 
----
+### Translation Status
+Track translation progress in RTDB:
+- Path: `i18n/translation-status/{document_id}`
+- Fields: source_locale, target_locales, completion_percentage, translator, deadline
 
-## Frontend Integration
-
-```javascript
-// Get localized content
-async function getLocalizedPost(slug, locale) {
-  // Try exact locale
-  let posts = await mcp.list_documents({
-    collection_name: "posts",
-    minimal: false
-  });
-  let post = posts.find(p => p.slug === slug && p.locale === locale);
-  
-  // Fallback chain
-  if (!post) {
-    const fallbacks = (await mcp.rtdb_get("i18n/fallback"))[locale] || ["en"];
-    for (const fb of fallbacks) {
-      post = posts.find(p => p.slug === slug && p.locale === fb);
-      if (post) break;
-    }
-  }
-  
-  return post;
-}
-
-// Language switcher
-function LanguageSwitcher({ currentLocale, slug }) {
-  const locales = await mcp.rtdb_get("i18n/locales");
-  return (
-    <select onChange={e => navigate(`/${e.target.value}/${slug}`)}>
-      {locales.map(l => (
-        <option key={l.code} value={l.code} selected={l.code === currentLocale}>
-          {l.native}
-        </option>
-      ))}
-    </select>
-  );
-}
-```
+### Locale Fallback
+If a translation is missing, show the original language:
+- Query default locale (e.g., English) as fallback
+- Implement in frontend, not CMS
 
 ---
 
-## SEO for Multi-Language
+## Timezone & Date Handling
 
-```bash
-# Add hreflang to each document
-create_schema_field {schema_name: "Post", field_name: "hreflang", field_type: "RichText", index: 30}  // JSON map
-
-# Example hreflang value:
-{
-  "en": "https://site.com/en/post/hello",
-  "es": "https://site.com/es/post/hola",
-  "fr": "https://site.com/fr/post/bonjour",
-  "x-default": "https://site.com/en/post/hello"
-}
-```
-
-### Sitemap with hreflang
-```xml
-<url>
-  <loc>https://site.com/en/post/hello</loc>
-  <xhtml:link rel="alternate" hreflang="en" href="https://site.com/en/post/hello" />
-  <xhtml:link rel="alternate" hreflang="es" href="https://site.com/es/post/hola" />
-  <xhtml:link rel="alternate" hreflang="fr" href="https://site.com/fr/post/bonjour" />
-  <xhtml:link rel="alternate" hreflang="x-default" href="https://site.com/en/post/hello" />
-</url>
-```
+Timestamps should be independent of locale:
+- Store all dates/times as unix timestamps (Number field)
+- Frontend converts to user's timezone
+- Don't store locale-specific date formats in CMS
 
 ---
 
-## MCP Bulk Translation Helper
+## Common i18n Scenarios
 
-```python
-async def create_translation_jobs(project_id, source_doc_id, target_locales):
-    """Create translation jobs for all target locales."""
-    jobs = []
-    for locale in target_locales:
-        job = await create_document(
-            project_id, "staging", "translation_jobs",
-            data={
-                "source_doc_id": source_doc_id,
-                "source_locale": "en",
-                "target_locale": locale,
-                "status": "pending"
-            }
-        )
-        jobs.append(job)
-    return jobs
-
-async def get_pending_translations(project_id, translator_id):
-    """Get jobs assigned to translator."""
-    jobs = await list_documents(project_id, "staging", "translation_jobs", minimal=False)
-    return [j for j in jobs["document_ids"] 
-            if jobs["document_statuses"][j] == "in_progress" 
-            and jobs["translator"] == translator_id]
-```
+| Scenario | Implementation |
+|----------|-----------------|
+| Blog in 3 languages | Separate collections (`posts_en`, `posts_es`, `posts_fr`), with translation references |
+| Product catalog, 10 markets | Single collection with locale field, filter by locale in queries |
+| Legal documents, precise versioning | Translation schema with ownership tracking |
+| Help center, missing translations | List all articles, check translation refs, report gaps |
+| Auto-publish across locales | Schedule each locale version separately using scheduling queue |
 
 ---
 
-## Best Practices
+## Multilingual Search & Discovery
 
-1. **Use ISO 639-1 codes** (en, es, fr, de, ja, zh, ar)
-2. **Store locale on every document** for easy filtering
-3. **Link translations** via `translation_group` or `translations` ref
-4. **Fallback chain** in RTDB for missing translations
-5. **Separate workflow** for professional translation (Option 3)
-6. **RTDB for config** — locales, fallbacks, translators
-7. **SEO hreflang** on every localized page
+If implementing search:
+- Index by locale (separate search indices per language)
+- Or add language suffix to search field names
+- Clients query the right language index
+
+---
+
+## Workflow for Agencies
+
+For teams managing translations:
+
+1. **Source is created** in default language (English)
+2. **Translation request created** in RTDB: `i18n/requests/{request_id}`
+3. **Translator picks up** request, creates translated documents
+4. **Review & QA** validates translations
+5. **Publish** translated version alongside original
+6. **Track status** in RTDB for reporting
+

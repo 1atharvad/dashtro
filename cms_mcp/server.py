@@ -617,9 +617,8 @@ Project (production workspace is read-only)
 **Read**: `list_*`, `get_*`, `rtdb_get`
 
 ## Schema Field Types
-- `String`, `Number`, `Boolean`, `RichText`
+- `String`, `Number`, `Boolean`, `Email`, `Date`, `DateTime`, `Color`, `RichText`, `Textarea`, `Image`, `URL`, `File`, `ScrollLink`, `NestedDocument`
 - `ReferenceDocument` (links to another collection's document)
-- `ReferenceCollection` (links to a collection)
 - Set `display_name: true` on one field to use as document label
 
 ## Realtime Database
@@ -708,8 +707,8 @@ async def schema_design_workflow() -> str:
 - `Number` — integers, floats (counts, prices)
 - `Boolean` — true/false (flags, featured)
 - `RichText` — long-form content (body, description)
+- `NestedDocument` — embedded sub-object within the same document
 - `ReferenceDocument` — link to ONE document in another collection
-- `ReferenceCollection` — link to a collection (for dynamic queries)
 
 **Design rules:**
 1. Set `display_name: true` on exactly ONE field per schema (used as label in lists)

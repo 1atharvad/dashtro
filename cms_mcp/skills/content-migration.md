@@ -7,178 +7,144 @@ Import, export, and transform content between systems, formats, and CMS instance
 
 ## Export from DashTro CMS
 
-### Full Project Export
-```bash
-# 1. Get all collections
-list_collections {project_id, minimal: false}
+### Export Workflow
+1. `list_collections` to get all collection names
+2. For each collection, `list_documents` to get all document IDs
+3. For each document, `get_document` with `minimal: false` and `depth: 5` to get full content with nested references
+4. `get_schema` for each schema to export field definitions
+5. Write results to a structured format (JSON Lines, CSV, or custom format)
 
-# 2. For each collection, get all documents
-list_documents {project_id, workspace_name: "production", collection_name: "posts", minimal: false}
+### Export Structure
+Export as a portable format that includes:
+- Schemas (name, fields, types)
+- Collections (name, schema reference)
+- Documents (collection, data, status, version)
 
-# 3. For each document, get full content with references
-get_document {project_id, workspace_name: "production", collection_name: "posts", document_id: "xxx", minimal: false, depth: 5}
-
-# 4. Export schemas
-list_schema {project_id}
-get_schema {project_id, schema_name: "Post"}  # repeat for each
-```
-
-### Export Format (JSON Lines)
-```jsonl
-{"type": "schema", "name": "Post", "fields": [...]}
-{"type": "collection", "name": "posts", "schema": "Post"}
-{"type": "document", "collection": "posts", "id": "xxx", "data": {...}, "status": "published", "version": 3}
-{"type": "document", "collection": "posts", "id": "yyy", "data": {...}, "status": "draft", "version": 1}
-```
+This allows re-importing into another DashTro instance or transforming for another CMS.
 
 ---
 
 ## Import to DashTro CMS
 
-### Prerequisites
-1. Target project exists (or create: `create_project`)
-2. Workspaces exist (`create_workspace`)
-3. Schemas created (`create_schema_field` × N)
-4. Collections created (`create_collection`)
+### Prerequisites (in order)
+1. Ensure target project exists (or `create_project` a new one)
+2. Create workspaces with `create_workspace`
+3. Define schemas with `create_schema_field` (one field at a time)
+4. Create collections with `create_collection`
+5. Import documents with `create_document` or `update_document`
 
-### Import Script Pattern
-```python
-async def import_content(project_id, workspace, data_file):
-    for line in data_file:
-        item = json.loads(line)
-        
-        if item["type"] == "schema":
-            for field in item["fields"]:
-                await create_schema_field(project_id, **field)
-            await create_collection(project_id, item["name"], item["name"])
-            
-        elif item["type"] == "document":
-            # Resolve reference IDs (map old IDs → new IDs)
-            data = remap_references(item["data"], id_map)
-            
-            created = await create_document(project_id, workspace, item["collection"], data)
-            new_id = created["_id"]
-            id_map[item["id"]] = new_id
-            
-            if item["status"] == "published":
-                await update_document_status(project_id, workspace, item["collection"], new_id, "published")
-```
+### Import Workflow
+1. Parse source data (JSON Lines, CSV, API response, etc.)
+2. Group by entity type: schemas → collections → documents
+3. Create schemas first (must exist before collections)
+4. Create collections (must exist before documents)
+5. For each document:
+   - Resolve reference IDs (map source IDs → new CMS IDs)
+   - `create_document` with transformed data
+   - If document has a status (draft, published), `update_document_status` after creation
+6. Track old ID → new ID mapping for reference remapping in subsequent documents
+
+### ID Mapping Challenge
+When importing, document IDs change (old source ID → new CMS-generated ID). Store a mapping so that reference fields in later documents can point to the correct new IDs.
 
 ---
 
 ## Common Migration Scenarios
 
 ### WordPress → DashTro
-| WordPress | DashTro |
-|-----------|---------|
-| Posts | Collection "posts" (schema "Post") |
-| Pages | Collection "pages" (schema "Page") |
-| Categories/Tags | ReferenceCollection or ReferenceDocument |
-| Media Library | RTDB or separate "media" collection |
-| ACF Fields | Schema fields (map types) |
+- WordPress Posts → DashTro collection "posts" (schema "Post")
+- WordPress Pages → DashTro collection "pages" (schema "Page")
+- WordPress Categories/Tags → ReferenceCollection fields
+- WordPress Media Library → Either RTDB or separate "media" collection
+- ACF custom fields → DashTro schema fields (map ACF type → field type)
 
 ### Contentful → DashTro
-```bash
-# Contentful export includes sys.id, fields, contentType
-# Map contentType → schema, fields → schema fields
-# sys.id → document _id (preserve for reference mapping)
-```
+- Contentful content types → DashTro schemas
+- Contentful entries → DashTro documents
+- Contentful field IDs → DashTro field names (map types: Text → String, RichText → RichText, Link → ReferenceDocument)
+- Preserve Contentful entry IDs or create new ones in CMS (affects reference mapping)
 
 ### Sanity → DashTro
-```bash
-# Sanity documents have _id, _type, references as _ref
-# _type → collection name
-# _ref → ReferenceDocument (resolve after all imports)
-```
+- Sanity document types (`_type`) → DashTro collections
+- Sanity documents (`_id`, fields) → DashTro documents
+- Sanity references (`_ref`) → DashTro ReferenceDocument/ReferenceCollection (resolve after full import)
+- Sanity assets → RTDB or media collection
 
-### Headless CMS Generic
-```json
-{
-  "source": "any",
-  "mapping": {
-    "title": "title",
-    "body": "content",
-    "author": {"type": "reference", "collection": "authors"},
-    "tags": {"type": "array", "item_type": "reference", "collection": "tags"},
-    "seo": {"type": "object", "fields": ["meta_title", "meta_desc"]}
-  }
-}
-```
+### Generic Headless CMS
+Create a mapping document that defines:
+- Which source fields map to which CMS schema fields
+- Type transformations (source type → DashTro type)
+- How to handle nested/complex fields
+- Reference ID remapping logic
 
 ---
 
-## Reference Resolution Strategy
+## Field Type Mapping
 
-```python
-# Two-pass import:
-# Pass 1: Create all documents, store old_id → new_id mapping
-# Pass 2: Update reference fields using mapping
-
-async def resolve_references(project_id, workspace, collection, id_map):
-    docs = await list_documents(project_id, workspace, collection, minimal=False)
-    for doc in docs["document_ids"]:
-        data = await get_document(project_id, workspace, collection, doc, minimal=False, depth=0)
-        updated = {}
-        for key, value in data.items():
-            if isinstance(value, str) and value in id_map:
-                updated[key] = id_map[value]
-            elif isinstance(value, list):
-                updated[key] = [id_map.get(v, v) for v in value]
-        if updated:
-            await update_document(project_id, workspace, collection, doc, updated)
-```
+| Source Type | DashTro Type | Notes |
+|-------------|-------------|-------|
+| Text, String | String | |
+| Long Text, RichText, HTML | RichText | |
+| Number, Integer, Float | Number | |
+| Boolean, Checkbox | Boolean | |
+| Date, DateTime | Number | Store as unix timestamp |
+| Select, Radio | String or ReferenceCollection | If many options, use reference collection |
+| Link, Reference | ReferenceDocument or ReferenceCollection | Requires ID remapping after import |
+| Asset, File, Image | ReferenceDocument | Point to media collection or RTDB |
+| Object, JSON | RichText | Store as JSON string in RichText |
 
 ---
 
-## Bulk Operations via MCP
+## Handling References During Import
 
-### Batch Create (Parallel)
-```bash
-# Use multiple create_document calls in parallel
-# Rate limit: 60 RPM default → batch in groups of 50/min
-```
+1. **First pass**: Import all documents with reference fields set to source IDs (or null)
+2. **Build ID map**: Create a mapping of source ID → new CMS ID for every document created
+3. **Second pass**: Go back and update all reference fields to point to the correct new CMS IDs
 
-### Batch Update
-```bash
-# For each document needing update:
-update_document {document_id: "xxx", data: {field: "new-value"}}
-# Track progress in RTDB
-rtdb_update {path: "migration/progress", value: {completed: 150, total: 500}}
-```
+Or, if source system provides IDs:
+- Use source IDs as CMS document IDs (if CMS allows custom IDs)
+- Reference mapping happens automatically
 
-### Batch Status Change
-```bash
-# Publish all drafted in a collection
-list_documents {workspace_name: "staging", collection_name: "posts", minimal: false}
-# Filter where status == "draft"
-# For each: update_document_status {status: "published"}
-```
+---
+
+## Data Transformation
+
+Some data may need transformation during import:
+- **Dates**: Convert from ISO strings to unix timestamps
+- **URLs**: Rewrite relative links if domain changed
+- **Rich content**: Convert HTML to markdown or vice versa (if needed)
+- **Enums**: Map source enum values to CMS enum/reference values
+- **Nested data**: Flatten complex nested structures or create separate documents
+
+---
+
+## Dry Run & Validation
+
+Before importing production data:
+1. Set `MCP_READ_ONLY=true` to prevent writes
+2. Run the import workflow on a subset (first 10 documents)
+3. Verify schema fields match, data types are correct, references are sane
+4. Manually inspect a few documents in the CMS
+5. Remove `READ_ONLY` and proceed with full import
 
 ---
 
 ## Rollback Strategy
 
-```bash
-# Before migration, snapshot current state
-rtdb_set {path: "migration/snapshots/pre-migration", value: {
-  collections: [...],
-  document_counts: {...},
-  timestamp: "2026-08-16T10:00:00Z"
-}}
-
-# If issues, restore:
-# 1. Delete new collections/documents
-# 2. Restore from snapshot (manual or scripted)
-```
+If import fails midway:
+1. Decide: can you resume from where it stopped, or restart?
+2. If resume: record last successfully imported document ID, skip to next
+3. If restart: delete imported documents and re-import (or use a separate test workspace)
+4. Verify: count imported documents, spot-check a few records
 
 ---
 
-## Validation Checklist
+## Common Import Issues
 
-- [ ] Document counts match (source = target)
-- [ ] All references resolve (no broken links)
-- [ ] Statuses correct (published/draft)
-- [ ] Rich text renders correctly
-- [ ] Media references work
-- [ ] SEO fields populated
-- [ ] RTDB/config migrated
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| References point to missing documents | ID mapping incomplete or out of order | Import in correct order: schemas → docs with no refs → docs with refs |
+| Required fields empty | Schema fields not mapped | Check mapping document, ensure all required source fields are included |
+| Data type mismatch | Source data doesn't match DashTro field type | Transform before import (e.g., string → number) |
+| Duplicate documents | Accidental re-import | Check CMS for duplicates, deduplicate, or reimport to fresh workspace |
+

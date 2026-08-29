@@ -9,221 +9,103 @@ Efficiently create, update, delete, or transform many documents at once using MC
 
 Default: **60 requests/minute** per API key (`MCP_RATE_LIMIT`)
 
-```bash
-# Batch size recommendations:
-# - Create: 40/min (leaves headroom)
-# - Update: 50/min
-# - Delete: 50/min
-# - Read: 100/min (lighter)
-```
+**Batch size recommendations:**
+- Create: 40/min (leaves headroom)
+- Update: 50/min
+- Delete: 50/min
+- Read: 100/min (lighter)
+
+Space large bulk operations across multiple minutes to stay under the limit.
 
 ---
 
 ## Bulk Create Pattern
 
-```python
-async def bulk_create(project_id, workspace, collection, items, batch_size=40):
-    """Create multiple documents with rate limiting."""
-    created = []
-    for i in range(0, len(items), batch_size):
-        batch = items[i:i + batch_size]
-        # Process batch (can run in parallel up to batch_size)
-        tasks = [
-            create_document(project_id, workspace, collection, item)
-            for item in batch
-        ]
-        results = await asyncio.gather(*tasks)
-        created.extend([json.loads(r) for r in results])
-        
-        # Progress tracking
-        rtdb_update({"path": "bulk/progress", "value": {"created": len(created), "total": len(items)}})
-        
-        if i + batch_size < len(items):
-            await asyncio.sleep(60)  # Wait for rate limit reset
-    return created
-```
+1. List or iterate over source items (CSV, JSON, array, or query results)
+2. For each item, call `create_document` with mapped fields
+3. Batch into groups of ~40 (respecting rate limit)
+4. Wait 60s between batches if exceeding rate limit
+5. Track progress in RTDB or logs as you go
 
-### MCP Sequential (Safe)
-```bash
-# Create 100 documents sequentially (respects rate limit)
-for item in items:
-    create_document {project_id, workspace_name: "staging", collection_name: "posts", data: item}
-    # Sleep 1s between calls
-```
+**Do NOT attempt to create 1000 documents in a tight loop.** Space them out.
 
 ---
 
 ## Bulk Update Pattern
 
-```python
-async def bulk_update(project_id, workspace, collection, updates):
-    """Update multiple documents by ID."""
-    for doc_id, data in updates.items():
-        await update_document(project_id, workspace, collection, doc_id, data)
-        rtdb_update({"path": "bulk/progress", "value": {"updated": count, "total": len(updates)}})
-```
+1. `list_documents` to fetch all documents in the collection
+2. Filter results by some criteria (status, field value, etc.)
+3. For each matching document, `update_document` with new data
+4. Track progress and errors as you proceed
 
-### Conditional Bulk Update
-```bash
-# Update all draft posts to add a field
-list_documents {workspace_name: "staging", collection_name: "posts", minimal: false}
-# Filter: status == "draft"
-# For each:
-update_document {document_id: "xxx", data: {needs_review: true}}
-```
+**Conditional updates:** Filter in-memory after listing, then update only matching docs.
 
 ---
 
 ## Bulk Status Change
 
-```bash
-# Publish all drafts in a collection
-list_documents {workspace_name: "staging", collection_name: "posts", minimal: false}
-# Filter where document_statuses[doc_id] == "draft"
-# For each draft:
-update_document_status {document_id: "xxx", status: "published"}
+1. `list_documents` to get all docs
+2. Filter by current status (e.g., "draft")
+3. For each, `update_document_status` to new status
 
-# Unpublish all in a category
-list_documents {workspace_name: "production", collection_name: "posts", minimal: false}
-# Filter by category reference
-# For each:
-update_document_status {document_id: "xxx", status: "draft"}
-```
+Example scenarios: publish all drafts, unpublish all in a category, mark as archived.
 
 ---
 
 ## Bulk Delete (Use with Caution!)
 
-```bash
-# Soft delete pattern (recommended): move to archive workspace
-create_workspace {workspace_name: "archive"}
+**Soft delete (recommended):** Instead of deleting, mark with `archived: true` and an `archived_at` timestamp, or move to an archive workspace. This preserves audit trails.
 
-# For each to delete:
-update_document {data: {archived: true, archived_at: timestamp}}
-# Or copy to archive then delete from source
-```
+**Hard delete (irreversible):** Only if absolutely certain. Call `delete_document` for each ID. Hard-deleted data cannot be recovered.
 
-### Hard Delete (Irreversible)
-```bash
-# ONLY if absolutely certain
-list_documents {workspace_name: "staging", collection_name: "old-posts", minimal: false}
-# For each:
-delete_document {document_id: "xxx"}
-
-# Track in RTDB for audit
-rtdb_set {path: "bulk/deleted", value: [{"id": "xxx", "collection": "posts", "timestamp": "..."}]}
-```
+**Always audit:** Track what was deleted (ID, collection, timestamp, reason) in RTDB for compliance.
 
 ---
 
 ## Bulk Reference Fix
 
-```python
-async def fix_broken_references(project_id, workspace, collection, field_name, old_id, new_id):
-    """Replace all occurrences of old_id with new_id in a reference field."""
-    docs = await list_documents(project_id, workspace, collection, minimal=False)
-    for doc in docs["document_ids"]:
-        data = await get_document(project_id, workspace, collection, doc, minimal=False, depth=0)
-        if data.get(field_name) == old_id:
-            await update_document(project_id, workspace, collection, doc, {field_name: new_id})
-        elif isinstance(data.get(field_name), list) and old_id in data[field_name]:
-            new_list = [new_id if x == old_id else x for x in data[field_name]]
-            await update_document(project_id, workspace, collection, doc, {field_name: new_list})
-```
+When a referenced document changes ID or should point elsewhere:
 
----
-
-## CSV/JSON Import → Bulk Create
-
-```python
-import csv
-import json
-
-async def import_csv(project_id, workspace, collection, csv_path, field_map):
-    """Import CSV as documents."""
-    with open(csv_path) as f:
-        reader = csv.DictReader(f)
-        items = []
-        for row in reader:
-            doc = {}
-            for csv_field, schema_field in field_map.items():
-                value = row[csv_field]
-                # Type conversion
-                if schema_field.endswith("_id") or "reference" in schema_field:
-                    doc[schema_field] = value  # Assume ID already mapped
-                elif schema_field in ("price", "inventory", "order"):
-                    doc[schema_field] = float(value) if value else 0
-                elif schema_field in ("published", "featured", "active"):
-                    doc[schema_field] = value.lower() in ("true", "1", "yes")
-                else:
-                    doc[schema_field] = value
-            items.append(doc)
-    
-    return await bulk_create(project_id, workspace, collection, items)
-```
+1. `list_documents` in the collection that has the reference
+2. For each document, `get_document` (with `minimal: false`) to inspect the reference field
+3. If the field matches the old ID (or contains it in a list), `update_document` with the new ID
+4. Handle both single references (`ReferenceDocument`) and multi-refs (`ReferenceCollection`)
 
 ---
 
 ## Progress Tracking (RTDB)
 
-```bash
-# Initialize
-rtdb_set {path: "bulk/import-2026-08-16", value: {
-  status: "running",
-  started: "2026-08-16T10:00:00Z",
-  total: 500,
-  completed: 0,
-  failed: 0,
-  errors: []
-}}
+Use RTDB to track bulk operation state (useful for long-running imports):
 
-# Update during operation
-rtdb_update {path: "bulk/import-2026-08-16", value: {completed: 150}}
+1. **Initialize**: `rtdb_set` a progress object with `status: "running"`, `total`, `completed`, `failed`, `errors: []`
+2. **Update**: Periodically `rtdb_update` to increment `completed` count
+3. **On error**: Append to `errors` array with doc ID and error message
+4. **Complete**: Update `status: "completed"` and set `completed_at` timestamp
 
-# On error
-rtdb_update {path: "bulk/import-2026-08-16", value: {
-  failed: 5,
-  errors: [{"doc": 150, "error": "validation failed"}]
-}}
-
-# Complete
-rtdb_update {path: "bulk/import-2026-08-16", value: {
-  status: "completed",
-  completed_at: "2026-08-16T10:15:00Z"
-}}
-```
+This lets external systems poll progress without querying the CMS directly.
 
 ---
 
 ## Dry Run Pattern
 
-```bash
-# Always test first with dry run
-# 1. Run with READ_ONLY=true (MCP_READ_ONLY=true env var)
-# 2. Verify operations would succeed
-# 3. Remove READ_ONLY and run for real
-```
+Before bulk operations on production data:
+
+1. Set `MCP_READ_ONLY=true` to prevent writes
+2. Run the same operation logic (list, filter, check what would update)
+3. Verify the results match expectations
+4. Remove `READ_ONLY` and run for real
 
 ---
 
 ## Error Handling
 
-```python
-async def safe_bulk_operation(operation, items, max_retries=3):
-    results = {"success": [], "failed": []}
-    for item in items:
-        for attempt in range(max_retries):
-            try:
-                result = await operation(item)
-                results["success"].append({"item": item, "result": result})
-                break
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    results["failed"].append({"item": item, "error": str(e)})
-                else:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
-    return results
-```
+Bulk operations may fail on individual items (validation errors, missing references, etc.). Do NOT stop on first error.
+
+**Safe approach:**
+- Try each operation with exponential backoff (2s, 4s, 8s between retries)
+- Collect failures in a list instead of throwing
+- Continue to completion
+- Report summary: N succeeded, M failed, with failure details
 
 ---
 
@@ -231,21 +113,20 @@ async def safe_bulk_operation(operation, items, max_retries=3):
 
 | Scenario | Approach |
 |----------|----------|
-| Import 1000 blog posts | Bulk create in batches of 40, 60s between batches |
-| Update SEO fields on 500 pages | Bulk update, track progress in RTDB |
-| Migrate categories → tags | Bulk reference fix + create new tag refs |
-| Archive old content | Soft delete (update + move workspace) |
-| Fix broken author references | Bulk reference fix |
-| Generate sitemap | List all published, write to RTDB/export |
+| Import CSV → documents | Parse CSV, map columns to fields, batch create with rate limit spacing |
+| Update many documents by field | List, filter by field value, update each with new data |
+| Migrate data (old schema → new) | List old, transform fields, create in new collection, soft-delete from old |
+| Fix broken references | List docs with old ref, check if field matches, update to new ref |
+| Publish/unpublish by category | List, filter by category reference, update status for each |
+| Archive old content | Mark with archived flag + timestamp, or move to archive workspace |
+| Generate export/sitemap | List all, filter (e.g., published only), write results to file or RTDB |
 
 ---
 
 ## Monitoring
 
-```bash
-# Check progress
-rtdb_get {path: "bulk/import-2026-08-16"}
+Check bulk operation progress stored in RTDB:
+- `rtdb_get` the progress path to inspect current state
+- Look for `completed`, `failed`, `errors` to understand how far you are
 
-# Watch for completion
-# (Poll every 30s or use MCP client notifications)
-```
+If operation hangs or errors, inspect RTDB to decide whether to retry, resume, or rollback.
