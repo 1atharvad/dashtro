@@ -167,7 +167,7 @@ describe("useDocumentData — updateDocumentData", () => {
 });
 
 describe("useDocumentData — deleteDocumentData", () => {
-  it("sends a DELETE and shows a success toast", async () => {
+  it("sends a DELETE, shows a success toast, and resolves true", async () => {
     mockedAuthFetch.mockResolvedValue({ ok: true } as Response);
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(documentKeys.collection(projectId, workspaceName, collectionName), meta);
@@ -177,13 +177,28 @@ describe("useDocumentData — deleteDocumentData", () => {
       { wrapper: withQueryClient(queryClient) }
     );
 
-    result.current.deleteDocumentData("doc-1");
+    await expect(result.current.deleteDocumentData("doc-1")).resolves.toBe(true);
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Document deleted"));
+    expect(toast.success).toHaveBeenCalledWith("Document deleted");
     expect(mockedAuthFetch).toHaveBeenCalledWith(
       expect.stringContaining(`/document/doc-1/`),
       expect.objectContaining({ method: "DELETE" })
     );
+  });
+
+  it("shows an error toast and resolves false when the delete fails (regression: callers used to treat this as success)", async () => {
+    mockedAuthFetch.mockResolvedValue({ ok: false, status: 500 } as Response);
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(documentKeys.collection(projectId, workspaceName, collectionName), meta);
+
+    const { result } = renderHook(
+      () => useDocumentData(projectId, collectionName, workspaceName),
+      { wrapper: withQueryClient(queryClient) }
+    );
+
+    await expect(result.current.deleteDocumentData("doc-1")).resolves.toBe(false);
+
+    expect(toast.error).toHaveBeenCalledWith("Failed to delete document");
   });
 });
 

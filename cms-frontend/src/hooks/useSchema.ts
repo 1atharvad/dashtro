@@ -8,6 +8,11 @@ import type { SchemaFieldItem, NewSchemaFieldInput } from '@ts/types/constants';
 import { useSchemaMetaData } from '@/hooks/useSchemaMetaData';
 import { toast } from 'advi-ui';
 
+// Stable fallback: `schemaDetails[schemaName] ?? []` creates a new array on
+// every render while the schema hasn't fetched yet, which breaks referential
+// equality for any effect depending on schemaNameData (infinite render loop).
+const EMPTY_SCHEMA_FIELDS: SchemaFieldItem[] = [];
+
 /**
  * Manages schema data for a single schema within a project.
  *
@@ -20,10 +25,15 @@ import { toast } from 'advi-ui';
  *
  * @param projectId - The project to load schema data for.
  * @param schemaName - The specific schema to load (e.g. "Article", "Author").
+ * @param isNewSchema - True when the caller already knows this schema hasn't
+ *   been created yet (e.g. the URL was navigated to ahead of the first save).
+ *   Skips the fetch entirely instead of firing a request guaranteed to 404.
  */
-export const useSchemaData = (projectId: string, schemaName: string) => {
+export const useSchemaData = (projectId: string, schemaName: string, isNewSchema = false) => {
   const { schemaNames, addNewSchemeName, removeSchemaName } = useSchemaMetaData(projectId);
-  const [requestedNames, setRequestedNames] = useState<string[]>(schemaName ? [schemaName] : []);
+  const [requestedNames, setRequestedNames] = useState<string[]>(
+    schemaName && !isNewSchema ? [schemaName] : []
+  );
 
   const createMutation = useCreateSchemaFieldMutation(projectId);
   const updateMutation = useUpdateSchemaFieldMutation(projectId);
@@ -31,8 +41,8 @@ export const useSchemaData = (projectId: string, schemaName: string) => {
 
   /** Runs when the user navigates to a different schema; drops all previously-requested names. */
   useEffect(() => {
-    setRequestedNames(schemaName ? [schemaName] : []);
-  }, [schemaName]);
+    setRequestedNames(schemaName && !isNewSchema ? [schemaName] : []);
+  }, [schemaName, isNewSchema]);
 
   const queries = useQueries({
     queries: requestedNames.map((name) => ({
@@ -77,8 +87,8 @@ export const useSchemaData = (projectId: string, schemaName: string) => {
     if (toAdd.size > 0) setRequestedNames((prev) => [...prev, ...toAdd]);
   }, [schemaDetails, schemaName, schemaNames, requestedNames]);
 
-  const schemaNameData: SchemaFieldItem[] = schemaDetails[schemaName] ?? [];
-  const loading = !(schemaName in schemaDetails);
+  const schemaNameData: SchemaFieldItem[] = schemaDetails[schemaName] ?? EMPTY_SCHEMA_FIELDS;
+  const loading = isNewSchema ? false : !(schemaName in schemaDetails);
 
   /**
    * Persists changes to one or more existing schema fields.
@@ -119,15 +129,15 @@ export const useSchemaData = (projectId: string, schemaName: string) => {
    * the last one in the schema, also removes `schemaName` from the project
    * metadata so the schema no longer appears in listings.
    */
-  const deleteSchemaData = (schemaId: string) => {
+  const deleteSchemaData = (schemaId: string): Promise<boolean> =>
     deleteMutation.mutateAsync({ schemaId, schemaName })
       .then(() => {
         const remaining = schemaDetails[schemaName];
         if (remaining && remaining.length === 1) removeSchemaName(schemaName);
         toast.success('Schema field deleted');
+        return true;
       })
-      .catch((err) => { console.error(err); toast.error('Failed to delete schema field'); });
-  };
+      .catch((err) => { console.error(err); toast.error('Failed to delete schema field'); return false; });
 
   return {
     schemaNameData,

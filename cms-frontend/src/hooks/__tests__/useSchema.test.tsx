@@ -61,6 +61,26 @@ describe("useSchemaData — fetching", () => {
     );
   });
 
+  it("skips the fetch entirely for a not-yet-created schema (regression: used to fire a guaranteed-404 request and log an error)", async () => {
+    mockedAuthFetch.mockResolvedValue({ ok: false, status: 404 } as Response);
+    const queryClient = createTestQueryClient();
+    seedMetaCache(queryClient);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { result } = renderHook(
+      () => useSchemaData(projectId, "BrandNewSchema", true),
+      { wrapper: withQueryClient(queryClient) }
+    );
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.schemaNameData).toEqual([]);
+    expect(mockedAuthFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining("/schema/BrandNewSchema/"),
+      expect.anything()
+    );
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
   it("discovers and fetches a nested schema referenced by a field, but not a self-reference or an unknown schema", async () => {
     const selfRefField = { ...articleField, _id: "f3", _index: 3, _name: "self", _nested_schema: "Article" };
     const unknownRefField = { ...articleField, _id: "f4", _index: 4, _name: "ghost", _nested_schema: "Ghost" };
@@ -169,7 +189,7 @@ describe("useSchemaData — updateSchemaData", () => {
 });
 
 describe("useSchemaData — deleteSchemaData", () => {
-  it("sends a DELETE and shows a success toast", async () => {
+  it("sends a DELETE, shows a success toast, and resolves true", async () => {
     mockedAuthFetch.mockImplementation(async (_input: RequestInfo, init?: RequestInit) => {
       if (init?.method === "DELETE") return { ok: true } as Response;
       return { ok: true, json: async () => ({ Article: [articleField] }) } as Response;
@@ -180,16 +200,16 @@ describe("useSchemaData — deleteSchemaData", () => {
     const { result } = renderHook(() => useSchemaData(projectId, "Article"), { wrapper: withQueryClient(queryClient) });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    result.current.deleteSchemaData("f1");
+    await expect(result.current.deleteSchemaData("f1")).resolves.toBe(true);
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Schema field deleted"));
+    expect(toast.success).toHaveBeenCalledWith("Schema field deleted");
     expect(mockedAuthFetch).toHaveBeenCalledWith(
       expect.stringContaining(`/projects/${projectId}/schema/f1/`),
       expect.objectContaining({ method: "DELETE" })
     );
   });
 
-  it("shows an error toast when the delete request fails", async () => {
+  it("shows an error toast and resolves false when the delete request fails (regression: callers used to treat this as success)", async () => {
     mockedAuthFetch.mockImplementation(async (_input: RequestInfo, init?: RequestInit) => {
       if (init?.method === "DELETE") return { ok: false, status: 400 } as Response;
       return { ok: true, json: async () => ({ Article: [articleField] }) } as Response;
@@ -200,8 +220,8 @@ describe("useSchemaData — deleteSchemaData", () => {
     const { result } = renderHook(() => useSchemaData(projectId, "Article"), { wrapper: withQueryClient(queryClient) });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    result.current.deleteSchemaData("f1");
+    await expect(result.current.deleteSchemaData("f1")).resolves.toBe(false);
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Failed to delete schema field"));
+    expect(toast.error).toHaveBeenCalledWith("Failed to delete schema field");
   });
 });

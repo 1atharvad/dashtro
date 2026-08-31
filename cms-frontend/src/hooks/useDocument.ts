@@ -99,11 +99,10 @@ export const useDocumentData = (
       .then(() => toast.success('Document updated from production'))
       .catch(err => { console.error(err); toast.error('Failed to pull document from production'); throw err; });
 
-  const deleteDocumentData = (docId: string) => {
+  const deleteDocumentData = (docId: string): Promise<boolean> =>
     deleteMutation.mutateAsync(docId)
-      .then(() => toast.success('Document deleted'))
-      .catch(err => { console.error(err); toast.error('Failed to delete document'); });
-  };
+      .then(() => { toast.success('Document deleted'); return true; })
+      .catch(err => { console.error(err); toast.error('Failed to delete document'); return false; });
 
   const fetchVersions = (docId: string) => {
     if (docId === documentId) versionsQuery.refetch();

@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { Trash2, ChevronDown } from 'lucide-react';
 import { Button } from 'advi-ui';
-import { ModalContentBtn } from '@ts/components/ModalContentBtn';
+import { ConfirmDialog } from '@ts/components/dialogs/ConfirmDialog';
 import { ColorPickerField } from '@ts/components/fields/ColorPickerField';
 import type { SchemaVariablesSchema, SchemaEntryData } from '@ts/types/constants';
 
@@ -28,7 +28,7 @@ export const SchemaEntry = ({
 }) => {
   const [name, setName] = useState(schemaEntryData['_name'] ? schemaEntryData['_name'] : '<em>New Entry - Schema</em>');
   const inputRefs = useRef<HTMLDivElement[]>([]);
-  const [deleteConfirmationModalClose, setDeleteConfirmationModalClose] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     if (schemaEntryData['_name']) setName(schemaEntryData['_name'])
@@ -222,40 +222,20 @@ export const SchemaEntry = ({
       </Grid>
       {!disabled && <Divider sx={{ mt: 2 }}/>}
       {!disabled && <Grid container spacing={2} sx={{ justifyContent: 'flex-end', mt: 1 }}>
-        <ModalContentBtn
-            id='delete-schema-entry'
-            modalTitle='Are you sure you want to delete the entry?'
-            modalBtn={(handleClick) => (
-              <Button variant='destructive' onClick={handleClick}>
-                <Trash2 className="h-4 w-4" /> Delete
-              </Button>
-            )}
-            closeModal={deleteConfirmationModalClose}
-            noCloseBtn={true}>
-          <Grid container spacing={2} sx={{justifyContent: 'flex-end'}}>
-            <Grid>
-              <Button
-                  variant='secondary'
-                  onClick={() => {
-                    setDeleteConfirmationModalClose(true);
-                    setTimeout(setDeleteConfirmationModalClose.bind(null, false), 0);
-                  }}>
-                Cancel
-              </Button>
-            </Grid>
-            <Grid>
-              <Button
-                  variant='destructive'
-                  onClick={() => {
-                    deleteEntry();
-                    setDeleteConfirmationModalClose(true);
-                    setTimeout(setDeleteConfirmationModalClose.bind(null, false), 0);
-                  }}>
-                <Trash2 className="h-4 w-4 fill-white" /> Delete
-              </Button>
-            </Grid>
-          </Grid>
-        </ModalContentBtn>
+        <Button variant='destructive' onClick={() => setDeleteOpen(true)}>
+          <Trash2 className="h-4 w-4" /> Delete
+        </Button>
+        <ConfirmDialog
+          open={deleteOpen}
+          onClose={() => setDeleteOpen(false)}
+          title="Delete this entry?"
+          confirmLabel="Delete"
+          onConfirm={() => { deleteEntry(); setDeleteOpen(false); }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            This will permanently remove this schema entry. This action cannot be undone.
+          </Typography>
+        </ConfirmDialog>
       </Grid>}
     </>
   );

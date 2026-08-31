@@ -2,7 +2,7 @@ import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { Accordion, AccordionDetails, AccordionSummary, Divider, Grid, MenuItem, TextField, Typography } from "@mui/material";
 import { Trash2 as DeleteIcon, ChevronDown as ExpandMoreIcon } from "lucide-react";
 import { Button } from "advi-ui";
-import { ModalContentBtn } from "@ts/components/ModalContentBtn";
+import { ConfirmDialog } from "@ts/components/dialogs/ConfirmDialog";
 import type { CollectionUiSchema, CollectionEntryData } from '@ts/types/constants';
 
 export const CollectionEntry = ({
@@ -22,7 +22,7 @@ export const CollectionEntry = ({
     word.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
 
   const [name, setName] = useState('');
-  const [deleteConfirmationModalClose, setDeleteConfirmationModalClose] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [entryIsDirty, setEntryIsDirty] = useState(false);
   const [schemaNamePresent, setSchemaNamePresent] = useState(false);
 
@@ -112,40 +112,20 @@ export const CollectionEntry = ({
       </Grid>
       <Divider sx={{ mt: 2 }}/>
       <Grid container spacing={2} sx={{ justifyContent: 'flex-end', mt: 1 }}>
-        <ModalContentBtn
-            id='delete-collection-entry'
-            modalTitle='Are you sure you want to delete the entry?'
-            modalBtn={(handleClick) => (
-              <Button variant='destructive' onClick={handleClick}>
-                <DeleteIcon className="h-4 w-4"/> Delete
-              </Button>
-            )}
-            closeModal={deleteConfirmationModalClose}
-            noCloseBtn={true}>
-          <Grid container spacing={2} sx={{justifyContent: 'flex-end'}}>
-            <Grid>
-              <Button
-                  variant='secondary'
-                  onClick={() => {
-                    setDeleteConfirmationModalClose(true);
-                    setTimeout(setDeleteConfirmationModalClose.bind(null, false), 0);
-                  }}>
-                Cancel
-              </Button>
-            </Grid>
-            <Grid>
-              <Button
-                  variant='destructive'
-                  onClick={() => {
-                    deleteEntry();
-                    setDeleteConfirmationModalClose(true);
-                    setTimeout(setDeleteConfirmationModalClose.bind(null, false), 0);
-                  }}>
-                <DeleteIcon className="h-4 w-4"/> Delete
-              </Button>
-            </Grid>
-          </Grid>
-        </ModalContentBtn>
+        <Button variant='destructive' onClick={() => setDeleteOpen(true)}>
+          <DeleteIcon className="h-4 w-4"/> Delete
+        </Button>
+        <ConfirmDialog
+          open={deleteOpen}
+          onClose={() => setDeleteOpen(false)}
+          title="Delete this entry?"
+          confirmLabel="Delete"
+          onConfirm={() => { deleteEntry(); setDeleteOpen(false); }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            This will permanently remove this collection entry. This action cannot be undone.
+          </Typography>
+        </ConfirmDialog>
       </Grid>
     </>
   );
