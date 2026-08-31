@@ -123,7 +123,7 @@ export const Signup = () => {
             size="small"
             autoComplete="new-password"
           />
-          <Button type="submit" variant="default" disabled={loading} className="w-full justify-center mt-1 border-current">
+          <Button type="submit" variant="default" disabled={loading} className="w-full justify-center mt-1">
             {loading ? "Creating account…" : "Create account"}
           </Button>
         </Box>

@@ -50,7 +50,7 @@ export const SettingsUsers = () => {
             <Typography variant="subtitle1" fontWeight={700}>Team Members</Typography>
             <Typography variant="body2" color="text.secondary">Manage who has access to this CMS</Typography>
           </Box>
-          <Button variant="default" className="border-current" onClick={() => setInviteOpen(true)}>
+          <Button variant="default" onClick={() => setInviteOpen(true)}>
             <UserPlus className="h-4 w-4" /> Invite User
           </Button>
         </Box>
@@ -127,10 +127,10 @@ export const SettingsUsers = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="secondary" className="border-current" onClick={() => { setInviteOpen(false); setInviteEmail(''); }}>
+          <Button variant="secondary" onClick={() => { setInviteOpen(false); setInviteEmail(''); }}>
             Cancel
           </Button>
-          <Button variant="default" className="border-current" onClick={copyLink} disabled={!inviteEmail}>
+          <Button variant="default" onClick={copyLink} disabled={!inviteEmail}>
             Copy Link
           </Button>
         </DialogActions>

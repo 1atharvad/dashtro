@@ -2,7 +2,7 @@ import { FormControlLabel, Grid, Skeleton, Switch, TextField } from '@mui/materi
 import { Dispatch, SetStateAction, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { ColorPickerField } from '@ts/components/fields/ColorPickerField';
 
-const RichTextModal = lazy(() => import('@ts/components/fields/RichTextModal').then(m => ({ default: m.RichTextModal })));
+const RichTextModal = lazy(() => import('@ts/components/dialogs/RichTextModal').then(m => ({ default: m.RichTextModal })));
 import { FileField } from '@ts/components/fields/FileField';
 import { ImageField } from '@ts/components/fields/ImageField';
 import { LinkField } from '@ts/components/fields/LinkField';

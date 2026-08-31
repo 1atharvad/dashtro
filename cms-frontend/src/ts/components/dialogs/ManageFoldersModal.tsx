@@ -76,7 +76,7 @@ export const ManageFoldersModal = ({
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
           />
-          <Button variant="default" className="border-current" onClick={handleAdd} disabled={!newName.trim()}>
+          <Button variant="default" onClick={handleAdd} disabled={!newName.trim()}>
             <FolderPlus className="h-4 w-4" /> Add
           </Button>
         </Box>

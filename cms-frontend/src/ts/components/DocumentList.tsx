@@ -7,7 +7,7 @@ import { ChevronRight as NavigateNextIcon, GripVertical as DragIndicatorIcon, Tr
 import { Link as BrowserLink } from "react-router-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageWrapper } from "@ts/components/PageForm";
-import { WorkspaceSyncModal } from "@ts/components/WorkspaceSyncModal";
+import { WorkspaceSyncModal } from "@ts/components/dialogs/WorkspaceSyncModal";
 import { useDocumentData } from "@/hooks/useDocument";
 import { useWorkspaceData } from "@/hooks/useWorkspace";
 import type { WorkspaceDiff, SchemaCollectionItem } from "@ts/types/constants";
@@ -160,7 +160,7 @@ export const DocumentList = ({
   };
 
   const NewDocumentBtn = () => (
-    <Button asChild variant="default" className="border-current">
+    <Button asChild variant="default">
       <BrowserLink to={`${base}/document/new/`}>
         <NewDocIcon className="h-4 w-4" />New Document
       </BrowserLink>

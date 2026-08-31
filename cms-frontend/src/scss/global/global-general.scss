@@ -284,7 +284,7 @@ html.dark input[type="week"] {
     font-size: 0.875rem;
     color: rgba(colors.$white, 0.85);
 
-    &:hover {
+    &:not(.vi-aside-item-text):hover {
       background: colors.$chrome-border;
       color: rgba(colors.$white, 0.85);
     }
@@ -298,7 +298,7 @@ html.dark input[type="week"] {
     html.dark & {
       color: rgba(colors.$white, 0.6);
 
-      &:hover {
+      &:not(.vi-aside-item-text):hover {
         background: rgba(colors.$white, 0.07);
         color: rgba(colors.$white, 0.6);
       }
@@ -310,6 +310,14 @@ html.dark input[type="week"] {
       }
     }
   }
+}
+
+.vi-link-logo-wrapper:hover {
+  text-decoration: none;
+}
+
+.vi-btn-variant-default {
+  border-color: color-mix(in srgb, hsl(var(--primary)) 65%, black);
 }
 
 .page-content {

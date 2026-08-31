@@ -184,14 +184,12 @@ export const WorkspaceSyncModal = ({
                           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
                             <Button
                               variant={resolutions[key] === 'production' ? 'default' : 'outline'}
-                              className="border-current"
                               onClick={() => setResolutions(prev => ({ ...prev, [key]: 'production' }))}
                             >
                               Production
                             </Button>
                             <Button
                               variant={resolutions[key] === 'workspace' ? 'default' : 'outline'}
-                              className="border-current"
                               onClick={() => setResolutions(prev => ({ ...prev, [key]: 'workspace' }))}
                             >
                               Keep mine
@@ -216,10 +214,9 @@ export const WorkspaceSyncModal = ({
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button variant="secondary" className="border-current" onClick={onClose}>Cancel</Button>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button
           variant="default"
-          className="border-current"
           onClick={handleConfirm}
           disabled={diffLoading || submitting || !diff}
         >

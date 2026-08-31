@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Box, Dialog, DialogActions, DialogContent, DialogTitle,
-  TextField, Typography
+  Box, IconButton, InputAdornment, TextField, Tooltip, Typography
 } from '@mui/material';
-import { UserCircle, Info, ClipboardList, AlertTriangle } from 'lucide-react';
+import { UserCircle, Info, ClipboardList, AlertTriangle, Copy } from 'lucide-react';
 import { AsideItem, Button } from 'advi-ui';
 import { useProjectData } from '@/hooks/useProject';
 import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { LinkDrawer } from '@ts/components/LinkDrawer';
 import { ProjectAuditLog } from '@ts/components/settings/ProjectAuditLog';
+import { DeleteProjectDialog } from '@ts/components/dialogs/DeleteProjectDialog';
 import '@/scss/Settings.scss';
 import '@/scss/ProjectPage.scss';
 
@@ -36,9 +36,15 @@ export const ProjectSettingsPage = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [confirmDeleteFinal, setConfirmDeleteFinal] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [duplicating, setDuplicating] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
+
+  const copyProjectId = () => {
+    if (!project_id) return;
+    navigator.clipboard.writeText(project_id);
+    setIdCopied(true);
+    setTimeout(() => setIdCopied(false), 1500);
+  };
 
   useEffect(() => {
     if (project) {
@@ -62,20 +68,6 @@ export const ProjectSettingsPage = () => {
     if (created) navigate(`/projects/${created._id}/`);
   };
 
-  const closeDeleteFlow = () => {
-    setConfirmDelete(false);
-    setConfirmDeleteFinal(false);
-    setDeleteConfirmText('');
-  };
-
-  const handleDelete = () => {
-    if (!project_id) return;
-    removeProject(project_id).then(success => {
-      if (success) navigate('/');
-    });
-    closeDeleteFlow();
-  };
-
   const navItems: AsideItem[] = [
     { icon: <UserCircle className="h-4 w-4" />, label: 'Identity', onClick: () => navigate(`/projects/${project_id}/settings/identity/`), active: section === 'identity' },
     { icon: <Info className="h-4 w-4" />, label: 'Info', onClick: () => navigate(`/projects/${project_id}/settings/info/`), active: section === 'info' },
@@ -95,10 +87,29 @@ export const ProjectSettingsPage = () => {
           <Box className="settings-section">
             <Box className="settings-section-header">
               <Typography variant="subtitle1" fontWeight={700}>Project Info</Typography>
-              <Typography variant="body2" color="text.secondary">Read-only details about this project</Typography>
+              <Typography variant="body2" color="text.secondary">Identifiers and metadata for this project</Typography>
             </Box>
             <Box className="settings-section-body">
-              <TextField label="Project ID" value={project._id} fullWidth disabled slotProps={{ inputLabel: { shrink: true } }} />
+              <TextField
+                label="Project ID"
+                value={project._id}
+                fullWidth
+                disabled
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Tooltip title={idCopied ? 'Copied!' : 'Copy project ID'}>
+                          <IconButton size="small" onClick={copyProjectId}>
+                            <Copy className="h-3.5 w-3.5" />
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
               <TextField label="Created" value={formatDate(project.created_at)} fullWidth disabled slotProps={{ inputLabel: { shrink: true } }} />
               <TextField label="Last updated" value={formatDate(project.updated_at)} fullWidth disabled slotProps={{ inputLabel: { shrink: true } }} />
               <TextField label="Workspaces" value={workspaces.length} fullWidth disabled slotProps={{ inputLabel: { shrink: true } }} />
@@ -124,7 +135,7 @@ export const ProjectSettingsPage = () => {
                     Creates an independent copy with the same schema, collections, workspaces, and documents.
                   </Typography>
                 </Box>
-                <Button variant="secondary" className="border-current" onClick={handleDuplicate} disabled={duplicating}>
+                <Button variant="secondary" onClick={handleDuplicate} disabled={duplicating}>
                   {duplicating ? 'Duplicating…' : 'Duplicate Project'}
                 </Button>
               </Box>
@@ -160,7 +171,7 @@ export const ProjectSettingsPage = () => {
               <TextField label="Name" value={name} onChange={e => setName(e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
               <TextField label="Description" value={description} onChange={e => setDescription(e.target.value)} fullWidth multiline rows={3} slotProps={{ inputLabel: { shrink: true } }} />
               <Box className="settings-actions">
-                <Button variant="default" className="border-current" onClick={handleSave} disabled={!name.trim() || !dirty}>
+                <Button variant="default" onClick={handleSave} disabled={!name.trim() || !dirty}>
                   Save Changes
                 </Button>
               </Box>
@@ -181,41 +192,13 @@ export const ProjectSettingsPage = () => {
         {renderContent()}
       </Box>
 
-      {/* First delete confirmation */}
-      <Dialog open={confirmDelete} onClose={closeDeleteFlow} fullWidth maxWidth="xs">
-        <DialogTitle>Delete project?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            &ldquo;{project.name}&rdquo; and all of its workspaces, schema, collections, and documents will be permanently deleted. This cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="secondary" className="border-current" onClick={closeDeleteFlow}>Cancel</Button>
-          <Button variant="destructive" onClick={() => { setConfirmDelete(false); setConfirmDeleteFinal(true); }}>Continue</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Second, typed confirmation */}
-      <Dialog open={confirmDeleteFinal} onClose={closeDeleteFlow} fullWidth maxWidth="xs">
-        <DialogTitle>Are you absolutely sure?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Type <strong>{project.name}</strong> to confirm you want to permanently delete this project.
-          </Typography>
-          <TextField
-            fullWidth size="small" autoFocus
-            value={deleteConfirmText}
-            onChange={e => setDeleteConfirmText(e.target.value)}
-            placeholder={project.name}
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="secondary" className="border-current" onClick={closeDeleteFlow}>Cancel</Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={deleteConfirmText !== project.name}>
-            Delete Permanently
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <DeleteProjectDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        projectName={project.name}
+        removeProject={() => removeProject(project_id ?? '')}
+        onDeleted={() => navigate('/')}
+      />
     </Box>
   );
 };

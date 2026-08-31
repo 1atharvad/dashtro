@@ -7,7 +7,7 @@ import { Box } from '@mui/material';
 import { SchemaComponent } from "@ts/components/SchemaComponent";
 import { CollectionComponent } from '@ts/components/CollectionComponent';
 import { LinkDrawer } from '@ts/components/LinkDrawer';
-import { ManageFoldersModal } from '@ts/components/ManageFoldersModal';
+import { ManageFoldersModal } from '@ts/components/dialogs/ManageFoldersModal';
 import { ProjectSwitcher } from '@ts/components/ProjectSwitcher';
 
 import { useSchemaMetaData } from "@/hooks/useSchemaMetaData";

@@ -5,7 +5,7 @@ import { Plus as AddIcon } from 'lucide-react';
 import { Loading } from 'advi-ui';
 import { CollectionEntry } from '@ts/components/CollectionEntry';
 import { PageForm } from '@ts/components/PageForm';
-import { ModalContentBtn } from '@ts/components/ModalContentBtn';
+import { ModalContentBtn } from '@ts/components/dialogs/ModalContentBtn';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSchemaMetaData } from '@/hooks/useSchemaMetaData';
 import { useCollectionData } from '@/hooks/useCollection';
@@ -54,7 +54,7 @@ const NewSchemaModalBtn = () => {
 
   return (
     <ModalContentBtn id="new-schema" modalTitle="Create New Schema" modalBtn={(handleClick) => (
-      <Button variant="secondary" onClick={handleClick} className="border-current">
+      <Button variant="secondary" onClick={handleClick}>
         Add new Schema
       </Button>
     )} closeModal={closeModal}>
@@ -85,7 +85,7 @@ const NewSchemaModalBtn = () => {
           ))}
         </TextField>
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Button variant="default" type="submit" className="border-current">
+          <Button variant="default" type="submit">
             <AddIcon className="h-4 w-4" /> Save
           </Button>
         </Box>

@@ -73,7 +73,7 @@ export const SettingsSecurity = () => {
             slotProps={{ inputLabel: { shrink: true } }}
           />
           <Box>
-            <Button type="submit" variant="default" className="border-current" disabled={!current || !next || !confirm || !!mismatch || !!weak}>
+            <Button type="submit" variant="default" disabled={!current || !next || !confirm || !!mismatch || !!weak}>
               Update Password
             </Button>
           </Box>

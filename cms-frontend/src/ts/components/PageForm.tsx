@@ -76,7 +76,7 @@ export const PageForm = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {extraButtons && extraButtons.map((btn, index) => <Box key={`button-${index}`}>{btn}</Box>)}
           {!readOnly && (
-            <Button type="submit" variant="default" onClick={handleValidation} className="border-current">
+            <Button type="submit" variant="default" onClick={handleValidation}>
               {submitBtnText}
             </Button>
           )}
@@ -99,10 +99,10 @@ export const PageWrapper = ({
 }) => {
   return (
     <Box className='collection-component'>
-      <Grid container columnSpacing={2} className="document-component-title-bar">
-        <Grid container spacing={0} className="document-component-title-wrapper">
+      <Grid container columnSpacing={2} className="collection-component-title-bar">
+        <Grid container spacing={0} className="collection-component-title-wrapper">
           <Grid>
-            <Typography component="h2" noWrap className="document-component-title">
+            <Typography component="h2" noWrap className="collection-component-title">
               {wrapperTitle}
             </Typography>
           </Grid>

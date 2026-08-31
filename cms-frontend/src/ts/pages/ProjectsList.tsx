@@ -46,7 +46,7 @@ export const ProjectsList = () => {
               Select a project to manage its content and workspaces.
             </Typography>
           </Box>
-          <Button variant="default" onClick={() => setCreating(true)} className="border-current">
+          <Button variant="default" onClick={() => setCreating(true)}>
             <AddIcon className="h-4 w-4" /> New Project
           </Button>
         </Box>
@@ -76,8 +76,8 @@ export const ProjectsList = () => {
             />
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-            <Button variant="secondary" className="border-current" onClick={handleCancel}>Cancel</Button>
-            <Button variant="default" className="border-current" onClick={handleCreate} disabled={!name.trim()}>Create</Button>
+            <Button variant="secondary" onClick={handleCancel}>Cancel</Button>
+            <Button variant="default" onClick={handleCreate} disabled={!name.trim()}>Create</Button>
           </DialogActions>
         </Dialog>
 

@@ -1,16 +1,18 @@
-import React, {FormEvent, useEffect, useMemo, useRef, useState} from 'react';
+import React, {FormEvent, useEffect, useMemo, useState} from 'react';
 import {
-  Box, Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, Fab, IconButton, InputBase, ListItemIcon, Menu, MenuItem,
-  Popover, Tooltip, Typography,
+  Box, Divider, Fab,
 } from "@mui/material";
 import { Button, toast } from 'advi-ui';
-import { Plus, X, FolderOpen, GripVertical, MoreHorizontal, Trash2, Lock, Unlock, Download, Upload } from 'lucide-react';
+import { Plus, X, FolderOpen, GripVertical, Upload } from 'lucide-react';
 import { Badge } from 'advi-ui';
 import { Loading } from 'advi-ui';
 import { SchemaEntry } from "@ts/components/SchemaEntry";
 import type { SchemaVariablesSchema, NewSchemaFieldInput, SchemaEntryData } from '@ts/types/constants';
 import { PageForm } from '@ts/components/PageForm';
+import { FolderPickerPopover } from '@ts/components/FolderPickerPopover';
+import { SchemaActionsMenu } from '@ts/components/SchemaActionsMenu';
+import { ImportSchemaDialog, type ImportedSchemaFile } from '@ts/components/dialogs/ImportSchemaDialog';
+import { DeleteSchemaDialog } from '@ts/components/dialogs/DeleteSchemaDialog';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSchemaMetaData } from '@/hooks/useSchemaMetaData';
 import { useSchemaData } from '@/hooks/useSchema';
@@ -79,8 +81,6 @@ export const SchemaComponent = ({
   const { categories, addCategory, getCategoryForSchema, getGeneralSchemas, getSchemasInCategory, assignSchemaCategory } = useCategory(project_id);
   const [schemaStructure, setSchemaStructure] = useState<SchemaVariablesSchema>({});
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
-  const [folderFilter, setFolderFilter] = useState('');
-  const filterInputRef = useRef<HTMLInputElement>(null);
 
   const handleAssignCategory = (schemaName: string, categoryId: string) =>
     assignSchemaCategory(schemaName, categoryId).catch(err => {
@@ -112,18 +112,14 @@ export const SchemaComponent = ({
   const [updatedSchemaDetails, setUpdatedSchemaDetails] = useState<Record<string, NewSchemaFieldInput>>({});
   const [openedPanel, setOpenedPanel] = useState<string[]>([]);
   const [deleteSchemaOpen, setDeleteSchemaOpen] = useState(false);
-  const [actionsAnchor, setActionsAnchor] = useState<null | HTMLElement>(null);
   const [importOpen, setImportOpen] = useState(false);
-  const [importFiles, setImportFiles] = useState<File[]>([]);
-  const [importError, setImportError] = useState('');
-  const importFileRef = useRef<HTMLInputElement>(null);
   const lockKey = `schema_locked_${project_id}_${componentName}`;
   const [isLocked, setIsLocked] = useState(false);
 
   useEffect(() => {
     setIsLocked(localStorage.getItem(lockKey) === 'true');
   }, [lockKey]);
-  const {schemaNameData, updateSchemaData, addSchemaData, deleteSchemaData} = useSchemaData(project_id, componentName);
+  const {schemaNameData, updateSchemaData, addSchemaData, deleteSchemaData} = useSchemaData(project_id, componentName, newSchema);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -215,76 +211,38 @@ export const SchemaComponent = ({
     setFolderMenuAnchor(null);
   };
 
-  const handleDeleteSchema = () => {
-    schema.forEach(entry => deleteSchemaData(String(entry['_id'])));
-    removeSchemaName(componentName);
-    setDeleteSchemaOpen(false);
-    navigate(`/projects/${project_id}/schema/`);
-  };
-
   const handleToggleLock = () => {
     const next = !isLocked;
     setIsLocked(next);
     localStorage.setItem(lockKey, String(next));
-    setActionsAnchor(null);
   };
 
-  const handleImport = async () => {
-    setImportError('');
-    if (!importFiles.length) { setImportError('Please select at least one JSON file.'); return; }
+  const handleImport = async (importedFiles: ImportedSchemaFile[]) => {
+    let lastFolderName: string | undefined;
 
-    const readFile = (file: File): Promise<string> =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target?.result as string);
-        reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-        reader.readAsText(file);
+    for (const file of importedFiles) {
+      lastFolderName = file.folderName ?? lastFolderName;
+      // compute _index inside the updater so concurrent imports don't collide
+      setNewSchemaEntry(prev => {
+        const startIndex = schema.length + prev.length;
+        const newEntries = file.fields.map((field, i: number) => ({
+          ...emptySchemaEntry,
+          ...field,
+          _schema_name: componentName,
+          _index: startIndex + i + 1,
+        }));
+        return [...prev, ...newEntries];
       });
+    }
 
-    try {
-      let lastFolderName: string | undefined;
-
-      for (const file of importFiles) {
-        const text = await readFile(file);
-        const parsed = JSON.parse(text);
-        let fields: Record<string, unknown>[];
-
-        if (Array.isArray(parsed)) {
-          fields = parsed;
-        } else if (parsed && Array.isArray(parsed.fields)) {
-          fields = parsed.fields;
-          lastFolderName = parsed._folder || lastFolderName;
-        } else {
-          throw new Error(`${file.name}: expected a JSON array or an object with a "fields" array.`);
-        }
-
-        // compute _index inside the updater so concurrent reads don't collide
-        setNewSchemaEntry(prev => {
-          const startIndex = schema.length + prev.length;
-          const newEntries = fields.map((field, i: number) => ({
-            ...emptySchemaEntry,
-            ...field,
-            _schema_name: componentName,
-            _index: startIndex + i + 1,
-          }));
-          return [...prev, ...newEntries];
-        });
+    if (lastFolderName) {
+      const existing = categories.find(c => c.name === lastFolderName);
+      if (existing) {
+        handleAssignCategory(componentName, existing.id);
+      } else {
+        const result = await addCategory(lastFolderName);
+        if (result?.id) handleAssignCategory(componentName, result.id);
       }
-
-      if (lastFolderName) {
-        const existing = categories.find(c => c.name === lastFolderName);
-        if (existing) {
-          handleAssignCategory(componentName, existing.id);
-        } else {
-          const result = await addCategory(lastFolderName);
-          if (result?.id) handleAssignCategory(componentName, result.id);
-        }
-      }
-
-      setImportFiles([]);
-      setImportOpen(false);
-    } catch (err) {
-      setImportError(err instanceof Error ? err.message : 'Invalid JSON');
     }
   };
 
@@ -302,9 +260,7 @@ export const SchemaComponent = ({
     a.download = `${componentName}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    setActionsAnchor(null);
   };
-
 
   const folderBadge = currentCategoryId ? (
     <Badge variant="secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'default' }}>
@@ -319,7 +275,7 @@ export const SchemaComponent = ({
   ) : (
     <Badge
       variant="outline"
-      onClick={(e: React.MouseEvent<HTMLSpanElement>) => { setFolderMenuAnchor(e.currentTarget as HTMLElement); setFolderFilter(''); }}
+      onClick={(e: React.MouseEvent<HTMLSpanElement>) => setFolderMenuAnchor(e.currentTarget as HTMLElement)}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: '1px dashed', opacity: 0.7 }}
     >
       <Plus className="h-3 w-3" />
@@ -330,52 +286,12 @@ export const SchemaComponent = ({
   return (
     <>
       {/* Popover lives here so its anchor ref stays stable across FolderBadge re-renders */}
-      <Popover
-        open={Boolean(folderMenuAnchor)}
+      <FolderPickerPopover
         anchorEl={folderMenuAnchor}
         onClose={closeFolderMenu}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-        slotProps={{
-          paper: { sx: { width: 200, mt: 0.5, borderRadius: 1.5 } },
-          transition: { onEntered: () => filterInputRef.current?.focus() },
-        }}
-      >
-        <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-          <InputBase
-            inputRef={filterInputRef}
-            fullWidth
-            placeholder="Search folders…"
-            value={folderFilter}
-            onChange={e => setFolderFilter(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Escape') closeFolderMenu(); }}
-            sx={{ fontSize: 13 }}
-          />
-        </Box>
-        <Box sx={{ maxHeight: 200, overflowY: 'auto', py: 0.5 }}>
-          {categories.filter(c => c.name.toLowerCase().includes(folderFilter.toLowerCase())).length === 0 ? (
-            <Typography sx={{ display: 'block', px: 1.5, py: 1, fontSize: 13, color: 'text.secondary' }}>
-              {categories.length === 0 ? 'No folders yet' : 'No match'}
-            </Typography>
-          ) : categories
-              .filter(c => c.name.toLowerCase().includes(folderFilter.toLowerCase()))
-              .map(cat => (
-                <Box
-                  key={cat.id}
-                  onClick={() => { handleAssignCategory(componentName, cat.id); closeFolderMenu(); }}
-                  sx={{
-                    display: 'flex', alignItems: 'center', gap: 1,
-                    px: 1.5, py: 0.75, cursor: 'pointer',
-                    '&:hover': { bgcolor: 'action.hover' },
-                  }}
-                >
-                  <FolderOpen className="h-3.5 w-3.5" style={{ opacity: 0.45 }} />
-                  <Typography sx={{ fontSize: 13 }}>{cat.name}</Typography>
-                </Box>
-              ))
-          }
-        </Box>
-      </Popover>
+        categories={categories}
+        onSelect={(categoryId) => handleAssignCategory(componentName, categoryId)}
+      />
 
       {(schema && schema.length > 0) || newSchema ? (
         <PageForm
@@ -391,45 +307,13 @@ export const SchemaComponent = ({
                 <Upload className="h-4 w-4" /> Import from JSON
               </Button>
             ] : [
-              <Box key="actions">
-                <Tooltip title="Actions">
-                  <IconButton size="small" onClick={e => setActionsAnchor(e.currentTarget)}>
-                    <MoreHorizontal className="h-4 w-4" />
-                  </IconButton>
-                </Tooltip>
-                <Menu
-                  anchorEl={actionsAnchor}
-                  open={Boolean(actionsAnchor)}
-                  onClose={() => setActionsAnchor(null)}
-                  anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                  transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                  slotProps={{ paper: { sx: { width: 200, mt: 0.5, borderRadius: 1.5 } } }}
-                >
-                  <MenuItem onClick={handleToggleLock} sx={{ fontSize: 13 }}>
-                    <ListItemIcon>
-                      {isLocked
-                        ? <Unlock className="h-4 w-4" />
-                        : <Lock className="h-4 w-4" />
-                      }
-                    </ListItemIcon>
-                    {isLocked ? 'Unlock Schema' : 'Lock Schema'}
-                  </MenuItem>
-                  <MenuItem onClick={handleDownload} sx={{ fontSize: 13 }}>
-                    <ListItemIcon><Download className="h-4 w-4" /></ListItemIcon>
-                    Download Schema
-                  </MenuItem>
-                  <Divider />
-                  <MenuItem
-                    onClick={() => { setActionsAnchor(null); setDeleteSchemaOpen(true); }}
-                    sx={{ color: 'error.main', fontSize: 13 }}
-                  >
-                    <ListItemIcon sx={{ color: 'error.main' }}>
-                      <Trash2 className="h-4 w-4" />
-                    </ListItemIcon>
-                    Delete Schema
-                  </MenuItem>
-                </Menu>
-              </Box>
+              <SchemaActionsMenu
+                key="actions"
+                isLocked={isLocked}
+                onToggleLock={handleToggleLock}
+                onDownload={handleDownload}
+                onDelete={() => setDeleteSchemaOpen(true)}
+              />
             ]}>
           <Box>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -512,76 +396,21 @@ export const SchemaComponent = ({
         </Box>
       )}
 
-      <Dialog
+      <ImportSchemaDialog
         open={importOpen}
-        onClose={() => { setImportOpen(false); setImportFiles([]); setImportError(''); }}
-        fullWidth maxWidth="sm"
-      >
-        <DialogTitle>Import Schema from JSON</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select one or more <code>.json</code> files. Use <strong>Download Schema</strong> to get the correct format.
-          </Typography>
-          <input
-            ref={importFileRef}
-            type="file"
-            accept=".json,application/json"
-            multiple
-            style={{ display: 'none' }}
-            onChange={e => {
-              setImportFiles(Array.from(e.target.files ?? []));
-              setImportError('');
-            }}
-          />
-          <Box
-            onClick={() => importFileRef.current?.click()}
-            sx={{
-              border: '2px dashed',
-              borderColor: importError ? 'error.main' : 'divider',
-              borderRadius: 2,
-              px: 3, py: 4,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
-              cursor: 'pointer',
-              '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-            }}
-          >
-            <Upload className="h-6 w-6" style={{ opacity: 0.5 }} />
-            {importFiles.length > 0 ? (
-              <Box sx={{ textAlign: 'center' }}>
-                {importFiles.map(f => (
-                  <Typography key={f.name} variant="body2" fontWeight={500}>{f.name}</Typography>
-                ))}
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary">Click to select JSON file(s)</Typography>
-            )}
-          </Box>
-          {importError && (
-            <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>{importError}</Typography>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="secondary" onClick={() => { setImportOpen(false); setImportFiles([]); setImportError(''); }}>
-            Cancel
-          </Button>
-          <Button variant="default" onClick={handleImport} disabled={!importFiles.length}>
-            Import
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onClose={() => setImportOpen(false)}
+        onImport={handleImport}
+      />
 
-      <Dialog open={deleteSchemaOpen} onClose={() => setDeleteSchemaOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Delete schema?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            This will permanently delete the <strong>{componentName}</strong> schema and all its fields. This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="secondary" onClick={() => setDeleteSchemaOpen(false)}>Cancel</Button>
-          <Button variant="destructive" onClick={handleDeleteSchema}>Delete Schema</Button>
-        </DialogActions>
-      </Dialog>
+      <DeleteSchemaDialog
+        open={deleteSchemaOpen}
+        onClose={() => setDeleteSchemaOpen(false)}
+        schemaName={componentName}
+        fieldIds={schema.map(entry => String(entry['_id']))}
+        deleteSchemaData={deleteSchemaData}
+        removeSchemaName={removeSchemaName}
+        onDeleted={() => navigate(`/projects/${project_id}/schema/`)}
+      />
     </>
   )
 }

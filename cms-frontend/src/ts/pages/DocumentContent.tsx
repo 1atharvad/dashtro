@@ -1,12 +1,10 @@
-import React, { FormEvent, useEffect, useRef, useState, useCallback } from 'react';
+import React, { Dispatch, FormEvent, SetStateAction, useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  Box, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  Drawer, IconButton, List, ListItem, ListItemButton,
-  Skeleton, Tooltip, Typography, useTheme,
+  Box, Chip, IconButton, Tooltip, Typography, useTheme,
 } from '@mui/material';
-import { Button, Menu as AdviMenu } from 'advi-ui';
-import { CloudDownload, CloudUpload, Download, History, MoreVertical, Trash2, Upload, X } from 'lucide-react';
+import { Button } from 'advi-ui';
+import { Download, Upload } from 'lucide-react';
 import '@/scss/DocCollection.scss';
 import { useCollectionData } from '@/hooks/useCollection';
 import { useSchemaData } from '@/hooks/useSchema';
@@ -16,6 +14,12 @@ import { DocumentEntry } from '@ts/components/DocumentEntry';
 import { useDocumentData } from '@/hooks/useDocument';
 import { Link } from '@ts/components/Link';
 import { AppHeader } from '@ts/components/AppHeader';
+import { VersionHistoryDrawer } from '@ts/components/VersionHistoryDrawer';
+import { DocumentActionsMenu } from '@ts/components/DocumentActionsMenu';
+import { DocumentSkeleton } from '@ts/components/skeletons/DocumentSkeleton';
+import { ImportDocumentDialog } from '@ts/components/dialogs/ImportDocumentDialog';
+import { DeleteDocumentDialog } from '@ts/components/dialogs/DeleteDocumentDialog';
+import { SyncConfirmDialog } from '@ts/components/dialogs/SyncConfirmDialog';
 import type { SchemaFieldItem, DocumentData, WorkspaceDiff } from '@ts/types/constants';
 
 const PageNavigation = ({
@@ -46,8 +50,6 @@ export const DocumentContent = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [syncConfirm, setSyncConfirm] = useState<'push' | 'pull' | null>(null);
   const [importDocOpen, setImportDocOpen] = useState(false);
-  const [importDocError, setImportDocError] = useState('');
-  const importDocFileRef = useRef<HTMLInputElement>(null);
 
   const { collections } = useCollectionData(project_id ?? '');
   const schemaName = collections.reduce((prev, curr) =>
@@ -208,21 +210,6 @@ export const DocumentContent = () => {
     }
   };
 
-  const handleRestore = async (versionId: string) => {
-    if (!document_id) return;
-    await restoreVersion(document_id, versionId);
-    // Reload page data after restore
-    setHistoryOpen(false);
-  };
-
-  const formatDate = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleString(undefined, {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-      });
-    } catch { return iso; }
-  };
-
   const statusBadge = ((!isNew && !isProduction) || (isProduction && currentDoc)) && currentStatus ? (
     <Tooltip title={currentStatus === 'published' ? 'Matches production' : 'Differs from production'}>
       <Chip
@@ -235,51 +222,14 @@ export const DocumentContent = () => {
   ) : null;
 
   const actionsButton = !isNew && !isProduction ? (
-    <AdviMenu
-      align="end"
-      contentClassName="cms-actions-menu"
-      trigger={
-        <IconButton size="small">
-          <MoreVertical className="h-4 w-4" />
-        </IconButton>
-      }
-      items={[
-        {
-          value: 'push',
-          label: outOfSync ? 'Push to production' : 'Already matches production',
-          icon: <CloudUpload className="h-4 w-4" />,
-          disabled: !outOfSync,
-          onSelect: () => setSyncConfirm('push'),
-        },
-        {
-          value: 'pull',
-          label: notInProduction ? 'Not in production yet' : 'Pull from production',
-          icon: <CloudDownload className="h-4 w-4" />,
-          disabled: notInProduction || !outOfSync,
-          onSelect: () => setSyncConfirm('pull'),
-        },
-        { type: 'separator', value: 'sep-1' },
-        {
-          value: 'history',
-          label: 'Version history',
-          icon: <History className="h-4 w-4" />,
-          onSelect: handleOpenHistory,
-        },
-        {
-          value: 'download',
-          label: 'Download',
-          icon: <Download className="h-4 w-4" />,
-          onSelect: () => handleExportDocument(),
-        },
-        { type: 'separator', value: 'sep-2' },
-        {
-          value: 'delete',
-          label: 'Delete document',
-          icon: <Trash2 className="h-4 w-4" />,
-          destructive: true,
-          onSelect: () => setDeleteOpen(true),
-        },
-      ]}
+    <DocumentActionsMenu
+      outOfSync={outOfSync}
+      notInProduction={notInProduction}
+      onPush={() => setSyncConfirm('push')}
+      onPull={() => setSyncConfirm('pull')}
+      onOpenHistory={handleOpenHistory}
+      onDownload={() => handleExportDocument()}
+      onDelete={() => setDeleteOpen(true)}
     />
   ) : null;
 
@@ -292,25 +242,16 @@ export const DocumentContent = () => {
     </Tooltip>
   ) : null;
 
-  const handleSyncConfirm = () => {
-    if (!document_id) return;
-    const pulling = syncConfirm === 'pull';
-    const action = pulling ? pullDocumentData(document_id) : pushDocumentData(document_id);
-    action.then(() => {
-      if (pulling) {
-        // Let the document-load effect re-read the pulled content from redux
-        loadedDocumentIdRef.current = null;
-        setUpdatedDocumentDetails({});
-      }
-      refreshDiff();
-    }).catch(() => undefined);
-    setSyncConfirm(null);
+  const handleDocumentSynced = (pulling: boolean) => {
+    if (pulling) {
+      // Let the document-load effect re-read the pulled content from redux
+      loadedDocumentIdRef.current = null;
+      setUpdatedDocumentDetails({});
+    }
+    refreshDiff();
   };
 
-  const handleDelete = () => {
-    if (!document_id) return;
-    deleteDocumentData(document_id);
-    setDeleteOpen(false);
+  const handleDocumentDeleted = () => {
     navigate(`/projects/${project_id}/workspace/${workspace_name}/collection/${collection_name}/`);
   };
 
@@ -332,34 +273,35 @@ export const DocumentContent = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleImportDocument = (file: File) => {
-    setImportDocError('');
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const parsed = JSON.parse(e.target?.result as string);
-        if (typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Expected a JSON object.');
-        const schemaFieldNames = new Set(schema.map((f) => f._name));
-        setEmptyDocumentData(prev => {
-          const merged = { ...prev };
-          for (const [key, val] of Object.entries(parsed)) {
-            if (schemaFieldNames.has(key)) merged[key] = val;
-          }
-          return merged;
-        });
-        setImportDocOpen(false);
-      } catch (err) {
-        setImportDocError(err instanceof Error ? err.message : 'Invalid JSON');
-      }
-    };
-    reader.readAsText(file);
-  };
-
   const importDocButton = isNew && !isProduction ? (
     <Button key="import-doc" variant="secondary" onClick={() => setImportDocOpen(true)}>
       <Upload className="h-4 w-4" /> Import from JSON
     </Button>
   ) : null;
+
+  // For a new document, edits write straight into emptyDocumentData. For an
+  // existing one, edits go through documentData and also accumulate a diff
+  // (updatedDocumentDetails) so handleSubmit only PATCHes changed fields.
+  const getVariableEntryState = (): [DocumentData, Dispatch<SetStateAction<DocumentData>>] =>
+    isNew
+      ? [emptyDocumentData, (updOrFn) => {
+          const v = typeof updOrFn === 'function' ? updOrFn(emptyDocumentData) : updOrFn;
+          setEmptyDocumentData(v);
+          return v;
+        }]
+      : [documentData, (updOrFn) => {
+          setDocumentData(prev => {
+            const v = typeof updOrFn === 'function' ? updOrFn(prev) : updOrFn;
+            const changed = Object.keys(prev).reduce((acc: DocumentData, key) => {
+              const val = v[key];
+              if (prev[key] !== val) acc[key] = val;
+              return acc;
+            }, {});
+            setUpdatedDocumentDetails(upd => ({ ...upd, ...changed }));
+            return v;
+          });
+          return updOrFn;
+        }];
 
   return (
     <>
@@ -392,27 +334,7 @@ export const DocumentContent = () => {
                           id={`variable-${entry['_index']}`}
                           variableSchema={entry}
                           readOnly={isProduction}
-                          variableEntryState={
-                            isNew
-                              ? [emptyDocumentData, (updOrFn) => {
-                                  const v = typeof updOrFn === 'function' ? updOrFn(emptyDocumentData) : updOrFn;
-                                  setEmptyDocumentData(v);
-                                  return v;
-                                }]
-                              : [documentData, (updOrFn) => {
-                                  setDocumentData(prev => {
-                                    const v = typeof updOrFn === 'function' ? updOrFn(prev) : updOrFn;
-                                    const changed = Object.keys(prev).reduce((acc: DocumentData, key) => {
-                                      const val = v[key];
-                                      if (prev[key] !== val) acc[key] = val;
-                                      return acc;
-                                    }, {});
-                                    setUpdatedDocumentDetails(upd => ({ ...upd, ...changed }));
-                                    return v;
-                                  });
-                                  return updOrFn;
-                                }]
-                          }
+                          variableEntryState={getVariableEntryState()}
                           schemaDetails={schemaDetails}
                           onImmediateSave={!isNew ? onImmediateSave : undefined}
                         />
@@ -423,37 +345,7 @@ export const DocumentContent = () => {
               </PageForm>
           </Box>
         ) : (
-          <Box className="document" sx={{ paddingTop: '72px' }}>
-            <Box className="document-component">
-              {/* Title bar — mirrors .document-component-title-bar padding (12px 24px) */}
-              <Box className="document-component-title-bar" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Skeleton width={110} height={13} sx={{ mb: 0.5 }} />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Skeleton width={220} height={26} />
-                    <Skeleton variant="rounded" width={64} height={22} />
-                  </Box>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <Skeleton variant="circular" width={30} height={30} />
-                  <Skeleton variant="circular" width={30} height={30} />
-                  <Skeleton variant="circular" width={30} height={30} />
-                  <Skeleton variant="rounded" width={108} height={36} />
-                </Box>
-              </Box>
-              {/* Fields card — mirrors .document-fields structure */}
-              <Box className="document-body">
-                <Box className="document-fields">
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <Box key={i} className="document-field-row">
-                      <Skeleton width={130} height={13} sx={{ mb: 0.75 }} />
-                      <Skeleton variant="rectangular" height={40} sx={{ borderRadius: '4px' }} />
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-            </Box>
-          </Box>
+          <DocumentSkeleton />
         )
       ) : (
         <Box className="document-error">
@@ -461,130 +353,40 @@ export const DocumentContent = () => {
         </Box>
       )}
 
-      {/* Version history drawer */}
-      <Drawer anchor="right" open={historyOpen} onClose={() => setHistoryOpen(false)}
-        PaperProps={{ sx: { width: 320, p: 0 } }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.5, py: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="subtitle1" fontWeight={700}>Version History</Typography>
-          <IconButton size="small" onClick={() => setHistoryOpen(false)}>
-            <X className="h-4 w-4" />
-          </IconButton>
-        </Box>
+      <VersionHistoryDrawer
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        versions={versions}
+        documentId={document_id}
+        restoreVersion={restoreVersion}
+      />
 
-        {versions.length === 0 ? (
-          <Box sx={{ px: 2.5, py: 3 }}>
-            <Typography variant="body2" color="text.secondary">No versions saved yet. Versions are created each time you save.</Typography>
-          </Box>
-        ) : (
-          <List disablePadding>
-            {versions.map((v, i) => (
-              <ListItem key={v.id} disablePadding divider>
-                <ListItemButton
-                  onClick={() => handleRestore(v.id)}
-                  disabled={i === 0}
-                  sx={{ px: 2.5, py: 1.5, flexDirection: 'column', alignItems: 'flex-start' }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <Typography variant="body2" fontWeight={600}>
-                      {i === 0 ? 'Current version' : `Version ${v.version_number}`}
-                    </Typography>
-                    {i !== 0 && (
-                      <Typography variant="caption" color="primary" sx={{ fontWeight: 600 }}>
-                        Restore
-                      </Typography>
-                    )}
-                  </Box>
-                  <Typography variant="caption" color="text.secondary">{formatDate(v.created_at)}</Typography>
-                  {v.created_by_email && (
-                    <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: '100%' }}>
-                      {v.created_by_email}
-                    </Typography>
-                  )}
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-        )}
-      </Drawer>
+      <ImportDocumentDialog
+        open={importDocOpen}
+        onClose={() => setImportDocOpen(false)}
+        schemaFieldNames={schema.map((f) => f._name)}
+        onImport={(data) => setEmptyDocumentData(prev => ({ ...prev, ...data }))}
+      />
 
-      {/* Import document */}
-      <Dialog open={importDocOpen} onClose={() => { setImportDocOpen(false); setImportDocError(''); }} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
-          Import Document from JSON
-          <IconButton size="small" onClick={() => { setImportDocOpen(false); setImportDocError(''); }}>
-            <X className="h-4 w-4" />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select a <code>.json</code> file exported from another document. Only fields matching this document's schema will be imported.
-          </Typography>
-          <input
-            ref={importDocFileRef}
-            type="file"
-            accept=".json,application/json"
-            style={{ display: 'none' }}
-            onChange={e => {
-              const file = e.target.files?.[0];
-              if (file) handleImportDocument(file);
-            }}
-          />
-          <Box
-            onClick={() => importDocFileRef.current?.click()}
-            sx={{
-              border: '2px dashed',
-              borderColor: importDocError ? 'error.main' : 'divider',
-              borderRadius: 2, px: 3, py: 4, cursor: 'pointer', textAlign: 'center',
-              '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-            }}
-          >
-            <Upload className="h-6 w-6" style={{ opacity: 0.4, margin: '0 auto 8px' }} />
-            <Typography variant="body2" color="text.secondary">Click to select a JSON file</Typography>
-          </Box>
-          {importDocError && <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>{importDocError}</Typography>}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button variant="secondary" onClick={() => { setImportDocOpen(false); setImportDocError(''); }}>Cancel</Button>
-        </DialogActions>
-      </Dialog>
+      <DeleteDocumentDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        documentLabel={getDocumentId(document_id ?? '')}
+        documentId={document_id}
+        deleteDocumentData={deleteDocumentData}
+        onDeleted={handleDocumentDeleted}
+      />
 
-      {/* Delete confirmation */}
-      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Delete document?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            This will permanently delete <strong>{getDocumentId(document_id ?? '')}</strong>. This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="secondary" onClick={() => setDeleteOpen(false)}>Cancel</Button>
-          <Button variant="destructive" onClick={handleDelete}>Delete</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Scoped push/pull confirmation */}
-      <Dialog open={!!syncConfirm} onClose={() => setSyncConfirm(null)} fullWidth maxWidth="xs">
-        <DialogTitle>
-          {syncConfirm === 'push' ? 'Push document to production?' : 'Pull document from production?'}
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            {syncConfirm === 'push' ? (
-              modifiedEntry
-                ? <>Production&rsquo;s copy of <strong>{getDocumentId(document_id ?? '')}</strong> will be replaced (changed fields: {modifiedEntry.changed_fields.join(', ')}).</>
-                : <><strong>{getDocumentId(document_id ?? '')}</strong> will be added to production.</>
-            ) : (
-              <>Your workspace&rsquo;s copy of <strong>{getDocumentId(document_id ?? '')}</strong> will be overwritten with production&rsquo;s version{modifiedEntry ? <> (changed fields: {modifiedEntry.changed_fields.join(', ')})</> : null}.</>
-            )}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="secondary" onClick={() => setSyncConfirm(null)}>Cancel</Button>
-          <Button variant="default" className="border-current" onClick={handleSyncConfirm}>
-            {syncConfirm === 'push' ? 'Push' : 'Pull'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <SyncConfirmDialog
+        mode={syncConfirm}
+        onClose={() => setSyncConfirm(null)}
+        documentLabel={getDocumentId(document_id ?? '')}
+        changedFields={modifiedEntry?.changed_fields}
+        documentId={document_id}
+        pullDocumentData={pullDocumentData}
+        pushDocumentData={pushDocumentData}
+        onSynced={handleDocumentSynced}
+      />
     </>
   );
 };

@@ -88,7 +88,7 @@ export const Login = () => {
             size="small"
             autoComplete="current-password"
           />
-          <Button type="submit" variant="default" disabled={loading} className="w-full justify-center mt-1 border-current">
+          <Button type="submit" variant="default" disabled={loading} className="w-full justify-center mt-1">
             {loading ? "Signing in…" : "Sign in"}
           </Button>
           {!ownerExists && (

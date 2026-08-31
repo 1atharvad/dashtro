@@ -1,9 +1,8 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Box, TextField, Typography } from '@mui/material';
 import { Trash2 } from 'lucide-react';
 import { Button, toast } from 'advi-ui';
-import MonacoEditor from '@monaco-editor/react';
 import { LiveProvider, LivePreview, LiveError } from 'react-live';
 import {
   useRichTextComponentsQuery, useUpdateRichTextComponentMutation, useDeleteRichTextComponentMutation,
@@ -12,26 +11,11 @@ import { ADVI_WRAPPER_COMPONENTS } from '@ts/utils/adviWrapperComponents';
 import { DEFAULT_SAMPLE_HTML } from '@ts/utils/richTextComponentDefaults';
 import { AppHeader } from '@ts/components/AppHeader';
 import { PageForm } from '@ts/components/PageForm';
-import { ModalContentBtn } from '@ts/components/ModalContentBtn';
+import { ModalContentBtn } from '@ts/components/dialogs/ModalContentBtn';
+import { MonacoEditorPane } from '@ts/components/MonacoEditorPane';
+import { useResizableSplit } from '@/hooks/useResizableSplit';
 import '@/scss/DocCollection.scss';
 import '@/scss/RichTextComponents.scss';
-
-// Shared so the sample-content and source editors look and behave identically.
-// `acceptSuggestionOnEnter: 'off'` + `quickSuggestions: false` keep Enter as a
-// plain newline — otherwise the HTML language service's autocomplete widget
-// (triggered by tags/attributes) swallows Enter to accept a suggestion instead.
-const MONACO_EDITOR_OPTIONS = {
-  minimap: { enabled: false },
-  fontSize: 14,
-  lineNumbers: 'on' as const,
-  scrollBeyondLastLine: false,
-  wordWrap: 'on' as const,
-  tabSize: 2,
-  automaticLayout: true,
-  padding: { top: 16 },
-  quickSuggestions: false,
-  acceptSuggestionOnEnter: 'off' as const,
-};
 
 const SPLIT_STORAGE_KEY = 'rtcEditorSplit';
 const DEFAULT_SPLIT_PERCENT = 60;
@@ -65,42 +49,12 @@ export const RichTextComponentEditor = () => {
 
   // Draggable code-row/preview split (vertical), persisted like the sidebar's
   // collapsed state.
-  const [splitPercent, setSplitPercent] = useState(() => {
-    const saved = Number(localStorage.getItem(SPLIT_STORAGE_KEY));
-    return saved >= MIN_SPLIT_PERCENT && saved <= MAX_SPLIT_PERCENT ? saved : DEFAULT_SPLIT_PERCENT;
+  const { splitPercent, containerRef: splitContainerRef, handleResizeStart } = useResizableSplit({
+    storageKey: SPLIT_STORAGE_KEY,
+    defaultPercent: DEFAULT_SPLIT_PERCENT,
+    minPercent: MIN_SPLIT_PERCENT,
+    maxPercent: MAX_SPLIT_PERCENT,
   });
-  const splitPercentRef = useRef(splitPercent);
-  splitPercentRef.current = splitPercent;
-  const splitContainerRef = useRef<HTMLDivElement>(null);
-  const isResizingRef = useRef(false);
-
-  useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!isResizingRef.current || !splitContainerRef.current) return;
-      const rect = splitContainerRef.current.getBoundingClientRect();
-      const percent = ((event.clientY - rect.top) / rect.height) * 100;
-      setSplitPercent(Math.min(MAX_SPLIT_PERCENT, Math.max(MIN_SPLIT_PERCENT, percent)));
-    };
-    const handleMouseUp = () => {
-      if (!isResizingRef.current) return;
-      isResizingRef.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      localStorage.setItem(SPLIT_STORAGE_KEY, String(splitPercentRef.current));
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, []);
-
-  const handleResizeStart = () => {
-    isResizingRef.current = true;
-    document.body.style.cursor = 'row-resize';
-    document.body.style.userSelect = 'none';
-  };
 
   // Components are now named and created via the modal on the list page,
   // so there's nothing to edit at the "new" route — send the user back.
@@ -203,47 +157,32 @@ export const RichTextComponentEditor = () => {
             style={{ flex: `0 0 ${splitPercent}%` }}
             onKeyDown={event => event.stopPropagation()}
           >
-            <Box className="rtc-source-editor">
-              <Typography className="rtc-pane-label">React Component</Typography>
-              <Box className="rtc-monaco-body">
-                <MonacoEditor
-                  height="100%"
-                  language="javascript"
-                  theme="vs-dark"
-                  value={source}
-                  onChange={v => setSource(v ?? '')}
-                  options={MONACO_EDITOR_OPTIONS}
-                />
-              </Box>
-            </Box>
+            <MonacoEditorPane
+              label="React Component"
+              language="javascript"
+              value={source}
+              onChange={setSource}
+              className="rtc-source-editor"
+              bodyClassName="rtc-monaco-body"
+            />
 
-            <Box className="rtc-css-editor">
-              <Typography className="rtc-pane-label">CSS</Typography>
-              <Box className="rtc-css-editor-body">
-                <MonacoEditor
-                  height="100%"
-                  language="scss"
-                  theme="vs-dark"
-                  value={css}
-                  onChange={v => setCss(v ?? '')}
-                  options={MONACO_EDITOR_OPTIONS}
-                />
-              </Box>
-            </Box>
+            <MonacoEditorPane
+              label="CSS"
+              language="scss"
+              value={css}
+              onChange={setCss}
+              className="rtc-css-editor"
+              bodyClassName="rtc-css-editor-body"
+            />
 
-            <Box className="rtc-sample-editor">
-              <Typography className="rtc-pane-label">Sample Content (HTML)</Typography>
-              <Box className="rtc-sample-editor-body">
-                <MonacoEditor
-                  height="100%"
-                  language="html"
-                  theme="vs-dark"
-                  value={sampleHtml}
-                  onChange={v => setSampleHtml(v ?? '')}
-                  options={MONACO_EDITOR_OPTIONS}
-                />
-              </Box>
-            </Box>
+            <MonacoEditorPane
+              label="Sample Content (HTML)"
+              language="html"
+              value={sampleHtml}
+              onChange={setSampleHtml}
+              className="rtc-sample-editor"
+              bodyClassName="rtc-sample-editor-body"
+            />
           </Box>
 
           <Box className="rtc-resize-handle" onMouseDown={handleResizeStart} />

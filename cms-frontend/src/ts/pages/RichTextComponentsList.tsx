@@ -9,7 +9,7 @@ import {
 import { LinkDrawer } from '@ts/components/LinkDrawer';
 import { ProjectSwitcher } from '@ts/components/ProjectSwitcher';
 import { PageWrapper } from '@ts/components/PageForm';
-import { ModalContentBtn } from '@ts/components/ModalContentBtn';
+import { ModalContentBtn } from '@ts/components/dialogs/ModalContentBtn';
 import { DEFAULT_COMPONENT_CSS, DEFAULT_COMPONENT_SOURCE, DEFAULT_SAMPLE_HTML } from '@ts/utils/richTextComponentDefaults';
 import '@/scss/DocCollection.scss';
 import '@/scss/RichTextComponents.scss';
@@ -75,7 +75,7 @@ const NewComponentModalBtn = ({ existingNames }: { existingNames: string[] }) =>
       modalTitle="Create New Component"
       closeModal={closeModal}
       modalBtn={handleOpen => (
-        <Button variant="default" className="border-current" onClick={handleOpen}>
+        <Button variant="default" onClick={handleOpen}>
           <Plus className="h-4 w-4" /> New Component
         </Button>
       )}
@@ -94,7 +94,7 @@ const NewComponentModalBtn = ({ existingNames }: { existingNames: string[] }) =>
           autoFocus
         />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Button variant="default" type="submit" className="border-current">
+          <Button variant="default" type="submit">
             <Plus className="h-4 w-4" /> Create
           </Button>
         </Box>

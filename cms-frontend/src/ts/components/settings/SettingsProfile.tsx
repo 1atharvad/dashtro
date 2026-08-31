@@ -107,7 +107,7 @@ export const SettingsProfile = () => {
               slotProps={{ inputLabel: { shrink: true } }}
             />
             <Box>
-              <Button variant="default" className="border-current" onClick={handleSave} disabled={!firstName && !lastName}>
+              <Button variant="default" onClick={handleSave} disabled={!firstName && !lastName}>
                 Save Changes
               </Button>
             </Box>

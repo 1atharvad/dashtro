@@ -1,16 +1,18 @@
-import { useRef, useState } from 'react';
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box, Card, CardContent, Chip,
-  Dialog, DialogActions, DialogContent, DialogTitle,
-  Grid, IconButton, TextField, Tooltip, Typography
+  Grid, IconButton, Tooltip, Typography
 } from '@mui/material';
-import { Plus, ArrowRight, Pencil, MoreVertical, LayoutTemplate, Database } from 'lucide-react';
-import { Button, Menu as AdviMenu, toast } from 'advi-ui';
+import { Plus, ArrowRight, Settings, LayoutTemplate, Database } from 'lucide-react';
+import { Button } from 'advi-ui';
 import { useProjectData } from '@/hooks/useProject';
 import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { AppHeader } from '@ts/components/AppHeader';
-import { WorkspaceSyncModal } from '@ts/components/WorkspaceSyncModal';
+import { WorkspaceRow } from '@ts/components/WorkspaceRow';
+import { WorkspaceSyncModal } from '@ts/components/dialogs/WorkspaceSyncModal';
+import { CreateWorkspaceDialog } from '@ts/components/dialogs/CreateWorkspaceDialog';
+import { ArchiveWorkspaceDialog } from '@ts/components/dialogs/ArchiveWorkspaceDialog';
 import '@/scss/ProjectPage.scss';
 
 export const ProjectPage = () => {
@@ -26,30 +28,8 @@ export const ProjectPage = () => {
   const project = projects.find(p => p._id === project_id);
 
   const [addingWs, setAddingWs] = useState(false);
-  const [newWsName, setNewWsName] = useState('');
-  const [newWsNameError, setNewWsNameError] = useState('');
-  const wsNameInputRef = useRef<HTMLInputElement>(null);
-
-  const validateWsName = (v: string) => {
-    if (!v) return '';
-    if (v === 'production') return "'production' is reserved.";
-    if (!/^[a-z][a-z0-9_-]*$/.test(v)) return 'Lowercase letters, numbers, hyphens, underscores only.';
-    return '';
-  };
-
   const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
   const [syncModal, setSyncModal] = useState<{ workspaceName: string; mode: 'push' | 'pull' } | null>(null);
-
-  const handleAddWorkspace = () => {
-    if (!newWsName.trim() || newWsNameError) return;
-    addWorkspace(newWsName.trim()).catch(err => {
-      console.error(err);
-      toast.error(err instanceof Error ? err.message : 'Failed to create workspace');
-    });
-    setNewWsName('');
-    setNewWsNameError('');
-    setAddingWs(false);
-  };
 
   const nonProdWorkspaces = workspaces.filter(w => !w.is_production);
 
@@ -75,7 +55,7 @@ export const ProjectPage = () => {
               </Typography>
             )}
           </Box>
-          <Button variant="secondary" className="border-current" onClick={() => navigate(`/projects/${project_id}/schema/`)}>
+          <Button variant="secondary" onClick={() => navigate(`/projects/${project_id}/schema/`)}>
             <LayoutTemplate className="h-4 w-4" /> Schema
           </Button>
         </Box>
@@ -92,7 +72,7 @@ export const ProjectPage = () => {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 2, flex: 1 }}>
                   The live workspace connected to your website. Push from any workspace to update it.
                 </Typography>
-                <Button variant="secondary" className="border-current"
+                <Button variant="secondary" 
                   onClick={() => navigate(`/projects/${project_id}/workspace/production/`)}>
                   View Production <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -111,7 +91,7 @@ export const ProjectPage = () => {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 2, flex: 1 }}>
                   A live JSON data store for this project, synced instantly across every connected client.
                 </Typography>
-                <Button variant="secondary" className="border-current"
+                <Button variant="secondary" 
                   onClick={() => navigate(`/projects/${project_id}/rtdb/`)}>
                   <Database className="h-4 w-4" /> Open Realtime Database
                 </Button>
@@ -127,8 +107,8 @@ export const ProjectPage = () => {
                     Project Info
                   </Typography>
                   <Tooltip title="Project settings">
-                    <IconButton size="small" onClick={() => navigate(`/projects/${project_id}/settings/identity/`)}>
-                      <Pencil className="h-4 w-4" />
+                    <IconButton size="small" sx={{ p: 1 }} onClick={() => navigate(`/projects/${project_id}/settings/identity/`)}>
+                      <Settings className="h-4 w-4" />
                     </IconButton>
                   </Tooltip>
                 </Box>
@@ -151,73 +131,26 @@ export const ProjectPage = () => {
         <Box className="project-workspaces">
           <Box className="project-workspaces-header">
             <Typography variant="h6" fontWeight={600}>Workspaces</Typography>
-            <Button variant="default" className="border-current" onClick={() => setAddingWs(true)}>
+            <Button variant="default" onClick={() => setAddingWs(true)}>
               <Plus className="h-4 w-4" /> Add Workspace
             </Button>
           </Box>
 
-          <Dialog
+          <CreateWorkspaceDialog
             open={addingWs}
-            onClose={() => { setNewWsName(''); setNewWsNameError(''); setAddingWs(false); }}
-            fullWidth maxWidth="xs"
-            slotProps={{ transition: { onEntered: () => wsNameInputRef.current?.focus() } }}
-          >
-            <DialogTitle>New Workspace</DialogTitle>
-            <DialogContent>
-              <TextField
-                fullWidth size="small" label="Workspace name"
-                inputRef={wsNameInputRef}
-                value={newWsName}
-                onChange={e => {
-                  const v = e.target.value.toLowerCase().replace(/\s/g, '-');
-                  setNewWsName(v);
-                  setNewWsNameError(validateWsName(v));
-                }}
-                error={!!newWsNameError}
-                helperText={newWsNameError || 'Lowercase letters, numbers, hyphens, underscores.'}
-                onKeyDown={e => e.key === 'Enter' && handleAddWorkspace()}
-                sx={{ mt: 1 }}
-              />
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-              <Button variant="secondary" className="border-current" onClick={() => { setNewWsName(''); setNewWsNameError(''); setAddingWs(false); }}>
-                Cancel
-              </Button>
-              <Button variant="default" className="border-current" onClick={handleAddWorkspace} disabled={!newWsName.trim() || !!newWsNameError}>
-                Create
-              </Button>
-            </DialogActions>
-          </Dialog>
+            onClose={() => setAddingWs(false)}
+            addWorkspace={addWorkspace}
+          />
 
           {wsError && (
             <Typography color="error" variant="body2" sx={{ mb: 2 }}>{wsError}</Typography>
           )}
 
-          {/* Archive confirmation dialog */}
-          <Dialog
-            open={!!confirmArchive}
+          <ArchiveWorkspaceDialog
+            workspaceName={confirmArchive}
             onClose={() => setConfirmArchive(null)}
-            fullWidth maxWidth="xs"
-          >
-            <DialogTitle>Archive workspace?</DialogTitle>
-            <DialogContent>
-              <Typography variant="body2" color="text.secondary">
-                All content in &ldquo;{confirmArchive}&rdquo; will be permanently deleted.
-              </Typography>
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-              <Button variant="secondary" className="border-current" onClick={() => setConfirmArchive(null)}>Cancel</Button>
-              <Button variant="destructive" onClick={() => {
-                if (confirmArchive) {
-                  removeWorkspace(confirmArchive).catch(err => {
-                    console.error(err);
-                    toast.error(err instanceof Error ? err.message : 'Failed to delete workspace');
-                  });
-                }
-                setConfirmArchive(null);
-              }}>Archive</Button>
-            </DialogActions>
-          </Dialog>
+            removeWorkspace={removeWorkspace}
+          />
 
           <WorkspaceSyncModal
             projectId={project_id ?? ''}
@@ -237,51 +170,14 @@ export const ProjectPage = () => {
             ) : (
               <Box className="workspace-list">
                 {nonProdWorkspaces.map(ws => (
-                  <Box key={ws.workspace_name} className="workspace-row">
-                    <RouterLink
-                      to={`/projects/${project_id}/workspace/${ws.workspace_name}/`}
-                      className="workspace-row-link"
-                    >
-                      <Typography variant="body1" fontWeight={600} className="workspace-row-name">
-                        {ws.workspace_name}
-                      </Typography>
-                      <Typography variant="caption" color="text.disabled">
-                        Created {new Date(ws.created_at).toLocaleDateString()}
-                      </Typography>
-                    </RouterLink>
-                    <AdviMenu
-                      align="end"
-                      contentClassName="cms-actions-menu"
-                      trigger={
-                        <IconButton
-                          size="small"
-                          className="workspace-row-menu-btn"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </IconButton>
-                      }
-                      items={[
-                        {
-                          value: 'push',
-                          label: 'Push to production',
-                          onSelect: () => setSyncModal({ workspaceName: ws.workspace_name, mode: 'push' }),
-                        },
-                        {
-                          value: 'pull',
-                          label: 'Pull latest from production',
-                          onSelect: () => setSyncModal({ workspaceName: ws.workspace_name, mode: 'pull' }),
-                        },
-                        { type: 'separator', value: 'sep' },
-                        {
-                          value: 'archive',
-                          label: 'Archive workspace',
-                          destructive: true,
-                          onSelect: () => setConfirmArchive(ws.workspace_name),
-                        },
-                      ]}
-                    />
-                  </Box>
+                  <WorkspaceRow
+                    key={ws.workspace_name}
+                    workspace={ws}
+                    projectId={project_id ?? ''}
+                    onPush={() => setSyncModal({ workspaceName: ws.workspace_name, mode: 'push' })}
+                    onPull={() => setSyncModal({ workspaceName: ws.workspace_name, mode: 'pull' })}
+                    onArchive={() => setConfirmArchive(ws.workspace_name)}
+                  />
                 ))}
               </Box>
             )
