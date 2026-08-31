@@ -7,6 +7,12 @@ import {
   useSetSchemaCategoryMutation,
 } from '@ts/api/categories';
 
+// Stable fallbacks: `data?.x ?? []` creates a new array/object on every
+// render while data is still loading, which breaks referential equality for
+// any effect depending on categories/categoryMap (infinite render loop).
+const EMPTY_CATEGORIES: Category[] = [];
+const EMPTY_CATEGORY_MAP: Record<string, string> = {};
+
 export const useCategory = (projectId: string) => {
   const { data, isLoading: loading } = useCategoriesQuery(projectId);
   const createMutation = useCreateCategoryMutation(projectId);
@@ -14,8 +20,8 @@ export const useCategory = (projectId: string) => {
   const deleteMutation = useDeleteCategoryMutation(projectId);
   const setSchemaCategoryMutation = useSetSchemaCategoryMutation(projectId);
 
-  const categories: Category[] = data?.categories ?? [];
-  const categoryMap: Record<string, string> = data?.category_map ?? {};
+  const categories: Category[] = data?.categories ?? EMPTY_CATEGORIES;
+  const categoryMap: Record<string, string> = data?.category_map ?? EMPTY_CATEGORY_MAP;
 
   const addCategory = (name: string) => createMutation.mutateAsync(name);
 
