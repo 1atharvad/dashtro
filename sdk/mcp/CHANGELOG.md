@@ -1,5 +1,11 @@
 # @dashtro/mcp
 
+## 0.2.1
+
+### Patch Changes
+
+- b19f70a: Fix read-only mode not blocking rtdb_set/rtdb_update/rtdb_delete, project_id empty-string fallback, XSS check bracket parity with Python server, and incorrect skill resource descriptions.
+
 ## 0.3.0
 
 ### Minor Changes
