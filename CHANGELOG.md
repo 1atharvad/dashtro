@@ -6,6 +6,39 @@ fixes/chores/docs — pre-1.0, so breaking changes may still land as minor.
 
 ---
 
+## [0.25.0] — 2026-08-31
+
+- Adds vitest coverage tooling and a shared RTL test setup to `cms-frontend`
+  (jest-dom matchers, auto-cleanup, an in-memory `localStorage` polyfill for
+  Node 26's experimental native implementation), plus render tests for
+  `PageForm`, `DocumentList`, and `SchemaComponent`.
+- Fixes an infinite render loop in `useCategory`/`useSchemaMetaData`: `?? []`/
+  `?? {}` fallbacks created a new array/object reference on every render
+  while query data was still loading, breaking referential equality for any
+  effect depending on it (e.g. in `SchemaComponent`) and freezing the tab on
+  first mount. Hoisted stable module-level empty constants instead.
+- Componentizes the largest `cms-frontend` pages (`DocumentContent`,
+  `SchemaComponent`, `ProjectPage`, `ProjectSettingsPage`, `SettingsAPI`,
+  `SettingsAuditLog`/`ProjectAuditLog`, `AuditHeatmap`) into
+  `src/ts/components/dialogs/`, `skeletons/`, and `settings/` sub-components;
+  dialogs now own their own mutation-calling logic and self-close.
+  `ProjectSettingsPage`'s project-delete flow is simplified from a two-step
+  typed-confirmation to a single confirm dialog, matching every other
+  destructive-action dialog in the app.
+- Fixes destructive dialogs (`DeleteDocumentDialog`, `DeleteSchemaDialog`)
+  proceeding as if a delete succeeded even when it failed —
+  `deleteDocumentData`/`deleteSchemaData` now resolve `true`/`false` and the
+  dialogs only navigate/refresh on success. `ImportSchemaDialog` now awaits
+  the import and shows a failure inline instead of closing before an async
+  rejection (e.g. folder creation) surfaces.
+- Extracts a shared `ConfirmDialog` and migrates every confirm-style dialog
+  onto it, including `SchemaEntry`/`CollectionEntry`'s inline delete-entry
+  confirmation, collapsing two different confirm-dialog patterns into one.
+  Adds 7 new dialog test files plus failure-path assertions on the
+  hook-level delete contract.
+
+---
+
 ## [0.24.0] — 2026-08-16
 
 - Add MCP server guardrails: token-bucket rate limiting (60 RPM, `MCP_RATE_LIMIT`), input sanitization (10k char limit, injection detection), request body size validation (1MB, `MCP_MAX_BODY_SIZE`), read-only mode (`MCP_READ_ONLY`). Applied to all 23 tools in @dashtro/mcp and all 23 tools in cms_mcp.
