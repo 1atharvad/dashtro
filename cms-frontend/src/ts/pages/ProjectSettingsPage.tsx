@@ -197,7 +197,7 @@ export const ProjectSettingsPage = () => {
         onClose={() => setConfirmDelete(false)}
         projectName={project.name}
         removeProject={() => removeProject(project_id ?? '')}
-        onDeleted={() => navigate('/')}
+        onDeleted={() => navigate('/projects/')}
       />
     </Box>
   );

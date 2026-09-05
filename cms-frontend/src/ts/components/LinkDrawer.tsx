@@ -23,7 +23,7 @@ export const LinkDrawer = ({
   const navigate = useNavigate();
   const { user, refreshUser } = useUser();
   const { project_id } = useParams<{ project_id?: string }>();
-  const logoUrl = project_id ? `/projects/${project_id}/` : '/';
+  const logoUrl = project_id ? `/projects/${project_id}/` : '/projects/';
   const [open, setOpen] = useState(() => localStorage.getItem('sidebarCollapsed') !== 'true');
 
   useEffect(() => {

@@ -4,7 +4,7 @@ import {
   Box, Card, CardContent, Chip,
   Grid, IconButton, Tooltip, Typography
 } from '@mui/material';
-import { Plus, ArrowRight, Settings, LayoutTemplate, Database } from 'lucide-react';
+import { Plus, ArrowRight, ArrowLeft, Settings, LayoutTemplate, Database } from 'lucide-react';
 import { Button } from 'advi-ui';
 import { useProjectData } from '@/hooks/useProject';
 import { useWorkspaceData } from '@/hooks/useWorkspace';
@@ -47,13 +47,20 @@ export const ProjectPage = () => {
 
         {/* ── Page title row ───────────────────────────────────────────── */}
         <Box className="project-page-header">
-          <Box>
-            <Typography variant="h5" fontWeight={700}>{project.name}</Typography>
-            {project.description && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-                {project.description}
-              </Typography>
-            )}
+          <Box className="project-page-title">
+            <Tooltip title="Back to projects">
+              <IconButton size="small" onClick={() => navigate('/projects/')}>
+                <ArrowLeft className="h-4 w-4" />
+              </IconButton>
+            </Tooltip>
+            <Box>
+              <Typography variant="h5" fontWeight={700}>{project.name}</Typography>
+              {project.description && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                  {project.description}
+                </Typography>
+              )}
+            </Box>
           </Box>
           <Button variant="secondary" onClick={() => navigate(`/projects/${project_id}/schema/`)}>
             <LayoutTemplate className="h-4 w-4" /> Schema

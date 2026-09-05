@@ -78,7 +78,7 @@ export const ProjectSwitcher = () => {
           </MenuItem>
         ))}
         <Divider />
-        <MenuItem onClick={() => { setAnchor(null); navigate('/'); }} className="project-switcher-item">
+        <MenuItem onClick={() => { setAnchor(null); navigate('/projects/'); }} className="project-switcher-item">
           <ListItemIcon><Folder className="h-4 w-4" /></ListItemIcon>
           <Typography variant="body2">All projects</Typography>
         </MenuItem>

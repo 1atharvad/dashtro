@@ -13,7 +13,7 @@ export const AppHeader = ({ actions }: AppHeaderProps) => {
   const navigate = useNavigate();
   const { user, refreshUser } = useUser();
   const { project_id } = useParams<{ project_id?: string }>();
-  const logoUrl = project_id ? `/projects/${project_id}/` : '/';
+  const logoUrl = project_id ? `/projects/${project_id}/` : '/projects/';
 
   useEffect(() => {
     if (!user) {
