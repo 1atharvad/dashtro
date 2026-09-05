@@ -1,7 +1,7 @@
 @use './global/global-vars' as vars;
 @use './global/global-colors' as colors;
 
-.marketing-title {
+.page-content .marketing-title {
   font-family: vars.$font-slackey;
   color: colors.$gold;
 }
