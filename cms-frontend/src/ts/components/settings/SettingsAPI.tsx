@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, IconButton, Tooltip, Typography, TextField } from '@mui/material';
 import { Key, Copy } from 'lucide-react';
 import { Button } from 'advi-ui';
-import { API_BASE_URL } from '@ts/config';
+import { API_BASE_URL, SDK_BASE_URL } from '@ts/config';
 import { authFetch } from '@ts/utils/auth';
 import { useUser } from '@ts/context/userContextValue';
 import { useProjectData } from '@/hooks/useProject';
@@ -53,7 +53,7 @@ export const SettingsAPI = () => {
   };
 
   const copyUrl = () => {
-    navigator.clipboard.writeText(API_BASE_URL || '');
+    navigator.clipboard.writeText(SDK_BASE_URL || '');
     setUrlCopied(true);
     setTimeout(() => setUrlCopied(false), 1500);
   };
@@ -74,7 +74,7 @@ export const SettingsAPI = () => {
         <Box className="settings-section-body">
           <TextField
             label="API Base URL"
-            value={API_BASE_URL}
+            value={SDK_BASE_URL}
             fullWidth
             disabled
             slotProps={{

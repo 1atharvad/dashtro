@@ -96,11 +96,21 @@ import urllib.error
 import urllib.request
 
 
+# Cloudflare (and similar edge WAFs) block the default "Python-urllib/x.y"
+# User-Agent as a bot signature, so requests never reach the app. A named,
+# identifiable UA lets it be explicitly allowed at the edge if needed. Points
+# at the project repo rather than any one deployment, since Dashtro is
+# self-hosted.
+_USER_AGENT = "DashtroCLI/1.0 (Schema import/export tool; +https://github.com/1atharvad/dashtro)"
+
+
 def _request(
     method: str, url: str, payload: dict | None = None, api_key: str | None = None
 ) -> dict | list:
     data = json.dumps(payload).encode() if payload is not None else None
-    headers = {"Content-Type": "application/json"} if data else {}
+    headers = {"User-Agent": _USER_AGENT}
+    if data:
+        headers["Content-Type"] = "application/json"
     if api_key:
         headers["X-API-Key"] = api_key
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
@@ -816,7 +826,10 @@ def _put_file(url: str, filepath: Path, api_key: str | None = None) -> dict:
         + filepath.read_bytes()
         + f"\r\n--{boundary}--\r\n".encode()
     )
-    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    headers = {
+        "User-Agent": _USER_AGENT,
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+    }
     if api_key:
         headers["X-API-Key"] = api_key
     req = urllib.request.Request(
@@ -846,7 +859,7 @@ def cmd_media_export_http(base_url: str, backup_dir: Path, api_key: str | None =
     missing = 0
     for filename in sorted(filenames):
         try:
-            headers = {}
+            headers = {"User-Agent": _USER_AGENT}
             if api_key:
                 headers["X-API-Key"] = api_key
             req = urllib.request.Request(
