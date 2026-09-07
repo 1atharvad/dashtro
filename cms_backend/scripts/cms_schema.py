@@ -95,7 +95,6 @@ _MEDIA_URL_RE = re.compile(r"/api/sdk/media/files/([A-Za-z0-9_.\-]+)")
 import urllib.error
 import urllib.request
 
-
 # Cloudflare (and similar edge WAFs) block the default "Python-urllib/x.y"
 # User-Agent as a bot signature, so requests never reach the app. A named,
 # identifiable UA lets it be explicitly allowed at the edge if needed. Points
