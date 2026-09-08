@@ -4,7 +4,8 @@ from typing import Any
 
 from api.utils import get_audit_client, get_data_client
 from api.utils.actor import get_actor, get_client_ip
-from api.utils.schema import get_schema_for_collection
+from api.utils.document_validation import DocumentValidationError, validate_document_data
+from api.utils.schema import get_schema_for_collection, schema_jsonify
 from config import CMS_PUBLIC_URL
 from fastapi import APIRouter, HTTPException, Request
 from models.field_types import COMPOUND_FIELD_TYPES
@@ -14,6 +15,7 @@ db = get_data_client()
 db_audit = get_audit_client()
 
 PRODUCTION = "production"
+_VALID_STATUSES = ("draft", "published")
 
 
 def _resolve_collection(project_id: str, collection_name: str):
@@ -265,9 +267,20 @@ async def create_document(
     collection_id, _, schema_data = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)
 
+    status = body.get("_status", "draft")
+    if status not in _VALID_STATUSES:
+        raise HTTPException(status_code=400, detail="_status must be 'draft' or 'published'.")
+
+    field_data = {k: v for k, v in body.items() if k not in ("_id", "_status")}
+    try:
+        validate_document_data(
+            field_data, schema_data or [], schema_jsonify(db.get_schema(project_id))
+        )
+    except DocumentValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
     doc_id = body.get("_id") or str(uuid.uuid4().hex[:20])
-    body["_id"] = doc_id
-    body.setdefault("_status", "draft")
+    body = {**field_data, "_id": doc_id, "_status": status}
     body = _apply_schema_defaults(body, schema_data)
 
     db.upsert_document(
@@ -317,11 +330,20 @@ async def update_document(
     request: Request,
 ):
     _guard_production_write(workspace_name)
-    collection_id, _, _ = _resolve_collection(project_id, collection_name)
+    collection_id, _, schema_data = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)
 
     if document_id not in document_ids:
         raise HTTPException(status_code=400, detail="Document id doesn't exist.")
+
+    if "_id" in body:
+        raise HTTPException(status_code=400, detail="_id cannot be changed.")
+    if "_status" in body and body["_status"] not in _VALID_STATUSES:
+        raise HTTPException(status_code=400, detail="_status must be 'draft' or 'published'.")
+    if any(k.startswith("_") and k not in ("_status",) for k in body):
+        raise HTTPException(
+            status_code=400, detail="Only '_status' may be set as a system key here."
+        )
 
     existing = await db.fetch_document(project_id, workspace_name, collection_id, document_id)
     if not existing:
@@ -342,6 +364,14 @@ async def update_document(
     for key, value in body.items():
         existing[key] = value
     existing["_id"] = document_id
+
+    field_data = {k: v for k, v in existing.items() if k not in ("_id", "_status")}
+    try:
+        validate_document_data(
+            field_data, schema_data or [], schema_jsonify(db.get_schema(project_id))
+        )
+    except DocumentValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Sync status in meta if it changed
     if "_status" in body:

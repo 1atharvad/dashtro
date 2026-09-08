@@ -2,7 +2,7 @@ import re
 from typing import Literal
 
 from models.field_types import ALL_FIELD_TYPES
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Build the Literal type dynamically from the registry so adding a new
 # built-in type only requires updating field_types.py (and the frontend registry).
@@ -12,7 +12,7 @@ _FieldTypeLiteral = Literal[tuple(ALL_FIELD_TYPES)]  # type: ignore[valid-type]
 class SchemaFieldIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    index: int = Field(alias="_index")
+    index: int = Field(alias="_index", ge=1)
     name: str = Field(alias="_name")
     type: _FieldTypeLiteral = Field(default="String", alias="_type")  # type: ignore[valid-type]
     description: str = Field(default="", alias="_description")
@@ -39,6 +39,16 @@ class SchemaFieldIn(BaseModel):
         if not re.match(r"^[a-z]+(_[a-z]+)*$", str(v)):
             raise ValueError("Must be snake_case without numbers (e.g. 'post_title')")
         return v
+
+    @model_validator(mode="after")
+    def validate_required_conditional_fields(self) -> "SchemaFieldIn":
+        if self.type == "NestedDocument" and not self.nested_schema:
+            raise ValueError("nested_schema required for NestedDocument")
+        if self.type == "ReferenceDocument" and not any(self.reference_schema):
+            raise ValueError(
+                "reference_schema required for ReferenceDocument (list of collection names)"
+            )
+        return self
 
     def to_storage(self) -> dict:
         return self.model_dump(by_alias=True)

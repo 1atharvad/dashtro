@@ -48,16 +48,10 @@ def test_project_and_authoring_lifecycle(mcp_env):
     assert ws["workspace_name"] == "staging"
 
     title_field = json.loads(
-        run(
-            server.create_schema_field(
-                project_id, "Post", "title", "String", index=1, display_name=True
-            )
-        )
+        run(server.create_schema_field(project_id, "Post", "title", "String", display_name=True))
     )
     assert title_field["_name"] == "title"
-    body_field = json.loads(
-        run(server.create_schema_field(project_id, "Post", "body", "RichText", index=2))
-    )
+    body_field = json.loads(run(server.create_schema_field(project_id, "Post", "body", "RichText")))
     assert body_field["_name"] == "body"
 
     schema_names = json.loads(run(server.list_schema(project_id)))
@@ -220,3 +214,287 @@ def test_tools_use_api_key_not_jwt(project, monkeypatch):
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
         run(server.list_schema(pid))
     assert exc_info.value.response.status_code == 401
+
+
+# ── Schema Field Validation Tests ──────────────────────────────────────────────
+
+
+def test_create_schema_field_valid_types(mcp_env):
+    """All valid field types should be accepted (with required conditional fields)."""
+    pid = mcp_env["project_id"] if "project_id" in mcp_env else None
+    # Create a project first
+    proj = json.loads(run(server.create_project("ValidationTest")))
+    pid = proj["_id"]
+
+    valid_types = [
+        "String",
+        "Number",
+        "Boolean",
+        "Email",
+        "Date",
+        "DateTime",
+        "Color",
+        "RichText",
+        "Textarea",
+        "Image",
+        "URL",
+        "File",
+        "ScrollLink",
+        "NestedDocument",
+        "ReferenceDocument",
+    ]
+    valid_names = [
+        "field_one",
+        "field_two",
+        "field_three",
+        "field_four",
+        "field_five",
+        "field_six",
+        "field_seven",
+        "field_eight",
+        "field_nine",
+        "field_ten",
+        "field_eleven",
+        "field_twelve",
+        "field_thirteen",
+        "field_fourteen",
+        "field_fifteen",
+    ]
+    for i, ftype in enumerate(valid_types):
+        kwargs = {}
+        if ftype == "NestedDocument":
+            kwargs["nested_schema"] = "ChildSchema"
+        elif ftype == "ReferenceDocument":
+            kwargs["reference_schema"] = ["authors"]
+        result = json.loads(
+            run(server.create_schema_field(pid, "TestSchema", valid_names[i], ftype, **kwargs))
+        )
+        assert result["_type"] == ftype
+
+
+def test_create_schema_field_invalid_type(mcp_env):
+    """Invalid field_type should be rejected by MCP before hitting backend."""
+    proj = json.loads(run(server.create_project("ValidationTest2")))
+    pid = proj["_id"]
+
+    with pytest.raises(ValueError) as exc:
+        run(server.create_schema_field(pid, "Test", "bad", "NotARealType"))
+    assert "Invalid schema field" in str(exc.value)
+    assert "NotARealType" in str(exc.value)
+
+
+def test_create_schema_field_invalid_schema_name(mcp_env):
+    """schema_name must be PascalCase without numbers."""
+    proj = json.loads(run(server.create_project("ValidationTest3")))
+    pid = proj["_id"]
+
+    for bad_name in ["badname", "BadName123", "bad_name", "123Bad"]:
+        with pytest.raises(ValueError) as exc:
+            run(server.create_schema_field(pid, bad_name, "field", "String"))
+        assert "PascalCase" in str(exc.value)
+
+
+def test_create_schema_field_invalid_field_name(mcp_env):
+    """field_name must be snake_case without numbers."""
+    proj = json.loads(run(server.create_project("ValidationTest4")))
+    pid = proj["_id"]
+
+    for bad_name in ["BadName", "badName", "bad-name", "bad123", "123bad"]:
+        with pytest.raises(ValueError) as exc:
+            run(server.create_schema_field(pid, "Test", bad_name, "String"))
+        assert "snake_case" in str(exc.value)
+
+
+def test_create_schema_field_relation_only_for_relational(mcp_env):
+    """relation only valid for ReferenceDocument or NestedDocument."""
+    proj = json.loads(run(server.create_project("ValidationTest5")))
+    pid = proj["_id"]
+
+    # Should fail for String
+    with pytest.raises(ValueError) as exc:
+        run(server.create_schema_field(pid, "Test", "field", "String", relation="OneToMany"))
+    assert "relation only valid for ReferenceDocument or NestedDocument" in str(exc.value)
+
+    # Should work for ReferenceDocument (needs reference_schema)
+    result = json.loads(
+        run(
+            server.create_schema_field(
+                pid,
+                "Test",
+                "ref_field",
+                "ReferenceDocument",
+                relation="OneToMany",
+                reference_schema=["authors"],
+            )
+        )
+    )
+    assert result["_relation"] == "OneToMany"
+
+    # Should work for NestedDocument (needs nested_schema)
+    result = json.loads(
+        run(
+            server.create_schema_field(
+                pid,
+                "Test",
+                "nested_field",
+                "NestedDocument",
+                relation="OneToOne",
+                nested_schema="Child",
+            )
+        )
+    )
+    assert result["_relation"] == "OneToOne"
+
+
+def test_create_schema_field_default_value_restrictions(mcp_env):
+    """default_value not allowed for certain types."""
+    proj = json.loads(run(server.create_project("ValidationTest6")))
+    pid = proj["_id"]
+
+    # Should fail for ReferenceDocument
+    with pytest.raises(ValueError) as exc:
+        run(
+            server.create_schema_field(pid, "Test", "field", "ReferenceDocument", default_value="x")
+        )
+    assert "default_value not supported" in str(exc.value)
+
+    # Should fail for RichText
+    with pytest.raises(ValueError) as exc:
+        run(server.create_schema_field(pid, "Test", "field", "RichText", default_value="x"))
+    assert "default_value not supported" in str(exc.value)
+
+    # Should work for String
+    result = json.loads(
+        run(server.create_schema_field(pid, "Test", "field", "String", default_value="hello"))
+    )
+    assert result["_default_value"] == "hello"
+
+
+def test_create_schema_field_placeholder_restrictions(mcp_env):
+    """placeholder not allowed for certain types."""
+    proj = json.loads(run(server.create_project("ValidationTest7")))
+    pid = proj["_id"]
+
+    # Should fail for Email
+    with pytest.raises(ValueError) as exc:
+        run(server.create_schema_field(pid, "Test", "field", "Email", placeholder="x"))
+    assert "placeholder not supported" in str(exc.value)
+
+    # Should fail for Boolean
+    with pytest.raises(ValueError) as exc:
+        run(server.create_schema_field(pid, "Test", "field", "Boolean", placeholder="x"))
+    assert "placeholder not supported" in str(exc.value)
+
+    # Should work for String
+    result = json.loads(
+        run(server.create_schema_field(pid, "Test", "field", "String", placeholder="enter text"))
+    )
+    assert result["_placeholder"] == "enter text"
+
+
+def test_create_schema_field_nested_schema_required(mcp_env):
+    """nested_schema required for NestedDocument."""
+    proj = json.loads(run(server.create_project("ValidationTest8")))
+    pid = proj["_id"]
+
+    # Should fail without nested_schema
+    with pytest.raises(ValueError) as exc:
+        run(server.create_schema_field(pid, "Test", "field", "NestedDocument"))
+    assert "nested_schema required for NestedDocument" in str(exc.value)
+
+    # Should fail with invalid nested_schema format
+    with pytest.raises(ValueError) as exc:
+        run(
+            server.create_schema_field(
+                pid, "Test", "field", "NestedDocument", nested_schema="badname"
+            )
+        )
+    assert "PascalCase" in str(exc.value)
+
+    # Should work with valid nested_schema
+    result = json.loads(
+        run(
+            server.create_schema_field(
+                pid, "Test", "field", "NestedDocument", nested_schema="ChildSchema"
+            )
+        )
+    )
+    assert result["_nested_schema"] == "ChildSchema"
+
+
+def test_create_schema_field_reference_schema_required(mcp_env):
+    """reference_schema required for ReferenceDocument."""
+    proj = json.loads(run(server.create_project("ValidationTest9")))
+    pid = proj["_id"]
+
+    # Should fail without reference_schema
+    with pytest.raises(ValueError) as exc:
+        run(server.create_schema_field(pid, "Test", "field", "ReferenceDocument"))
+    assert "reference_schema required" in str(exc.value)
+
+    # Should fail with empty list
+    with pytest.raises(ValueError) as exc:
+        run(
+            server.create_schema_field(
+                pid, "Test", "field", "ReferenceDocument", reference_schema=[]
+            )
+        )
+    assert "reference_schema required" in str(exc.value)
+
+    # Should work with valid reference_schema
+    result = json.loads(
+        run(
+            server.create_schema_field(
+                pid, "Test", "field", "ReferenceDocument", reference_schema=["authors", "posts"]
+            )
+        )
+    )
+    assert result["_reference_schema"] == ["authors", "posts"]
+
+
+def test_create_schema_field_rich_text_wrapper_only_for_richtext(mcp_env):
+    """rich_text_wrapper only valid for RichText."""
+    proj = json.loads(run(server.create_project("ValidationTest10")))
+    pid = proj["_id"]
+
+    # Should fail for String
+    with pytest.raises(ValueError) as exc:
+        run(server.create_schema_field(pid, "Test", "field", "String", rich_text_wrapper="Card"))
+    assert "rich_text_wrapper only valid for RichText" in str(exc.value)
+
+    # Should work for RichText
+    result = json.loads(
+        run(server.create_schema_field(pid, "Test", "field", "RichText", rich_text_wrapper="Card"))
+    )
+    assert result["_rich_text_wrapper"] == "Card"
+
+
+def test_create_schema_field_auto_increments_index(mcp_env):
+    """_index is always server-assigned on create (cms_backend/routers/
+    sdk_schema.py) — the MCP tool doesn't even expose an index param, so
+    there's no way for a caller to collide two fields on the same index via
+    create; each successive field just gets the next index."""
+    proj = json.loads(run(server.create_project("ValidationTest11")))
+    pid = proj["_id"]
+
+    field_one = json.loads(run(server.create_schema_field(pid, "Test", "field_one", "String")))
+    assert field_one["_index"] == 1
+
+    field_two = json.loads(run(server.create_schema_field(pid, "Test", "field_two", "String")))
+    assert field_two["_index"] == 2
+
+
+def test_create_schema_field_display_name_uniqueness(mcp_env):
+    """Only one display_name per schema — enforced by the backend
+    (cms_backend/routers/sdk_schema.py), not the MCP client, so this comes
+    back as a 400 from the real HTTP round trip rather than a local
+    pre-check."""
+    proj = json.loads(run(server.create_project("ValidationTest12")))
+    pid = proj["_id"]
+
+    run(server.create_schema_field(pid, "Test", "field_one", "String", display_name=True))
+    # Second field with display_name should fail
+    with pytest.raises(httpx.HTTPStatusError) as exc:
+        run(server.create_schema_field(pid, "Test", "field_two", "String", display_name=True))
+    assert exc.value.response.status_code == 400
+    assert "already has a display_name field" in str(exc.value)

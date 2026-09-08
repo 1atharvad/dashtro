@@ -4,7 +4,12 @@ from typing import Any
 
 from api.utils import get_audit_client, get_data_client
 from api.utils.actor import get_actor, get_client_ip
-from api.utils.schema import get_schema_names, schema_jsonify
+from api.utils.schema import (
+    check_index_and_display_name_conflicts,
+    get_schema_names,
+    next_schema_index,
+    schema_jsonify,
+)
 from fastapi import APIRouter, HTTPException, Request
 from models.field_types import ADVI_WRAPPER_COMPONENTS
 from models.schema import SchemaFieldIn, get_schema_field_ui_schema
@@ -50,10 +55,21 @@ def get_schema(project_id: str, schema_id: str):
 
 @router.post("/projects/{project_id}/schema/", status_code=201)
 def create_schema(project_id: str, body: dict[str, Any], request: Request):
+    """_index is always server-assigned (append to the end of the schema) —
+    any _index the caller sends is ignored."""
+    schema = db.get_schema(project_id)
+    body = {**body, "_index": next_schema_index(schema, body.get("_schema_name") or "")}
     try:
         field = SchemaFieldIn.model_validate(body)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=json.loads(e.json())) from e
+
+    try:
+        check_index_and_display_name_conflicts(
+            schema, field.schema_name, field.index, field.display_name
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     data = field.to_storage()
     field_id = str(uuid.uuid4().hex[:20])
@@ -91,6 +107,13 @@ def update_schema(project_id: str, schema_id: str, body: dict[str, Any], request
         field = SchemaFieldIn.model_validate({**existing, **body})
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=json.loads(e.json())) from e
+
+    try:
+        check_index_and_display_name_conflicts(
+            schema, field.schema_name, field.index, field.display_name, exclude_field_id=schema_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     updates = field.to_storage()
     for key, value in updates.items():

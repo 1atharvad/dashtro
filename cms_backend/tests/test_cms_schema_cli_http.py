@@ -257,6 +257,18 @@ def test_documents_and_media_export_import_http_round_trip(live_server, tmp_path
         )
         assert ws.status_code == 201, ws.text
 
+        # This test is about media-path export/import mechanics, not schema
+        # typing, so "image" is a plain String field holding a raw URL
+        # rather than the Image compound type's {url, alt_text, ...} shape —
+        # document writes are now validated against the schema (see
+        # ARCHITECTURE.md), so the field has to actually be declared.
+        image_field = client.post(
+            f"/api/cms/projects/{project_id}/schema/",
+            json={"_index": 2, "_name": "image", "_type": "String", "_schema_name": "Post"},
+            headers=jwt_headers,
+        )
+        assert image_field.status_code == 201, image_field.text
+
         doc = client.post(
             f"/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/posts/",
             json={"title": "Hello", "image": "/api/sdk/media/files/photo.png"},

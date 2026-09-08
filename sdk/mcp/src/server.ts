@@ -24,12 +24,250 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { readFile, readdir } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 const CMS_API_URL = process.env.CMS_API_URL ?? "http://localhost:7312/api/sdk";
 const CMS_API_KEY = process.env.CMS_API_KEY ?? "";
 const CMS_PROJECT_ID = process.env.CMS_PROJECT_ID ?? "";
+
+// ── Retry & Circuit Breaker Configuration ────────────────────────────────────
+
+const MAX_RETRIES = parseInt(process.env.MCP_MAX_RETRIES ?? "3", 10);
+const BASE_RETRY_DELAY = parseFloat(process.env.MCP_BASE_RETRY_DELAY ?? "0.5"); // seconds
+const MAX_RETRY_DELAY = parseFloat(process.env.MCP_MAX_RETRY_DELAY ?? "30.0"); // seconds
+const RETRY_JITTER = parseFloat(process.env.MCP_RETRY_JITTER ?? "0.1"); // 10% jitter
+
+// Circuit breaker settings
+const CIRCUIT_BREAKER_THRESHOLD = parseInt(process.env.MCP_CB_THRESHOLD ?? "5", 10);
+const CIRCUIT_BREAKER_TIMEOUT = parseFloat(process.env.MCP_CB_TIMEOUT ?? "30.0"); // seconds
+const CIRCUIT_BREAKER_HALF_OPEN_MAX = parseInt(process.env.MCP_CB_HALF_OPEN_MAX ?? "3", 10);
+
+// Retryable HTTP status codes
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+class CircuitBreakerOpen extends Error {
+  public readonly retryAfter: number;
+  constructor(retryAfter: number) {
+    super(`Circuit breaker open, retry after ${retryAfter.toFixed(1)}s`);
+    this.name = "CircuitBreakerOpen";
+    this.retryAfter = retryAfter;
+  }
+}
+
+class CircuitBreaker {
+  private failureCount = 0;
+  private successCount = 0;
+  private lastFailureTime: number | null = null;
+  private state: "closed" | "open" | "half-open" = "closed";
+
+  constructor(
+    private readonly failureThreshold: number = CIRCUIT_BREAKER_THRESHOLD,
+    private readonly recoveryTimeout: number = CIRCUIT_BREAKER_TIMEOUT,
+    private readonly halfOpenMax: number = CIRCUIT_BREAKER_HALF_OPEN_MAX,
+  ) {}
+
+  recordSuccess(): void {
+    this.failureCount = 0;
+    if (this.state === "half-open") {
+      this.successCount += 1;
+      if (this.successCount >= this.halfOpenMax) {
+        this.state = "closed";
+        this.successCount = 0;
+      }
+    }
+  }
+
+  recordFailure(): void {
+    this.failureCount += 1;
+    this.lastFailureTime = Date.now();
+    if (this.state === "half-open") {
+      this.state = "open";
+      this.successCount = 0;
+    } else if (this.failureCount >= this.failureThreshold) {
+      this.state = "open";
+    }
+  }
+
+  canExecute(): boolean {
+    if (this.state === "closed") return true;
+    if (this.state === "open") {
+      if (this.lastFailureTime && (Date.now() - this.lastFailureTime) >= this.recoveryTimeout * 1000) {
+        this.state = "half-open";
+        this.successCount = 0;
+        return true;
+      }
+      return false;
+    }
+    // half-open
+    return true;
+  }
+
+  getRetryAfter(): number {
+    if (this.state === "open" && this.lastFailureTime) {
+      return Math.max(0, this.recoveryTimeout - (Date.now() - this.lastFailureTime) / 1000);
+    }
+    return 0;
+  }
+}
+
+// Global circuit breaker instance (shared across all requests to the same backend)
+const circuitBreaker = new CircuitBreaker();
+
+function calculateBackoff(attempt: number): number {
+  const delay = Math.min(BASE_RETRY_DELAY * Math.pow(2, attempt), MAX_RETRY_DELAY);
+  const jitter = delay * RETRY_JITTER * (Math.random() * 2 - 1);
+  return Math.max(0, delay + jitter);
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function retryAsync<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = MAX_RETRIES,
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+
+      // Don't retry circuit breaker errors - fail fast
+      if (error instanceof CircuitBreakerOpen) {
+        throw error;
+      }
+
+      // Check if error is retryable
+      const isRetryable =
+        error instanceof TypeError || // Network errors (fetch throws TypeError on network failure)
+        (error instanceof Error &&
+          RETRYABLE_STATUS_CODES.has(
+            parseInt(error.message.match(/failed: (\d+)/)?.[1] ?? "", 10),
+          ));
+
+      if (!isRetryable || attempt === maxRetries) {
+        throw error;
+      }
+    }
+
+    // Wait before retry
+    const delay = calculateBackoff(attempt);
+    await sleep(delay * 1000);
+  }
+
+  throw lastError;
+}
+
+// ── Schema Field Validation (matches backend models/schema.py SchemaFieldIn) ──────
+
+const ALL_FIELD_TYPES = [
+  "String", "Number", "Boolean", "Email", "Date", "DateTime", "Color", "RichText", "Textarea",
+  "Image", "URL", "File", "ScrollLink",
+  "NestedDocument", "ReferenceDocument"
+] as const;
+
+const VALID_RELATIONS = ["OneToOne", "OneToMany"] as const;
+
+const NO_DEFAULT_VALUE_TYPES = new Set(["ReferenceDocument", "NestedDocument", "RichText", "Textarea", "Image", "File", "URL"]);
+const NO_PLACEHOLDER_TYPES = new Set(["Email", "Image", "File", "Color", "Boolean", "NestedDocument", "ReferenceDocument", "RichText"]);
+const NESTED_SCHEMA_TYPES = new Set(["NestedDocument"]);
+const REFERENCE_SCHEMA_TYPES = new Set(["ReferenceDocument"]);
+const RICH_TEXT_WRAPPER_TYPES = new Set(["RichText"]);
+const RELATION_TYPES = new Set(["ReferenceDocument", "NestedDocument"]);
+
+const SCHEMA_NAME_PATTERN = /^[A-Z][a-zA-Z]*$/;
+const FIELD_NAME_PATTERN = /^[a-z]+(_[a-z]+)*$/;
+
+// Zod schema for schema field validation
+const SchemaFieldCreateSchema = z.object({
+  _name: z.string().regex(FIELD_NAME_PATTERN, "Must be snake_case without numbers (e.g. 'post_title')"),
+  _type: z.enum(ALL_FIELD_TYPES).default("String"),
+  _schema_name: z.string().regex(SCHEMA_NAME_PATTERN, "Must be PascalCase without numbers (e.g. 'BlogPost')"),
+  _description: z.string().default(""),
+  _relation: z.enum(VALID_RELATIONS).optional(),
+  _default_value: z.string().optional(),
+  _placeholder: z.string().optional(),
+  _nested_schema: z.string().optional(),
+  _reference_schema: z.array(z.string()).optional(),
+  _rich_text_wrapper: z.string().optional(),
+  _display_name: z.boolean().default(false),
+  _required: z.boolean().default(false),
+}).refine((data) => {
+  // Cross-field validation for required conditional fields
+  if (NESTED_SCHEMA_TYPES.has(data._type) && !data._nested_schema) {
+    return false;
+  }
+  if (REFERENCE_SCHEMA_TYPES.has(data._type) && (!data._reference_schema || data._reference_schema.length === 0)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "nested_schema required for NestedDocument; reference_schema required for ReferenceDocument",
+  path: ["_type"],
+}).refine((data) => {
+  // Validate relation only for relational types
+  if (data._relation && !RELATION_TYPES.has(data._type)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "relation only valid for ReferenceDocument or NestedDocument",
+  path: ["_relation"],
+}).refine((data) => {
+  // Validate default_value not for excluded types
+  if (data._default_value && NO_DEFAULT_VALUE_TYPES.has(data._type)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "default_value not supported for this field type",
+  path: ["_default_value"],
+}).refine((data) => {
+  // Validate placeholder not for excluded types
+  if (data._placeholder && NO_PLACEHOLDER_TYPES.has(data._type)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "placeholder not supported for this field type",
+  path: ["_placeholder"],
+}).refine((data) => {
+  // Validate nested_schema only for NestedDocument
+  if (data._nested_schema && !NESTED_SCHEMA_TYPES.has(data._type)) {
+    return false;
+  }
+  if (data._nested_schema && !SCHEMA_NAME_PATTERN.test(data._nested_schema)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "nested_schema only valid for NestedDocument and must be PascalCase",
+  path: ["_nested_schema"],
+}).refine((data) => {
+  // Validate reference_schema only for ReferenceDocument
+  if (data._reference_schema && data._reference_schema.length > 0 && !REFERENCE_SCHEMA_TYPES.has(data._type)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "reference_schema only valid for ReferenceDocument",
+  path: ["_reference_schema"],
+}).refine((data) => {
+  // Validate rich_text_wrapper only for RichText
+  if (data._rich_text_wrapper && !RICH_TEXT_WRAPPER_TYPES.has(data._type)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "rich_text_wrapper only valid for RichText",
+  path: ["_rich_text_wrapper"],
+});
+
+// Type inferred from schema
+type SchemaFieldCreate = z.infer<typeof SchemaFieldCreateSchema>;
 
 // ── Guardrails ────────────────────────────────────────────────────────────
 
@@ -104,7 +342,7 @@ function isWriteTool(name: string): boolean {
 /** Guardrail wrapper for tool handlers. */
 function withGuardrails<T extends Record<string, unknown>>(
   toolName: string,
-  handler: (args: T) => Promise<unknown>,
+  handler: (args: T) => Promise<{ content: Array<{ type: "text"; text: string }> }>,
 ) {
   return async (args: T) => {
     const clientKey = `${toolName}:${CMS_API_KEY.slice(0, 8)}`;
@@ -125,6 +363,12 @@ function resolveProjectId(explicit?: string): string {
   return id;
 }
 
+// Index-uniqueness and display-name-uniqueness are enforced atomically by
+// the backend (cms_backend/routers/sdk_schema.py, via
+// api.utils.schema.check_index_and_display_name_conflicts) — no client-side
+// pre-check here, since a read-then-write check over HTTP can't be atomic
+// and would just add a redundant round trip.
+
 // ── HTTP helpers ────────────────────────────────────────────────────────────
 
 /** JSON content-type header, plus X-API-Key if CMS_API_KEY is set. */
@@ -141,29 +385,62 @@ function apiUrl(path: string, params?: Record<string, string | number>): string 
   return u.toString();
 }
 
-/** Send an HTTP request and return the parsed JSON body, throwing on a non-ok response. */
-async function request(method: string, path: string, options?: {
-  params?: Record<string, string | number>;
-  data?: unknown;
-}): Promise<unknown> {
-  const res = await fetch(apiUrl(path, options?.params), {
-    method,
-    headers: headers(),
-    body: options?.data !== undefined ? JSON.stringify(options.data) : undefined,
-  });
-  if (!res.ok) {
-    throw new Error(`${method} ${path} failed: ${res.status} ${await res.text()}`);
+function checkCircuitBreaker(): void {
+  if (!circuitBreaker.canExecute()) {
+    throw new CircuitBreakerOpen(circuitBreaker.getRetryAfter());
   }
-  if (method === "DELETE") return null;
-  return res.json();
+}
+
+async function executeWithRetry(
+  method: string,
+  path: string,
+  options?: { params?: Record<string, string | number>; data?: unknown },
+): Promise<unknown> {
+  checkCircuitBreaker();
+
+  async function doRequest(): Promise<unknown> {
+    const res = await fetch(apiUrl(path, options?.params), {
+      method,
+      headers: headers(),
+      body: options?.data !== undefined ? JSON.stringify(options.data) : undefined,
+    });
+    if (RETRYABLE_STATUS_CODES.has(res.status) || !res.ok) {
+      // Surface the backend's actual error detail (e.g. a schema-field
+      // validation failure), not just a bare status code — falls back to
+      // raw text if the body isn't JSON.
+      const bodyText = await res.text();
+      let detail = bodyText;
+      try {
+        const parsed = JSON.parse(bodyText);
+        detail = typeof parsed === "object" && parsed && "detail" in parsed
+          ? JSON.stringify((parsed as { detail: unknown }).detail)
+          : bodyText;
+      } catch {
+        // not JSON, keep raw text
+      }
+      throw new Error(`${method} ${path} failed: ${res.status} ${detail}`);
+    }
+    if (method === "DELETE") return null;
+    return res.json();
+  }
+
+  try {
+    const result = await retryAsync(doRequest);
+    circuitBreaker.recordSuccess();
+    return result;
+  } catch (error) {
+    circuitBreaker.recordFailure();
+    throw error;
+  }
 }
 
 const get = (path: string, params?: Record<string, string | number>) =>
-  request("GET", path, { params });
-const post = (path: string, data?: unknown) => request("POST", path, { data: data ?? {} });
-const put = (path: string, data: unknown) => request("PUT", path, { data });
-const patch = (path: string, data: unknown) => request("PATCH", path, { data });
-const del = (path: string) => request("DELETE", path);
+  executeWithRetry("GET", path, { params });
+const post = (path: string, data?: unknown) =>
+  executeWithRetry("POST", path, { data: data ?? {} });
+const put = (path: string, data: unknown) => executeWithRetry("PUT", path, { data });
+const patch = (path: string, data: unknown) => executeWithRetry("PATCH", path, { data });
+const del = (path: string) => executeWithRetry("DELETE", path);
 
 /** Serialize obj to compact JSON for a tool's text response. */
 function dump(obj: unknown): { content: [{ type: "text"; text: string }] } {
@@ -248,9 +525,10 @@ const WORKFLOW_PROMPTS = [
 
 2. **Define schema** (if not exists):
    \`list_schema {project_id}\` → check existing
-   \`create_schema_field {project_id, schema_name: "Post", field_name: "title", field_type: "String", index: 1, display_name: true}\`
-   \`create_schema_field {project_id, schema_name: "Post", field_name: "body", field_type: "RichText", index: 2}\`
-   \`create_schema_field {project_id, schema_name: "Post", field_name: "author", field_type: "ReferenceDocument", index: 3}\`
+   \`create_schema_field {project_id, schema_name: "Post", field_name: "title", field_type: "String", display_name: true}\`
+   \`create_schema_field {project_id, schema_name: "Post", field_name: "body", field_type: "RichText"}\`
+   \`create_schema_field {project_id, schema_name: "Post", field_name: "author", field_type: "ReferenceDocument"}\`
+   (order is append-only and server-assigned — fields are created in the order you want them to appear)
 
 3. **Create collection** bound to schema:
    \`create_collection {project_id, collection_name: "posts", schema_name: "Post"}\`
@@ -302,22 +580,22 @@ const WORKFLOW_PROMPTS = [
 
 **Design rules:**
 1. Set \`display_name: true\` on exactly ONE field per schema (used as label in lists)
-2. Use \`index\` to control field order (1 = first)
+2. Field order is server-assigned by creation order (append-only) — create fields in the order you want them to appear
 3. Reference fields store target document IDs, not full objects
 4. Reference expansion happens at read time via \`get_document {depth: N}\`
 
 **Example — Blog with Authors:**
 \`\`\`
 Schema: Author
-  - name (String, index: 1, display_name: true)
-  - bio (RichText, index: 2)
+  - name (String, display_name: true)
+  - bio (RichText)
 
 Schema: Post
-  - title (String, index: 1, display_name: true)
-  - slug (String, index: 2)
-  - body (RichText, index: 3)
-  - author (ReferenceDocument, index: 4) → points to Author collection
-  - published_at (Number, index: 5) → timestamp
+  - title (String, display_name: true)
+  - slug (String)
+  - body (RichText)
+  - author (ReferenceDocument) → points to Author collection
+  - published_at (Number) → timestamp
 \`\`\`
 
 Then:
@@ -449,26 +727,70 @@ export async function createServer(): Promise<McpServer> {
     "create_schema_field",
     {
       description:
-        "Add a field to a schema (creating the schema itself the first time a field references it). field_type is e.g. 'String', 'Number', 'Boolean', 'RichText', 'ReferenceDocument'. Set display_name=true to make this field the one shown as a document's label in lists.",
+        `Add a field to a schema (creating the schema itself the first time a field references it).
+
+field_type must be one of: ${ALL_FIELD_TYPES.join(", ")}
+
+Conditional fields:
+- relation (OneToOne/OneToMany): only for ReferenceDocument, NestedDocument
+- default_value: not for ReferenceDocument, NestedDocument, RichText, Textarea, Image, File, URL
+- placeholder: not for Email, Image, File, Color, Boolean, NestedDocument, ReferenceDocument, RichText
+- nested_schema (PascalCase): required for NestedDocument
+- reference_schema (list of collection names): required for ReferenceDocument
+- rich_text_wrapper: only for RichText
+- display_name: only one per schema (enforced by the backend)
+- required: boolean
+- field order is append-only and server-assigned — fields are created in the order you want them to appear`,
       inputSchema: {
         project_id: z.string().optional(),
         schema_name: z.string(),
         field_name: z.string(),
-        field_type: z.string(),
-        index: z.number().int().default(1),
+        field_type: z.enum(ALL_FIELD_TYPES).default("String"),
         display_name: z.boolean().default(false),
+        description: z.string().default(""),
+        relation: z.enum(VALID_RELATIONS).optional(),
+        default_value: z.string().optional(),
+        placeholder: z.string().optional(),
+        nested_schema: z.string().optional(),
+        reference_schema: z.array(z.string()).optional(),
+        rich_text_wrapper: z.string().optional(),
+        required: z.boolean().default(false),
       },
     },
-    withGuardrails("create_schema_field", async ({ project_id, schema_name, field_name, field_type, index, display_name }) => {
-      return dump(
-        await post(`/projects/${resolveProjectId(project_id)}/schema/`, {
-          _index: index,
-          _name: field_name,
-          _type: field_type,
-          _schema_name: schema_name,
-          _display_name: display_name,
-        }),
-      );
+    withGuardrails("create_schema_field", async (args) => {
+      // Validate with Zod schema (catches type errors, pattern mismatches, conditional field rules)
+      const validated = SchemaFieldCreateSchema.parse({
+        _name: args.field_name,
+        _type: args.field_type,
+        _schema_name: args.schema_name,
+        _display_name: args.display_name,
+        _description: args.description,
+        _relation: args.relation,
+        _default_value: args.default_value,
+        _placeholder: args.placeholder,
+        _nested_schema: args.nested_schema,
+        _reference_schema: args.reference_schema,
+        _rich_text_wrapper: args.rich_text_wrapper,
+        _required: args.required,
+      });
+
+      const pid = resolveProjectId(args.project_id);
+
+      // Index/display_name uniqueness is enforced by the backend, atomically.
+      // Send to backend (convert undefined to empty string for compatibility).
+      // _relation is excluded: unlike the others, the backend's _relation is
+      // a strict Literal["OneToOne", "OneToMany"] with no "" case — it must
+      // always be one of those two literal strings on the wire, so an unset
+      // relation gets the same explicit "OneToOne" default the backend
+      // itself would apply, never "" and never omitted.
+      const storageData: Record<string, unknown> = { ...validated };
+      for (const key of ["_default_value", "_placeholder", "_nested_schema", "_rich_text_wrapper"] as const) {
+        if (storageData[key] === undefined) storageData[key] = "";
+      }
+      if (storageData._relation === undefined) storageData._relation = "OneToOne";
+      if (storageData._reference_schema === undefined) storageData._reference_schema = [];
+
+      return dump(await post(`/projects/${pid}/schema/`, storageData));
     }),
   );
 
@@ -596,7 +918,7 @@ export async function createServer(): Promise<McpServer> {
     "create_document",
     {
       description:
-        "Create a new document in a collection. data keys must match the collection's schema field names. New documents default to _status='draft'. Production workspace is read-only.",
+        "Create a new document in a collection. data is validated against the collection's schema: every key must be a real field name on that schema (no invented fields), and each value must match its field's declared type (including OneToMany list shapes and NestedDocument/compound object shapes). Missing a field marked required is rejected. data cannot contain _id or any other underscore-prefixed key — those are system-owned; the document id is always server-generated. New documents default to _status='draft'. Production workspace is read-only.",
       inputSchema: {
         project_id: z.string().optional(),
         workspace_name: z.string(),
@@ -618,7 +940,7 @@ export async function createServer(): Promise<McpServer> {
     "update_document",
     {
       description:
-        "Update fields on an existing document. Only include keys you want to change. The previous state is automatically saved as a version before the update is applied. Production workspace is read-only.",
+        "Update fields on an existing document. Only include keys you want to change. The merged result (existing fields plus this update) is validated against the collection's schema the same way create_document is — an update cannot introduce an invented field, a wrong-typed value, or leave a required field empty. data cannot contain _id (immutable) or any underscore-prefixed key other than _status (which must be 'draft' or 'published' if included — prefer update_document_status instead). The previous state is automatically saved as a version before the update is applied. Production workspace is read-only.",
       inputSchema: {
         project_id: z.string().optional(),
         workspace_name: z.string(),
@@ -768,14 +1090,8 @@ function toTitleCase(str: string): string {
 }
 
 function getSkillsDir(): string {
-  // Handle both ESM (import.meta.url) and CJS (__dirname) environments
-  try {
-    // ESM
-    return join(dirname(fileURLToPath(import.meta.url)), "skills");
-  } catch {
-    // CJS fallback
-    return join(__dirname, "skills");
-  }
+  // Works in both CJS and ESM (tsup bundles with __dirname shim)
+  return join(__dirname, "skills");
 }
 
 async function loadSkills(server: McpServer): Promise<void> {

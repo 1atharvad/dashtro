@@ -555,3 +555,265 @@ def test_project_delete_rejects_key_scoped_to_other_project(client, auth_headers
         headers={"X-API-Key": api_key},
     )
     assert resp.status_code == 403, resp.text
+
+
+# ── Schema Field Validation ─────────────────────────────────────────────────
+#
+# Regression tests for a real gap: create_schema_field/update_schema_field
+# in routers/sdk_schema.py used to accept the raw request body verbatim with
+# no validation at all (unlike create_collection/create_project/
+# create_workspace in the same file, which all validate via a Pydantic
+# model) — meaning nothing stopped a client (MCP-driven or otherwise) from
+# writing a schema field with a made-up field type, wrong-cased name, or a
+# NestedDocument/ReferenceDocument with no actual target. These tests pin
+# down that the shared SchemaFieldIn model (models/schema.py) is now
+# actually enforced on this write path.
+
+
+def test_create_schema_field_rejects_unknown_type(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+
+    resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_index": 1, "_name": "field", "_type": "NotARealType", "_schema_name": "Test"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 400, resp.text
+
+
+def test_create_schema_field_rejects_bad_name_casing(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+
+    resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_index": 1, "_name": "BadName", "_type": "String", "_schema_name": "Test"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 400, resp.text
+
+
+def test_create_schema_field_rejects_bad_schema_name_casing(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+
+    resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_index": 1, "_name": "field", "_type": "String", "_schema_name": "bad_name"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 400, resp.text
+
+
+def test_create_schema_field_ignores_client_supplied_index(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+
+    # _index is always server-assigned on create — a client-supplied value
+    # (even an invalid one like 0) is silently overwritten, never rejected.
+    resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_index": 0, "_name": "field", "_type": "String", "_schema_name": "Test"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["_index"] == 1
+
+
+def test_update_schema_field_rejects_index_below_one(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+    headers = {"X-API-Key": api_key}
+
+    create_resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_name": "field", "_type": "String", "_schema_name": "Test"},
+        headers=headers,
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    field_id = create_resp.json()["_id"]
+
+    # Unlike create, update lets the caller move a field's index — but the
+    # ge=1 floor still applies.
+    resp = client.put(
+        f"/api/sdk/projects/{project_id}/schema/{field_id}/",
+        json={"_index": 0},
+        headers=headers,
+    )
+    assert resp.status_code == 400, resp.text
+
+
+def test_create_schema_field_nested_document_requires_nested_schema(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+
+    resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_index": 1, "_name": "field", "_type": "NestedDocument", "_schema_name": "Test"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 400, resp.text
+
+    resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={
+            "_index": 1,
+            "_name": "field",
+            "_type": "NestedDocument",
+            "_schema_name": "Test",
+            "_nested_schema": "Child",
+        },
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 200, resp.text
+
+
+def test_create_schema_field_reference_document_requires_reference_schema(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+
+    resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_index": 1, "_name": "field", "_type": "ReferenceDocument", "_schema_name": "Test"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 400, resp.text
+
+    resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={
+            "_index": 1,
+            "_name": "field",
+            "_type": "ReferenceDocument",
+            "_schema_name": "Test",
+            "_reference_schema": ["authors"],
+        },
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 200, resp.text
+
+
+def test_create_schema_field_auto_increments_index(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+    headers = {"X-API-Key": api_key}
+
+    resp1 = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_name": "field_one", "_type": "String", "_schema_name": "Test"},
+        headers=headers,
+    )
+    assert resp1.status_code == 200, resp1.text
+    assert resp1.json()["_index"] == 1
+
+    resp2 = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_name": "field_two", "_type": "String", "_schema_name": "Test"},
+        headers=headers,
+    )
+    assert resp2.status_code == 200, resp2.text
+    assert resp2.json()["_index"] == 2
+
+
+def test_update_schema_field_rejects_duplicate_index(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+    headers = {"X-API-Key": api_key}
+
+    resp1 = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_name": "field_one", "_type": "String", "_schema_name": "Test"},
+        headers=headers,
+    )
+    assert resp1.status_code == 200, resp1.text
+
+    resp2 = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_name": "field_two", "_type": "String", "_schema_name": "Test"},
+        headers=headers,
+    )
+    assert resp2.status_code == 200, resp2.text
+    field_two_id = resp2.json()["_id"]
+
+    # field_two is at index 2 — try to move it onto field_one's index (1).
+    resp3 = client.put(
+        f"/api/sdk/projects/{project_id}/schema/{field_two_id}/",
+        json={"_index": 1},
+        headers=headers,
+    )
+    assert resp3.status_code == 400, resp3.text
+    assert "already used" in resp3.text
+
+
+def test_create_schema_field_rejects_duplicate_display_name(client, auth_headers):
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+    headers = {"X-API-Key": api_key}
+
+    resp1 = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={
+            "_index": 1,
+            "_name": "field_one",
+            "_type": "String",
+            "_schema_name": "Test",
+            "_display_name": True,
+        },
+        headers=headers,
+    )
+    assert resp1.status_code == 200, resp1.text
+
+    resp2 = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={
+            "_index": 2,
+            "_name": "field_two",
+            "_type": "String",
+            "_schema_name": "Test",
+            "_display_name": True,
+        },
+        headers=headers,
+    )
+    assert resp2.status_code == 400, resp2.text
+    assert "already has a display_name field" in resp2.text
+
+
+def test_update_schema_field_404s_on_unknown_id(client, auth_headers):
+    """
+    Same bug class as test_collection_update_404s_on_unknown_id: before this
+    fix, update_schema_field had no existence check, so PUT-ing an unknown
+    field_id would silently INSERT a new, half-populated schema field row.
+    """
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+
+    resp = client.put(
+        f"/api/sdk/projects/{project_id}/schema/does-not-exist/",
+        json={"_index": 1, "_name": "field", "_type": "String", "_schema_name": "Test"},
+        headers={"X-API-Key": api_key},
+    )
+    assert resp.status_code == 404, resp.text
+
+
+def test_update_schema_field_can_change_index_without_colliding_with_itself(client, auth_headers):
+    """The uniqueness check must exclude the field being updated, or every
+    no-op update (or even a valid reorder) would spuriously conflict with
+    itself."""
+    project_id = _create_project(client, auth_headers)
+    api_key = _create_api_key(client, auth_headers)
+    headers = {"X-API-Key": api_key}
+
+    create_resp = client.post(
+        f"/api/sdk/projects/{project_id}/schema/",
+        json={"_index": 1, "_name": "field", "_type": "String", "_schema_name": "Test"},
+        headers=headers,
+    )
+    field_id = create_resp.json()["_id"]
+
+    update_resp = client.put(
+        f"/api/sdk/projects/{project_id}/schema/{field_id}/",
+        json={"_index": 1, "_name": "field", "_type": "String", "_schema_name": "Test"},
+        headers=headers,
+    )
+    assert update_resp.status_code == 200, update_resp.text

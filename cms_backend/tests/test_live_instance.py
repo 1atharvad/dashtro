@@ -6,13 +6,18 @@ Every other test in this suite proves the code is correct against an
 in-process app instance; these prove the same behavior holds end-to-end
 against a real deployed process, database, and network round trip.
 
-Skipped entirely unless both LIVE_CMS_BASE_URL and LIVE_CMS_API_KEY are set
-(e.g. `LIVE_CMS_BASE_URL=https://dashtro-staging.onrender.com
-LIVE_CMS_API_KEY=... pytest cms_backend/tests/test_live_instance.py`) — never
-runs in CI or a normal local `pytest` invocation, since it needs real
-credentials and talks to the network. The API key must be unscoped (no
-project_id bound to it) since test_live_project_lifecycle exercises
-create_project, which only an unscoped key is allowed to do.
+Skipped entirely unless both LIVE_CMS_BASE_URL and LIVE_CMS_API_KEY are set —
+either as real env vars, or (easier for repeated local runs) as two lines in
+a repo-root `.env.live` file (gitignored, separate from the normal `.env` so
+staging credentials don't mix with local dev config — see
+`.env.live.example`):
+    LIVE_CMS_BASE_URL=https://dashtro-staging.onrender.com
+    LIVE_CMS_API_KEY=...
+A real env var of the same name always takes priority over `.env.live` if
+both are set. Never runs in CI or a normal local `pytest` invocation, since
+it needs real credentials and talks to the network. The API key must be
+unscoped (no project_id bound to it) since test_live_project_lifecycle
+exercises create_project, which only an unscoped key is allowed to do.
 
 Every test uses the `live_project` fixture, which creates a fresh scratch
 project through create_project and always deletes it again in a `finally`
@@ -23,12 +28,28 @@ as it was before the test ran, even if an assertion fails partway through.
 
 import os
 import uuid
+from pathlib import Path
 
 import httpx
 import pytest
+from decouple import Config, RepositoryEnv
 
-BASE_URL = os.environ.get("LIVE_CMS_BASE_URL", "").rstrip("/")
-API_KEY = os.environ.get("LIVE_CMS_API_KEY", "")
+_LIVE_ENV_PATH = Path(__file__).resolve().parents[2] / ".env.live"
+
+
+def _live_env(key: str) -> str:
+    """A real env var wins if set; otherwise fall back to .env.live (repo
+    root, gitignored) — kept separate from the main .env so these opt-in
+    live-instance credentials don't mix with normal local dev config."""
+    if key in os.environ:
+        return os.environ[key]
+    if _LIVE_ENV_PATH.exists():
+        return Config(RepositoryEnv(str(_LIVE_ENV_PATH)))(key, default="")
+    return ""
+
+
+BASE_URL = _live_env("LIVE_CMS_BASE_URL").rstrip("/")
+API_KEY = _live_env("LIVE_CMS_API_KEY")
 
 pytestmark = pytest.mark.skipif(
     not BASE_URL or not API_KEY,
@@ -157,12 +178,12 @@ def test_live_collection_and_document_crud(live_client, live_project):
     assert create_coll_resp.status_code == 200, create_coll_resp.text
     collection_id = create_coll_resp.json()["_id"]
 
-    doc_id = uuid.uuid4().hex[:12]
     create_doc_resp = live_client.post(
         f"/projects/{live_project}/workspace/staging/collection/posts/",
-        json={"_id": doc_id, "title": "Hello from the live suite"},
+        json={"title": "Hello from the live suite"},
     )
     assert create_doc_resp.status_code == 201, create_doc_resp.text
+    doc_id = create_doc_resp.json()["_id"]
 
     get_doc_resp = live_client.get(
         f"/projects/{live_project}/workspace/staging/collection/posts/document/{doc_id}/"

@@ -22,20 +22,352 @@ Configuration (env vars):
   MCP_READ_ONLY     — "true" to disable write tools (default: false)
 """
 
+import asyncio
 import json
 import math
 import os
+import random
+import re
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from functools import wraps
-from typing import Any
+from typing import Any, Literal, TypeVar
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# ── Retry & Circuit Breaker Configuration ────────────────────────────────────
+
+MAX_RETRIES = int(os.environ.get("MCP_MAX_RETRIES", "3"))
+BASE_RETRY_DELAY = float(os.environ.get("MCP_BASE_RETRY_DELAY", "0.5"))  # seconds
+MAX_RETRY_DELAY = float(os.environ.get("MCP_MAX_RETRY_DELAY", "30.0"))  # seconds
+RETRY_JITTER = float(os.environ.get("MCP_RETRY_JITTER", "0.1"))  # 10% jitter
+
+# Circuit breaker settings
+CIRCUIT_BREAKER_THRESHOLD = int(os.environ.get("MCP_CB_THRESHOLD", "5"))  # failures before opening
+CIRCUIT_BREAKER_TIMEOUT = float(
+    os.environ.get("MCP_CB_TIMEOUT", "30.0")
+)  # seconds before half-open
+CIRCUIT_BREAKER_HALF_OPEN_MAX = int(
+    os.environ.get("MCP_CB_HALF_OPEN_MAX", "3")
+)  # test requests in half-open
+
+# Retryable HTTP status codes
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+T = TypeVar("T")
+
+
+class CircuitBreakerOpen(Exception):
+    """Raised when circuit breaker is open and requests are blocked."""
+
+    def __init__(self, retry_after: float):
+        self.retry_after = retry_after
+        super().__init__(f"Circuit breaker open, retry after {retry_after:.1f}s")
+
+
+class CircuitBreaker:
+    """Simple circuit breaker to prevent cascading failures."""
+
+    def __init__(
+        self,
+        failure_threshold: int = CIRCUIT_BREAKER_THRESHOLD,
+        recovery_timeout: float = CIRCUIT_BREAKER_TIMEOUT,
+        half_open_max: int = CIRCUIT_BREAKER_HALF_OPEN_MAX,
+    ):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.half_open_max = half_open_max
+        self.failure_count = 0
+        self.success_count = 0
+        self.last_failure_time: float | None = None
+        self.state = "closed"  # closed, open, half-open
+
+    def record_success(self) -> None:
+        self.failure_count = 0
+        if self.state == "half-open":
+            self.success_count += 1
+            if self.success_count >= self.half_open_max:
+                self.state = "closed"
+                self.success_count = 0
+
+    def record_failure(self) -> None:
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+        if self.state == "half-open":
+            self.state = "open"
+            self.success_count = 0
+        elif self.failure_count >= self.failure_threshold:
+            self.state = "open"
+
+    def can_execute(self) -> bool:
+        if self.state == "closed":
+            return True
+        if self.state == "open":
+            if (
+                self.last_failure_time
+                and (time.time() - self.last_failure_time) >= self.recovery_timeout
+            ):
+                self.state = "half-open"
+                self.success_count = 0
+                return True
+            return False
+        # half-open
+        return True
+
+    def get_retry_after(self) -> float:
+        if self.state == "open" and self.last_failure_time:
+            return max(0, self.recovery_timeout - (time.time() - self.last_failure_time))
+        return 0
+
+
+# Global circuit breaker instance (shared across all requests to the same backend)
+_circuit_breaker = CircuitBreaker()
+
+
+def _calculate_backoff(attempt: int) -> float:
+    """Calculate exponential backoff with jitter."""
+    delay = min(BASE_RETRY_DELAY * (2**attempt), MAX_RETRY_DELAY)
+    jitter = delay * RETRY_JITTER * random.uniform(-1, 1)
+    return max(0, delay + jitter)
+
+
+async def _retry_async(
+    func: Callable[..., T],
+    *args: Any,
+    max_retries: int = MAX_RETRIES,
+    **kwargs: Any,
+) -> T:
+    """Execute async function with exponential backoff retry for transient failures."""
+    last_exception: Exception | None = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return await func(*args, **kwargs)
+        except httpx.HTTPStatusError as e:
+            last_exception = e
+            if e.response.status_code not in RETRYABLE_STATUS_CODES:
+                raise
+            if attempt == max_retries:
+                raise
+        except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError) as e:
+            last_exception = e
+            if attempt == max_retries:
+                raise
+        except CircuitBreakerOpen:
+            # Don't retry circuit breaker errors - fail fast
+            raise
+
+        # Wait before retry
+        delay = _calculate_backoff(attempt)
+        await asyncio.sleep(delay)
+
+    # This should never be reached, but satisfies type checker
+    raise last_exception from last_exception
+
 
 CMS_API_URL = os.environ.get("CMS_API_URL", "http://localhost:7312/api/sdk")
 CMS_API_KEY = os.environ.get("CMS_API_KEY", "")
 CMS_PROJECT_ID = os.environ.get("CMS_PROJECT_ID", "")
+
+# ── Schema Field Validation (Pydantic model matching backend SchemaFieldIn) ──────
+
+# From backend models/field_types.py - keep in sync
+ALL_FIELD_TYPES = (
+    "String",
+    "Number",
+    "Boolean",
+    "Email",
+    "Date",
+    "DateTime",
+    "Color",
+    "RichText",
+    "Textarea",
+    "Image",
+    "URL",
+    "File",
+    "ScrollLink",
+    "NestedDocument",
+    "ReferenceDocument",
+)
+
+VALID_RELATIONS = ("OneToOne", "OneToMany")
+
+# Field types with conditional fields
+NO_DEFAULT_VALUE_TYPES = {
+    "ReferenceDocument",
+    "NestedDocument",
+    "RichText",
+    "Textarea",
+    "Image",
+    "File",
+    "URL",
+}
+NO_PLACEHOLDER_TYPES = {
+    "Email",
+    "Image",
+    "File",
+    "Color",
+    "Boolean",
+    "NestedDocument",
+    "ReferenceDocument",
+    "RichText",
+}
+NESTED_SCHEMA_TYPES = {"NestedDocument"}
+REFERENCE_SCHEMA_TYPES = {"ReferenceDocument"}
+RICH_TEXT_WRAPPER_TYPES = {"RichText"}
+RELATION_TYPES = {"ReferenceDocument", "NestedDocument"}
+
+SCHEMA_NAME_PATTERN = r"^[A-Z][a-zA-Z]*$"
+FIELD_NAME_PATTERN = r"^[a-z]+(_[a-z]+)*$"
+
+
+class SchemaFieldCreate(BaseModel):
+    """Pydantic model for creating a schema field - mirrors backend SchemaFieldIn.
+
+    Conditional fields are optional (None = not provided). Validation only runs
+    when a non-None value is given. to_storage() converts None -> "" for backend.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    name: str = Field(alias="_name", pattern=FIELD_NAME_PATTERN)
+    type: Literal[ALL_FIELD_TYPES] = Field(default="String", alias="_type")
+    description: str = Field(default="", alias="_description")
+    relation: Literal[VALID_RELATIONS] | None = Field(default=None, alias="_relation")
+    default_value: str | None = Field(default=None, alias="_default_value")
+    placeholder: str | None = Field(default=None, alias="_placeholder")
+    nested_schema: str | None = Field(default=None, alias="_nested_schema")
+    reference_schema: list[str] | None = Field(default=None, alias="_reference_schema")
+    rich_text_wrapper: str | None = Field(default=None, alias="_rich_text_wrapper")
+    display_name: bool = Field(default=False, alias="_display_name")
+    required: bool = Field(default=False, alias="_required")
+    schema_name: str = Field(alias="_schema_name", pattern=SCHEMA_NAME_PATTERN)
+
+    @field_validator("schema_name", mode="before")
+    @classmethod
+    def validate_schema_name(cls, v: str) -> str:
+        if not re.match(SCHEMA_NAME_PATTERN, v):
+            raise ValueError("Must be PascalCase without numbers (e.g. 'BlogPost')")
+        return v
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not re.match(FIELD_NAME_PATTERN, v):
+            raise ValueError("Must be snake_case without numbers (e.g. 'post_title')")
+        return v
+
+    @field_validator("relation")
+    @classmethod
+    def validate_relation(cls, v: str | None, info) -> str | None:
+        if v is None:
+            return v
+        field_type = info.data.get("type") or info.data.get("_type")
+        if field_type not in RELATION_TYPES:
+            raise ValueError(
+                f"relation only valid for ReferenceDocument or NestedDocument, not {field_type}"
+            )
+        return v
+
+    @field_validator("default_value")
+    @classmethod
+    def validate_default_value(cls, v: str | None, info) -> str | None:
+        if v is None:
+            return v
+        field_type = info.data.get("type") or info.data.get("_type")
+        if v and field_type in NO_DEFAULT_VALUE_TYPES:
+            raise ValueError(f"default_value not supported for {field_type}")
+        return v
+
+    @field_validator("placeholder")
+    @classmethod
+    def validate_placeholder(cls, v: str | None, info) -> str | None:
+        if v is None:
+            return v
+        field_type = info.data.get("type") or info.data.get("_type")
+        if v and field_type in NO_PLACEHOLDER_TYPES:
+            raise ValueError(f"placeholder not supported for {field_type}")
+        return v
+
+    @field_validator("nested_schema")
+    @classmethod
+    def validate_nested_schema(cls, v: str | None, info) -> str | None:
+        if v is None:
+            return v
+        field_type = info.data.get("type") or info.data.get("_type")
+        if field_type in NESTED_SCHEMA_TYPES:
+            if not v:
+                raise ValueError("nested_schema required for NestedDocument")
+            if not re.match(SCHEMA_NAME_PATTERN, v):
+                raise ValueError("nested_schema must be PascalCase (e.g. 'Author')")
+        elif v:
+            raise ValueError(f"nested_schema only valid for NestedDocument, not {field_type}")
+        return v
+
+    @field_validator("reference_schema")
+    @classmethod
+    def validate_reference_schema(cls, v: list[str] | None, info) -> list[str] | None:
+        if v is None:
+            return v
+        field_type = info.data.get("type") or info.data.get("_type")
+        if field_type in REFERENCE_SCHEMA_TYPES:
+            if not v or not any(v):
+                raise ValueError(
+                    "reference_schema required for ReferenceDocument (list of collection names)"
+                )
+        elif v and any(v):
+            raise ValueError(f"reference_schema only valid for ReferenceDocument, not {field_type}")
+        return v
+
+    @field_validator("rich_text_wrapper")
+    @classmethod
+    def validate_rich_text_wrapper(cls, v: str | None, info) -> str | None:
+        if v is None:
+            return v
+        field_type = info.data.get("type") or info.data.get("_type")
+        if v and field_type not in RICH_TEXT_WRAPPER_TYPES:
+            raise ValueError(f"rich_text_wrapper only valid for RichText, not {field_type}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_required_conditional_fields(self) -> "SchemaFieldCreate":
+        """Check that required conditional fields are provided for specific types."""
+        field_type = self.type
+        if field_type in NESTED_SCHEMA_TYPES and not self.nested_schema:
+            raise ValueError("nested_schema required for NestedDocument")
+        if field_type in REFERENCE_SCHEMA_TYPES and not self.reference_schema:
+            raise ValueError(
+                "reference_schema required for ReferenceDocument (list of collection names)"
+            )
+        return self
+
+    def to_storage(self) -> dict:
+        """Convert to backend storage format (aliases, None -> "")."""
+        data = self.model_dump(by_alias=True, exclude_none=False)
+        # Convert None to "" for backend compatibility. _relation is excluded:
+        # unlike the others, the backend's _relation is a strict
+        # Literal["OneToOne", "OneToMany"] with no "" case — it must always
+        # be one of those two literal strings on the wire, so an unset
+        # relation gets the same explicit "OneToOne" default the backend
+        # itself would apply, never "" and never omitted.
+        for key in ("_default_value", "_placeholder", "_nested_schema", "_rich_text_wrapper"):
+            if data.get(key) is None:
+                data[key] = ""
+        if data.get("_relation") is None:
+            data["_relation"] = "OneToOne"
+        if data.get("_reference_schema") is None:
+            data["_reference_schema"] = []
+        return data
+
+
+# Index-uniqueness and display-name-uniqueness are enforced atomically by the
+# backend (cms_backend/routers/sdk_schema.py, via
+# api.utils.schema.check_index_and_display_name_conflicts) — no client-side
+# pre-check here, since a read-then-write check over HTTP can't be atomic and
+# would just add a redundant round trip.
 
 # ── Guardrails ──────────────────────────────────────────────────────────────────
 
@@ -156,43 +488,98 @@ def _url(path: str) -> str:
     return f"{CMS_API_URL.rstrip('/')}{path}"
 
 
+def _check_circuit_breaker() -> None:
+    """Check if circuit breaker allows request execution."""
+    if not _circuit_breaker.can_execute():
+        raise CircuitBreakerOpen(_circuit_breaker.get_retry_after())
+
+
+def _enrich_http_error(e: httpx.HTTPStatusError) -> httpx.HTTPStatusError:
+    """Re-raise with the backend's actual error detail in the message.
+
+    raise_for_status()'s default message only has the status code and URL —
+    a schema-field validation failure's actual reason (e.g. "Index 1 already
+    used by field 'title' in schema 'Post'") would otherwise never reach the
+    MCP tool caller. Keeps the exception type/response intact so existing
+    status-code checks still work.
+    """
+    try:
+        body = e.response.json()
+        detail = body.get("detail", body) if isinstance(body, dict) else body
+    except ValueError:
+        detail = e.response.text
+    message = f"{e} — {detail}" if detail else str(e)
+    return httpx.HTTPStatusError(message, request=e.request, response=e.response)
+
+
+async def _execute_with_retry(
+    method: str,
+    path: str,
+    data: dict | None = None,
+    params: dict | None = None,
+) -> dict | list | None:
+    """Execute HTTP request with retry logic and circuit breaker."""
+    _check_circuit_breaker()
+
+    async def _do_request() -> dict | list | None:
+        async with httpx.AsyncClient(timeout=30) as client:
+            if method == "GET":
+                r = await client.get(_url(path), headers=_headers(), params=params)
+            elif method == "POST":
+                r = await client.post(_url(path), headers=_headers(), json=data or {})
+            elif method == "PUT":
+                r = await client.put(_url(path), headers=_headers(), json=data)
+            elif method == "PATCH":
+                r = await client.patch(_url(path), headers=_headers(), json=data)
+            elif method == "DELETE":
+                r = await client.delete(_url(path), headers=_headers())
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
+
+            if r.status_code in RETRYABLE_STATUS_CODES:
+                # Raise to trigger retry
+                r.raise_for_status()
+
+            r.raise_for_status()
+            if method == "DELETE":
+                return None
+            return r.json()
+
+    try:
+        result = await _retry_async(_do_request)
+        _circuit_breaker.record_success()
+        return result
+    except httpx.HTTPStatusError as e:
+        _circuit_breaker.record_failure()
+        raise _enrich_http_error(e) from e
+    except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError):
+        _circuit_breaker.record_failure()
+        raise
+
+
 async def _get(path: str, params: dict | None = None) -> dict | list:
     """GET path and return the parsed JSON body, raising on a non-2xx response."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.get(_url(path), headers=_headers(), params=params)
-        r.raise_for_status()
-        return r.json()
+    return await _execute_with_retry("GET", path, params=params)  # type: ignore[return-value]
 
 
 async def _post(path: str, data: dict | None = None) -> dict:
     """POST data as JSON to path and return the parsed JSON body, raising on a non-2xx response."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(_url(path), headers=_headers(), json=data or {})
-        r.raise_for_status()
-        return r.json()
+    return await _execute_with_retry("POST", path, data=data)  # type: ignore[return-value]
 
 
 async def _put(path: str, data: dict) -> dict:
     """PUT data as JSON to path and return the parsed JSON body, raising on a non-2xx response."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.put(_url(path), headers=_headers(), json=data)
-        r.raise_for_status()
-        return r.json()
+    return await _execute_with_retry("PUT", path, data=data)  # type: ignore[return-value]
 
 
 async def _patch(path: str, data: dict) -> dict:
     """PATCH data as JSON to path and return the parsed JSON body, raising on a non-2xx response."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.patch(_url(path), headers=_headers(), json=data)
-        r.raise_for_status()
-        return r.json()
+    return await _execute_with_retry("PATCH", path, data=data)  # type: ignore[return-value]
 
 
 async def _delete(path: str) -> None:
     """DELETE path, raising on a non-2xx response."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.delete(_url(path), headers=_headers())
-        r.raise_for_status()
+    await _execute_with_retry("DELETE", path)
 
 
 def _dump(obj) -> str:
@@ -286,35 +673,73 @@ async def create_schema_field(
     project_id: str | None = None,
     schema_name: str = "",
     field_name: str = "",
-    field_type: str = "",
-    index: int = 1,
+    field_type: str = "String",
     display_name: bool = False,
+    description: str = "",
+    relation: str | None = None,
+    default_value: str | None = None,
+    placeholder: str | None = None,
+    nested_schema: str | None = None,
+    reference_schema: list[str] | None = None,
+    rich_text_wrapper: str | None = None,
+    required: bool = False,
 ) -> str:
     """
     Add a field to a schema (creating the schema itself the first time a
-    field references it). field_type is e.g. 'String', 'Number', 'Boolean',
-    'RichText', 'ReferenceDocument'. Set display_name=True to make this
-    field the one shown as a document's label in lists.
+    field references it).
+
+    field_type must be one of: String, Number, Boolean, Email, Date, DateTime,
+    Color, RichText, Textarea, Image, URL, File, ScrollLink, NestedDocument,
+    ReferenceDocument
+
+    Conditional fields:
+    - relation (OneToOne/OneToMany): only for ReferenceDocument, NestedDocument
+    - default_value: not for ReferenceDocument, NestedDocument, RichText, Textarea, Image, File, URL
+    - placeholder: not for Email, Image, File, Color, Boolean, NestedDocument, ReferenceDocument, RichText
+    - nested_schema (PascalCase): required for NestedDocument
+    - reference_schema (list of collection names): required for ReferenceDocument
+    - rich_text_wrapper: only for RichText
+    - display_name: only one per schema (enforced)
+    - required: boolean
+
+    Field order (_index) is assigned automatically by the backend — new
+    fields are always appended to the end of the schema; there's no way to
+    request a specific position here.
     """
-    if not schema_name:
-        raise ValueError("schema_name is required and cannot be empty")
-    if not field_name:
-        raise ValueError("field_name is required and cannot be empty")
-    if not field_type:
-        raise ValueError("field_type is required and cannot be empty")
     pid = _resolve_project_id(project_id)
-    return _dump(
-        await _post(
-            f"/projects/{pid}/schema/",
-            data={
-                "_index": index,
-                "_name": field_name,
-                "_type": field_type,
-                "_schema_name": schema_name,
-                "_display_name": display_name,
-            },
-        )
-    )
+
+    # Build data for Pydantic validation - only include non-None optional fields
+    field_data = {
+        "_name": field_name,
+        "_type": field_type,
+        "_schema_name": schema_name,
+        "_display_name": display_name,
+        "_description": description,
+        "_required": required,
+    }
+    # Add optional fields only if provided (not None)
+    if relation is not None:
+        field_data["_relation"] = relation
+    if default_value is not None:
+        field_data["_default_value"] = default_value
+    if placeholder is not None:
+        field_data["_placeholder"] = placeholder
+    if nested_schema is not None:
+        field_data["_nested_schema"] = nested_schema
+    if reference_schema is not None:
+        field_data["_reference_schema"] = reference_schema
+    if rich_text_wrapper is not None:
+        field_data["_rich_text_wrapper"] = rich_text_wrapper
+
+    # Validate with Pydantic (catches type errors, pattern mismatches, conditional field rules)
+    try:
+        validated = SchemaFieldCreate.model_validate(field_data)
+    except Exception as e:
+        raise ValueError(f"Invalid schema field: {e}") from e
+
+    # Index/display_name uniqueness is enforced by the backend, atomically.
+    # Send to backend
+    return _dump(await _post(f"/projects/{pid}/schema/", data=validated.to_storage()))
 
 
 @mcp.tool()
@@ -443,7 +868,13 @@ async def create_document(
 ) -> str:
     """
     Create a new document in a collection.
-    data keys must match the collection's schema field names.
+
+    data is validated against the collection's schema: every key must be a
+    real field name on that schema (no invented fields), and each value must
+    match its field's declared type (including OneToMany list shapes and
+    NestedDocument/compound object shapes). Missing a field marked required
+    is rejected. data cannot contain _id or any other underscore-prefixed
+    key — those are system-owned; the document id is always server-generated.
     New documents default to _status='draft'. Production workspace is read-only.
     """
     pid = _resolve_project_id(project_id)
@@ -466,6 +897,12 @@ async def update_document(
 ) -> str:
     """
     Update fields on an existing document. Only include keys you want to change.
+    The merged result (existing fields plus this update) is validated against
+    the collection's schema the same way create_document is — an update
+    cannot introduce an invented field, a wrong-typed value, or leave a
+    required field empty. data cannot contain _id (immutable) or any
+    underscore-prefixed key other than _status (which must be 'draft' or
+    'published' if included — prefer update_document_status instead).
     The previous state is automatically saved as a version before the update is applied.
     Production workspace is read-only.
     """
@@ -654,9 +1091,10 @@ async def create_content_workflow() -> str:
 
 2. **Define schema** (if not exists):
    `list_schema {project_id}` → check existing
-   `create_schema_field {project_id, schema_name: "Post", field_name: "title", field_type: "String", index: 1, display_name: true}`
-   `create_schema_field {project_id, schema_name: "Post", field_name: "body", field_type: "RichText", index: 2}`
-   `create_schema_field {project_id, schema_name: "Post", field_name: "author", field_type: "ReferenceDocument", index: 3}`
+   `create_schema_field {project_id, schema_name: "Post", field_name: "title", field_type: "String", display_name: true}`
+   `create_schema_field {project_id, schema_name: "Post", field_name: "body", field_type: "RichText"}`
+   `create_schema_field {project_id, schema_name: "Post", field_name: "author", field_type: "ReferenceDocument"}`
+   (order is append-only and server-assigned — fields are created in the order you want them to appear)
 
 3. **Create collection** bound to schema:
    `create_collection {project_id, collection_name: "posts", schema_name: "Post"}`

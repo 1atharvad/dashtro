@@ -28,6 +28,7 @@ cloudflared/credentials.json
 __pycache__
 **/**.pyc
 .env
+.env.live
 *.egg-info/
 sdk/python/build/
 cms_backend/db.sqlite3

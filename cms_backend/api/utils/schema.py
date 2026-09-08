@@ -42,6 +42,45 @@ def get_schema_for_collection(collection_name: str, collections: dict, schema: d
     return collection_id, schema_name, schema_data.get(schema_name)
 
 
+def next_schema_index(schema: dict, schema_name: str) -> int:
+    """Next _index for a newly created field in schema_name: one past
+    whatever the current highest index in that schema is (1 if the schema
+    doesn't exist yet). Used so field ordering on create is always
+    server-assigned, never a caller-supplied value.
+    """
+    existing = [
+        field_data.get("_index", 0)
+        for field_data in schema.values()
+        if field_data.get("_schema_name") == schema_name
+    ]
+    return (max(existing) if existing else 0) + 1
+
+
+def check_index_and_display_name_conflicts(
+    schema: dict,
+    schema_name: str,
+    index: int,
+    display_name: bool,
+    exclude_field_id: str | None = None,
+) -> None:
+    """Raise ValueError if index or display_name would collide with another
+    field already in the same schema. Call before writing a new/updated field.
+    """
+    for field_id, field_data in schema.items():
+        if field_id == exclude_field_id or field_data.get("_schema_name") != schema_name:
+            continue
+        if field_data.get("_index") == index:
+            raise ValueError(
+                f"Index {index} already used by field '{field_data.get('_name')}' "
+                f"in schema '{schema_name}'"
+            )
+        if display_name and field_data.get("_display_name"):
+            raise ValueError(
+                f"Schema '{schema_name}' already has a display_name field: "
+                f"'{field_data.get('_name')}'. Only one display_name field allowed per schema."
+            )
+
+
 def reindex_schema_after_delete(schema: dict, deleted_id: str) -> tuple[list[str], str | None]:
     """Remove a field from the in-memory schema dict and reindex remaining fields.
 

@@ -1,17 +1,23 @@
 """SDK schema endpoints for import/export via API key authentication."""
 
+import json
 import uuid
 from datetime import UTC, datetime
 
 from api.utils import get_audit_client, get_data_client
 from api.utils.actor import get_client_ip
 from api.utils.api_key_auth import check_key_scope, require_api_key
-from api.utils.schema import get_schema_names as _get_schema_names
-from api.utils.schema import schema_jsonify
+from api.utils.schema import (
+    check_index_and_display_name_conflicts,
+    get_schema_names,
+    next_schema_index,
+    schema_jsonify,
+)
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from models.collection import SchemaCollectionIn
 from models.project import ProjectIn, WorkspaceIn
+from models.schema import SchemaFieldIn
 from pydantic import ValidationError
 
 PRODUCTION = "production"
@@ -33,7 +39,7 @@ def _key_actor(key_info: dict) -> tuple[str, str]:
 
 
 @router.get("/projects/{project_id}/schema/")
-def get_schema_names(
+def list_schema_names(
     project_id: str,
     key_info: dict = Depends(require_api_key("read")),
 ):
@@ -41,7 +47,7 @@ def get_schema_names(
     check_key_scope(key_info, project_id, None)
     db = get_data_client()
     schema = db.get_schema(project_id)
-    return {"_schema_names": _get_schema_names(schema)}
+    return {"_schema_names": get_schema_names(schema)}
 
 
 @router.get("/projects/{project_id}/schema/{schema_name}/")
@@ -192,15 +198,28 @@ def create_schema_field(
     request: Request,
     key_info: dict = Depends(require_api_key("write")),
 ):
-    """Create a schema field."""
+    """Create a schema field. _index is always server-assigned (append to
+    the end of the schema) — any _index the caller sends is ignored."""
     check_key_scope(key_info, project_id, None)
     db = get_data_client()
-    schema_name = body.get("_schema_name")
-    if not schema_name:
-        raise HTTPException(status_code=400, detail="_schema_name required")
 
+    schema = db.get_schema(project_id)
+    body = {**body, "_index": next_schema_index(schema, body.get("_schema_name") or "")}
+    try:
+        field = SchemaFieldIn.model_validate(body)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=json.loads(e.json())) from e
+
+    try:
+        check_index_and_display_name_conflicts(
+            schema, field.schema_name, field.index, field.display_name
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    data = field.to_storage()
     field_id = uuid.uuid4().hex[:16]
-    db.upsert_schema_field(project_id, field_id, body)
+    db.upsert_schema_field(project_id, field_id, data)
 
     user_id, user_email = _key_actor(key_info)
     db_audit.log(
@@ -209,11 +228,11 @@ def create_schema_field(
         user_id=user_id,
         user_email=user_email,
         resource_id=field_id,
-        resource_name=f"{schema_name}.{body.get('_name', '')}",
+        resource_name=f"{field.schema_name}.{field.name}",
         project_id=project_id,
         ip_address=get_client_ip(request),
     )
-    return {"_id": field_id, **body}
+    return {"_id": field_id, **data}
 
 
 @router.put("/projects/{project_id}/schema/{field_id}/")
@@ -227,7 +246,33 @@ def update_schema_field(
     """Update a schema field."""
     check_key_scope(key_info, project_id, None)
     db = get_data_client()
-    db.upsert_schema_field(project_id, field_id, body)
+
+    schema = db.get_schema(project_id)
+    if field_id not in schema:
+        raise HTTPException(status_code=404, detail="Schema field not found.")
+
+    existing = {**schema[field_id]}
+    try:
+        field = SchemaFieldIn.model_validate({**existing, **body})
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=json.loads(e.json())) from e
+
+    try:
+        check_index_and_display_name_conflicts(
+            schema, field.schema_name, field.index, field.display_name, exclude_field_id=field_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    # _schema_name is fixed at creation, same as the JWT-authenticated
+    # routers/schema.py:update_schema — a PUT can't move a field to a
+    # different schema.
+    updates = field.to_storage()
+    for key, value in updates.items():
+        if key != "_schema_name":
+            existing[key] = value
+    data = existing
+    db.upsert_schema_field(project_id, field_id, data)
 
     user_id, user_email = _key_actor(key_info)
     db_audit.log(
@@ -236,11 +281,11 @@ def update_schema_field(
         user_id=user_id,
         user_email=user_email,
         resource_id=field_id,
-        resource_name=f"{body.get('_schema_name', '')}.{body.get('_name', '')}",
+        resource_name=f"{field.schema_name}.{field.name}",
         project_id=project_id,
         ip_address=get_client_ip(request),
     )
-    return {"_id": field_id, **body}
+    return {"_id": field_id, **data}
 
 
 @router.delete("/projects/{project_id}/schema/{field_id}/")
@@ -284,7 +329,7 @@ def create_collection(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=e.errors()) from e
 
-    schema_names = _get_schema_names(db.get_schema(project_id))
+    schema_names = get_schema_names(db.get_schema(project_id))
     if collection.schema_name not in schema_names:
         raise HTTPException(status_code=400, detail="Schema doesn't exist, create it first.")
 
@@ -585,60 +630,6 @@ def update_schema_category_map(
         ip_address=get_client_ip(request),
     )
     return {"schema_name": schema_name, "category_id": category_id}
-
-
-@router.post("/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/")
-async def create_document(
-    project_id: str,
-    workspace_name: str,
-    collection_name: str,
-    body: dict,
-    key_info: dict = Depends(require_api_key("write")),
-):
-    """Create a document in a collection."""
-    check_key_scope(key_info, project_id, collection_name)
-    db = get_data_client()
-    collections = db.get_collections(project_id)
-    collection_id = next(
-        (cid for cid, c in collections.items() if c.get("_collection_name") == collection_name),
-        None,
-    )
-    if not collection_id:
-        raise HTTPException(status_code=404, detail=f"Collection {collection_name} not found")
-
-    doc_id = body.get("_id")
-    if not doc_id:
-        raise HTTPException(status_code=400, detail="_id required")
-
-    doc_data = {k: v for k, v in body.items() if k != "_id"}
-    await db.upsert_document(project_id, workspace_name, collection_id, doc_id, doc_data)
-    return {"_id": doc_id, **doc_data}
-
-
-@router.put(
-    "/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/"
-)
-async def update_document(
-    project_id: str,
-    workspace_name: str,
-    collection_name: str,
-    document_id: str,
-    body: dict,
-    key_info: dict = Depends(require_api_key("write")),
-):
-    """Update a document (merge mode)."""
-    check_key_scope(key_info, project_id, collection_name)
-    db = get_data_client()
-    collections = db.get_collections(project_id)
-    collection_id = next(
-        (cid for cid, c in collections.items() if c.get("_collection_name") == collection_name),
-        None,
-    )
-    if not collection_id:
-        raise HTTPException(status_code=404, detail=f"Collection {collection_name} not found")
-
-    await db.upsert_document(project_id, workspace_name, collection_id, document_id, body)
-    return {"_id": document_id, **body}
 
 
 @router.get("/media/files/{filename}")
