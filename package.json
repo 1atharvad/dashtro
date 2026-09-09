@@ -30,6 +30,7 @@
     "test:backend": "pytest cms_backend/tests",
     "test:mcp-python": "pytest cms_mcp/tests",
     "test:mcp": "npm --prefix sdk/mcp test",
+    "test:live": "pytest -m live cms_backend/tests/test_live_instance.py cms_mcp/tests/test_live_mcp.py",
     "precommit": "npm run lint && npm run test && npm run precommit:changesets",
     "precommit:changesets": "node scripts/check-changesets.mjs"
   }

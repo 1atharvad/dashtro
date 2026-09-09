@@ -693,12 +693,58 @@ class PostgresData(PostgresClient):
     ):
         cursor = self.get_cursor()
         with self.transaction():
+            # Pushing is the only thing that marks a document 'published' —
+            # it's a system-driven side effect of promoting content to
+            # production, never a directly-settable value. Stamp it on the
+            # source (so a later edit there can detect it's now "dirty"
+            # against production and auto-revert to draft) in one bulk
+            # jsonb_set update, not a per-row Python loop — this stays O(1)
+            # round trips regardless of collection size.
             cursor.execute(
-                """SELECT document_id, data FROM cms_project_workspace_data
-                   WHERE project_id=%s AND workspace_name=%s AND collection_id=%s""",
+                """UPDATE cms_project_workspace_data
+                   SET data = jsonb_set(data, '{_status}', '"published"')
+                   WHERE project_id=%s AND workspace_name=%s AND collection_id=%s AND document_id != '_meta_data'""",
                 (project_id, source_workspace, collection_id),
             )
-            rows = cursor.fetchall()
+
+            cursor.execute(
+                """SELECT document_id, data FROM cms_project_workspace_data
+                   WHERE project_id=%s AND workspace_name=%s AND collection_id=%s AND document_id != '_meta_data'""",
+                (project_id, source_workspace, collection_id),
+            )
+            data_by_id = {r["document_id"]: r["data"] for r in cursor.fetchall()}
+
+            # Preserve the source's authored document order — the SELECT
+            # above has no defined order, so build the sequence from
+            # _document_sequence (falling back to append order for any row
+            # somehow missing from it) rather than raw query result order.
+            cursor.execute(
+                """SELECT data FROM cms_project_workspace_data
+                   WHERE project_id=%s AND workspace_name=%s AND collection_id=%s AND document_id='_meta_data'""",
+                (project_id, source_workspace, collection_id),
+            )
+            source_meta_row = cursor.fetchone()
+            source_meta = source_meta_row["data"] if source_meta_row else {}
+            sequence = [
+                doc_id
+                for doc_id in source_meta.get("_document_sequence", [])
+                if doc_id in data_by_id
+            ]
+            sequence += [doc_id for doc_id in data_by_id if doc_id not in sequence]
+
+            statuses = {doc_id: "published" for doc_id in sequence}
+            source_meta["_document_statuses"] = {
+                **source_meta.get("_document_statuses", {}),
+                **statuses,
+            }
+            cursor.execute(
+                """INSERT INTO cms_project_workspace_data
+                   (project_id, workspace_name, collection_id, document_id, data)
+                   VALUES (%s, %s, %s, '_meta_data', %s)
+                   ON CONFLICT(project_id, workspace_name, collection_id, document_id)
+                   DO UPDATE SET data=excluded.data""",
+                (project_id, source_workspace, collection_id, psycopg2.extras.Json(source_meta)),
+            )
 
             # Replace production's copy of this collection only
             cursor.execute(
@@ -706,13 +752,30 @@ class PostgresData(PostgresClient):
                    WHERE project_id=%s AND workspace_name='production' AND collection_id=%s""",
                 (project_id, collection_id),
             )
-            for r in rows:
-                cursor.execute(
+            if sequence:
+                psycopg2.extras.execute_values(
+                    cursor,
                     """INSERT INTO cms_project_workspace_data
                        (project_id, workspace_name, collection_id, document_id, data)
-                       VALUES (%s, 'production', %s, %s, %s)""",
-                    (project_id, collection_id, r["document_id"], psycopg2.extras.Json(r["data"])),
+                       VALUES %s""",
+                    [
+                        (
+                            project_id,
+                            "production",
+                            collection_id,
+                            doc_id,
+                            psycopg2.extras.Json(data_by_id[doc_id]),
+                        )
+                        for doc_id in sequence
+                    ],
                 )
+            production_meta = {"_document_sequence": sequence, "_document_statuses": statuses}
+            cursor.execute(
+                """INSERT INTO cms_project_workspace_data
+                   (project_id, workspace_name, collection_id, document_id, data)
+                   VALUES (%s, 'production', %s, '_meta_data', %s)""",
+                (project_id, collection_id, psycopg2.extras.Json(production_meta)),
+            )
         cursor.close()
 
     def push_document_to_production(
@@ -730,39 +793,75 @@ class PostgresData(PostgresClient):
             if not row:
                 found = False
             else:
+                # Pushing is the only thing that marks a document
+                # 'published' — it's a system-driven side effect of
+                # promoting content to production, never a directly-settable
+                # value. Stamp it on both the source (so a later edit there
+                # can detect it's now "dirty" against production and
+                # auto-revert to draft) and the production copy.
+                published_data = {**row["data"], "_status": "published"}
+
+                cursor.execute(
+                    """UPDATE cms_project_workspace_data SET data=%s
+                       WHERE project_id=%s AND workspace_name=%s AND collection_id=%s AND document_id=%s""",
+                    (
+                        psycopg2.extras.Json(published_data),
+                        project_id,
+                        source_workspace,
+                        collection_id,
+                        document_id,
+                    ),
+                )
+                self._set_document_status_in_meta(
+                    cursor, project_id, source_workspace, collection_id, document_id, "published"
+                )
+
                 cursor.execute(
                     """INSERT INTO cms_project_workspace_data
                        (project_id, workspace_name, collection_id, document_id, data)
                        VALUES (%s, 'production', %s, %s, %s)
                        ON CONFLICT(project_id, workspace_name, collection_id, document_id)
                        DO UPDATE SET data=excluded.data""",
-                    (project_id, collection_id, document_id, psycopg2.extras.Json(row["data"])),
+                    (project_id, collection_id, document_id, psycopg2.extras.Json(published_data)),
                 )
-
-                # Register the doc in production's meta for this collection
-                cursor.execute(
-                    """SELECT data FROM cms_project_workspace_data
-                       WHERE project_id=%s AND workspace_name='production' AND collection_id=%s AND document_id='_meta_data'""",
-                    (project_id, collection_id),
-                )
-                meta_row = cursor.fetchone()
-                meta = meta_row["data"] if meta_row else {}
-                sequence = meta.get("_document_sequence", [])
-                if document_id not in sequence:
-                    sequence.append(document_id)
-                statuses = meta.get("_document_statuses", {})
-                statuses[document_id] = row["data"].get("_status", "draft")
-                new_meta = {**meta, "_document_sequence": sequence, "_document_statuses": statuses}
-                cursor.execute(
-                    """INSERT INTO cms_project_workspace_data
-                       (project_id, workspace_name, collection_id, document_id, data)
-                       VALUES (%s, 'production', %s, '_meta_data', %s)
-                       ON CONFLICT(project_id, workspace_name, collection_id, document_id)
-                       DO UPDATE SET data=excluded.data""",
-                    (project_id, collection_id, psycopg2.extras.Json(new_meta)),
+                self._set_document_status_in_meta(
+                    cursor, project_id, "production", collection_id, document_id, "published"
                 )
         cursor.close()
         return found
+
+    def _set_document_status_in_meta(
+        self,
+        cursor,
+        project_id: str,
+        workspace_name: str,
+        collection_id: str,
+        document_id: str,
+        status: str,
+    ) -> None:
+        """Update a single document's entry in its workspace's _document_statuses
+        meta map, registering it in _document_sequence too if it isn't there yet."""
+        cursor.execute(
+            """SELECT data FROM cms_project_workspace_data
+               WHERE project_id=%s AND workspace_name=%s AND collection_id=%s AND document_id='_meta_data'""",
+            (project_id, workspace_name, collection_id),
+        )
+        meta_row = cursor.fetchone()
+        meta = meta_row["data"] if meta_row else {}
+        sequence = meta.get("_document_sequence", [])
+        if document_id not in sequence:
+            sequence.append(document_id)
+        statuses = meta.get("_document_statuses", {})
+        statuses[document_id] = status
+        new_meta = {**meta, "_document_sequence": sequence, "_document_statuses": statuses}
+        cursor.execute(
+            """INSERT INTO cms_project_workspace_data
+               (project_id, workspace_name, collection_id, document_id, data)
+               VALUES (%s, %s, %s, '_meta_data', %s)
+               ON CONFLICT(project_id, workspace_name, collection_id, document_id)
+               DO UPDATE SET data=excluded.data""",
+            (project_id, workspace_name, collection_id, psycopg2.extras.Json(new_meta)),
+        )
 
     def pull_from_production(
         self,

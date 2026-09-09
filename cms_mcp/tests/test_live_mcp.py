@@ -60,10 +60,13 @@ def _live_env(key: str) -> str:
 BASE_URL = _live_env("LIVE_CMS_BASE_URL").rstrip("/")
 API_KEY = _live_env("LIVE_CMS_API_KEY")
 
-pytestmark = pytest.mark.skipif(
-    not BASE_URL or not API_KEY,
-    reason="set LIVE_CMS_BASE_URL and LIVE_CMS_API_KEY to run against a real deployed instance",
-)
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(
+        not BASE_URL or not API_KEY,
+        reason="set LIVE_CMS_BASE_URL and LIVE_CMS_API_KEY to run against a real deployed instance",
+    ),
+]
 
 
 def run(coro):
@@ -189,14 +192,26 @@ def test_live_mcp_full_lifecycle(live_mcp_env):
         assert updated["body"] == "Revised draft"
         assert updated["title"] == "Hello from the live MCP suite"
 
-        published = json.loads(
+        # Publishing only ever happens as a side effect of pushing to
+        # production through the CMS UI — MCP has no push-to-production
+        # tool, and update_document_status is restricted to 'draft' only.
+        reverted = json.loads(
+            run(
+                server.update_document_status(
+                    project_id, "staging", "posts", doc_id, status="draft"
+                )
+            )
+        )
+        assert reverted["_status"] == "draft"
+
+        # Rejected client-side by the tool's own check — never even reaches
+        # the network, let alone real staging.
+        with pytest.raises(ValueError):
             run(
                 server.update_document_status(
                     project_id, "staging", "posts", doc_id, status="published"
                 )
             )
-        )
-        assert published["_status"] == "published"
 
         run(server.delete_document(project_id, "staging", "posts", doc_id))
         listed_after_delete = json.loads(run(server.list_documents(project_id, "staging", "posts")))

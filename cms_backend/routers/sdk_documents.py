@@ -17,8 +17,6 @@ from routers.documents import (
     _resolve_references,
 )
 
-_VALID_STATUSES = ("draft", "published")
-
 router = APIRouter()
 db = get_data_client()
 db_audit = get_audit_client()
@@ -127,11 +125,7 @@ async def create_document(
     collection_id, _, schema_data = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)
 
-    status = body.get("_status", "draft")
-    if status not in _VALID_STATUSES:
-        raise HTTPException(status_code=400, detail="_status must be 'draft' or 'published'.")
-
-    field_data = {k: v for k, v in body.items() if k not in ("_id", "_status")}
+    field_data = {k: v for k, v in body.items() if k != "_id"}
     try:
         validate_document_data(
             field_data, schema_data or [], schema_jsonify(db.get_schema(project_id))
@@ -140,7 +134,7 @@ async def create_document(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     doc_id = body.get("_id") or str(uuid.uuid4().hex[:20])
-    body = {**field_data, "_id": doc_id, "_status": status}
+    body = {**field_data, "_id": doc_id, "_status": "draft"}
     body = _apply_schema_defaults(body, schema_data)
 
     db.upsert_document(
@@ -198,13 +192,10 @@ async def update_document(
     if document_id not in document_ids:
         raise HTTPException(status_code=400, detail="Document id doesn't exist.")
 
-    if "_id" in body:
-        raise HTTPException(status_code=400, detail="_id cannot be changed.")
-    if "_status" in body and body["_status"] not in _VALID_STATUSES:
-        raise HTTPException(status_code=400, detail="_status must be 'draft' or 'published'.")
-    if any(k.startswith("_") and k not in ("_status",) for k in body):
+    if any(k.startswith("_") for k in body):
         raise HTTPException(
-            status_code=400, detail="Only '_status' may be set as a system key here."
+            status_code=400,
+            detail="Data cannot contain system-owned keys. Use update_document_status to change status.",
         )
 
     existing = await db.fetch_document(project_id, workspace_name, collection_id, document_id)
@@ -215,6 +206,8 @@ async def update_document(
     db.save_document_version(
         project_id, workspace_name, collection_id, document_id, existing, user_id, user_email
     )
+
+    current_status = existing.get("_status", "draft")
 
     for key, value in body.items():
         existing[key] = value
@@ -228,8 +221,12 @@ async def update_document(
     except DocumentValidationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    if "_status" in body:
-        document_statuses[document_id] = body["_status"]
+    # A data edit takes a published document off the published state — it no
+    # longer matches what was pushed live, so it reverts to draft until
+    # explicitly republished via update_document_status (a "dirty" flag).
+    if body and current_status == "published":
+        existing["_status"] = "draft"
+        document_statuses[document_id] = "draft"
         db.upsert_document(
             project_id,
             workspace_name,
@@ -278,8 +275,12 @@ async def update_document_status(
     check_key_scope(key_info, project_id, collection_name)
     _guard_production_write(workspace_name)
     status = body.get("_status")
-    if status not in ("draft", "published"):
-        raise HTTPException(status_code=400, detail="_status must be 'draft' or 'published'.")
+    if status != "draft":
+        raise HTTPException(
+            status_code=400,
+            detail="_status can only be set to 'draft' here. 'published' is set by pushing to "
+            "production, which isn't available through the API-key/MCP surface.",
+        )
 
     collection_id, _, _ = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)

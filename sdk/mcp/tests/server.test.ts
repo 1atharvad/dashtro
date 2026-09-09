@@ -266,21 +266,45 @@ describe("createServer tools", () => {
 
   /**
    * update_document_status must PATCH the dedicated
-   * .../document/{id}/status/ endpoint with {"_status": status} — this is
-   * the real, purpose-built /api/sdk/* status endpoint (with its own
-   * validation that status is "draft" or "published"), not a workaround.
+   * .../document/{id}/status/ endpoint with {"_status": "draft"} — this is
+   * the real, purpose-built /api/sdk/* status endpoint, not a workaround.
    * A prior /api/cms/-targeting version of this tool PATCHed a status/
    * route that never existed there at all (only under /api/sdk/*), so
    * this pins down the exact method + path so that regression can't
-   * silently return.
+   * silently return. Only 'draft' is accepted — 'published' is set
+   * exclusively by pushing to production through the CMS UI, which MCP
+   * doesn't have access to, so the tool's schema doesn't even accept it
+   * (see the rejects-published test below).
    */
   it("update_document_status PATCHes the dedicated status/ endpoint", async () => {
     const calls = stubFetch({
       "PATCH /api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/status/": () => ({
         _id: "d1",
-        _status: "published",
+        _status: "draft",
       }),
     });
+
+    const result = await client.callTool({
+      name: "update_document_status",
+      arguments: {
+        project_id: "p1",
+        workspace_name: "staging",
+        collection_name: "posts",
+        document_id: "d1",
+        status: "draft",
+      },
+    });
+
+    expect(calls[0]).toMatchObject({
+      method: "PATCH",
+      path: "/api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/status/",
+      body: { _status: "draft" },
+    });
+    expect(JSON.parse(textOf(result))._status).toBe("draft");
+  });
+
+  it("update_document_status rejects a status other than 'draft'", async () => {
+    const calls = stubFetch({});
 
     const result = await client.callTool({
       name: "update_document_status",
@@ -293,12 +317,9 @@ describe("createServer tools", () => {
       },
     });
 
-    expect(calls[0]).toMatchObject({
-      method: "PATCH",
-      path: "/api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/status/",
-      body: { _status: "published" },
-    });
-    expect(JSON.parse(textOf(result))._status).toBe("published");
+    expect(result.isError).toBe(true);
+    // Rejected by the tool's own Zod schema — never even reaches the network.
+    expect(calls).toHaveLength(0);
   });
 
   /**

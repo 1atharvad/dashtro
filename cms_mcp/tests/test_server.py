@@ -114,16 +114,15 @@ def test_list_collections(project):
 def test_document_lifecycle(project):
     """
     Drives every document-related MCP tool through a single realistic
-    sequence: create → list → get → update → change status to published →
-    delete, asserting on real response state after each step rather than
-    just checking each call didn't raise.
+    sequence: create → list → get → update → delete, asserting on real
+    response state after each step rather than just checking each call
+    didn't raise.
 
-    In particular, update_document_status here exercises the fix from this
-    session: it now PATCHes /api/sdk/.../document/{id}/status/, the real
-    purpose-built endpoint sdk_documents.py exposes, instead of the
-    previous PUT-with-_status-in-body workaround that was needed only
-    because the equivalent /api/cms/ PATCH endpoint never actually
-    existed.
+    Publishing a document ('published' status) only ever happens as a side
+    effect of pushing to production through the CMS UI — MCP has no
+    push-to-production tool, and update_document_status is restricted to
+    'draft' only (see test_update_document_status_rejects_published below)
+    — so this lifecycle never reaches a published state.
     """
     pid, ws, coll = project["project_id"], project["workspace_name"], project["collection_name"]
 
@@ -145,14 +144,49 @@ def test_document_lifecycle(project):
     )
     assert updated["title"] == "Updated"
 
-    status = json.loads(run(server.update_document_status(pid, ws, coll, doc_id, "published")))
-    assert status["_status"] == "published"
-    listed_after_status = json.loads(run(server.list_documents(pid, ws, coll, minimal=False)))
-    assert listed_after_status["document_statuses"][doc_id] == "published"
+    status = json.loads(run(server.update_document_status(pid, ws, coll, doc_id, "draft")))
+    assert status["_status"] == "draft"
 
     run(server.delete_document(pid, ws, coll, doc_id))
     listed_after_delete = json.loads(run(server.list_documents(pid, ws, coll)))
     assert doc_id not in listed_after_delete["document_ids"]
+
+
+def test_update_document_status_rejects_published(project):
+    """
+    update_document_status is restricted to 'draft' — 'published' is set
+    exclusively by pushing to production (a JWT/UI-only action MCP doesn't
+    expose), never directly through this tool. Rejected client-side by the
+    tool's own check before any network call is made — see
+    test_update_document_status_rejects_published_server_side below for
+    proof the backend independently enforces the same rule.
+    """
+    pid, ws, coll = project["project_id"], project["workspace_name"], project["collection_name"]
+    created = json.loads(run(server.create_document(pid, ws, coll, data={"title": "Hello"})))
+    doc_id = created["_id"]
+
+    with pytest.raises(ValueError):
+        run(server.update_document_status(pid, ws, coll, doc_id, "published"))
+
+
+def test_update_document_status_rejects_published_server_side(project):
+    """
+    The backend's own /status/ endpoint rejects 'published' independently of
+    the MCP tool's client-side check — proven by calling it directly over
+    HTTP, bypassing update_document_status's ValueError guard entirely.
+    """
+    pid, ws, coll = project["project_id"], project["workspace_name"], project["collection_name"]
+    created = json.loads(run(server.create_document(pid, ws, coll, data={"title": "Hello"})))
+    doc_id = created["_id"]
+
+    with pytest.raises(httpx.HTTPStatusError) as exc:
+        run(
+            server._patch(
+                f"/projects/{pid}/workspace/{ws}/collection/{coll}/document/{doc_id}/status/",
+                data={"_status": "published"},
+            )
+        )
+    assert exc.value.response.status_code == 400
 
 
 def test_rtdb_crud(project):

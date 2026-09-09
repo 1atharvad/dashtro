@@ -51,10 +51,13 @@ def _live_env(key: str) -> str:
 BASE_URL = _live_env("LIVE_CMS_BASE_URL").rstrip("/")
 API_KEY = _live_env("LIVE_CMS_API_KEY")
 
-pytestmark = pytest.mark.skipif(
-    not BASE_URL or not API_KEY,
-    reason="set LIVE_CMS_BASE_URL and LIVE_CMS_API_KEY to run against a real deployed instance",
-)
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(
+        not BASE_URL or not API_KEY,
+        reason="set LIVE_CMS_BASE_URL and LIVE_CMS_API_KEY to run against a real deployed instance",
+    ),
+]
 
 
 @pytest.fixture

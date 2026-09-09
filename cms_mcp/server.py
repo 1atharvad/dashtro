@@ -873,9 +873,10 @@ async def create_document(
     real field name on that schema (no invented fields), and each value must
     match its field's declared type (including OneToMany list shapes and
     NestedDocument/compound object shapes). Missing a field marked required
-    is rejected. data cannot contain _id or any other underscore-prefixed
-    key — those are system-owned; the document id is always server-generated.
-    New documents default to _status='draft'. Production workspace is read-only.
+    is rejected. data may include _id (honored if given, else
+    server-generated); no other underscore-prefixed key is allowed —
+    including _status, which always starts as 'draft' and can't be set here.
+    Production workspace is read-only.
     """
     pid = _resolve_project_id(project_id)
     return _dump(
@@ -900,11 +901,14 @@ async def update_document(
     The merged result (existing fields plus this update) is validated against
     the collection's schema the same way create_document is — an update
     cannot introduce an invented field, a wrong-typed value, or leave a
-    required field empty. data cannot contain _id (immutable) or any
-    underscore-prefixed key other than _status (which must be 'draft' or
-    'published' if included — prefer update_document_status instead).
-    The previous state is automatically saved as a version before the update is applied.
-    Production workspace is read-only.
+    required field empty. data cannot contain _id or any underscore-prefixed
+    key at all, including _status — status is never settable through this
+    tool. If the document was published, editing it here reverts it to
+    'draft' automatically (it no longer matches what was pushed to
+    production) — see update_document_status to explicitly revert to draft;
+    'published' can only be set by pushing to production, which isn't
+    available through MCP. The previous state is automatically saved as a
+    version before the update is applied. Production workspace is read-only.
     """
     pid = _resolve_project_id(project_id)
     return _dump(
@@ -925,11 +929,16 @@ async def update_document_status(
     status: str = "",
 ) -> str:
     """
-    Change a document's publish status. status must be 'draft' or 'published'.
-    Production workspace is read-only.
+    Revert a document to 'draft'. status must be 'draft' — 'published' can't
+    be set through this tool or anywhere else in MCP; it's only ever set as
+    a side effect of pushing to production through the CMS UI, which MCP
+    doesn't have access to. Production workspace is read-only.
     """
-    if status not in ("draft", "published"):
-        raise ValueError("status must be 'draft' or 'published'")
+    if status != "draft":
+        raise ValueError(
+            "status must be 'draft' — 'published' is set by pushing to production, "
+            "which isn't available through MCP"
+        )
     pid = _resolve_project_id(project_id)
     return _dump(
         await _patch(
@@ -1033,8 +1042,8 @@ Project (production workspace is read-only)
 1. `create_workspace` → creates "staging" workspace
 2. `list_schema` → find/create schema (`create_schema_field`)
 3. `create_collection` → bind collection to schema
-4. `create_document` → write content in staging workspace
-5. `update_document_status` → set `published`
+4. `create_document` → write content in staging workspace (starts as `draft`)
+5. Publishing (`draft` → `published`) happens by pushing to production through the CMS UI — MCP has no access to that action. `update_document_status` can only revert a document back to `draft`.
 
 ### Read Content Efficiently
 - `list_collections {minimal: true}` → just names & schemas
@@ -1099,11 +1108,10 @@ async def create_content_workflow() -> str:
 3. **Create collection** bound to schema:
    `create_collection {project_id, collection_name: "posts", schema_name: "Post"}`
 
-4. **Write documents** in staging:
+4. **Write documents** in staging (starts as `draft`):
    `create_document {project_id, workspace_name: "staging", collection_name: "posts", data: {title: "Hello", body: "..."}}`
 
-5. **Publish**:
-   `update_document_status {project_id, workspace_name: "staging", collection_name: "posts", document_id: "xxx", status: "published"}`
+5. **Publish**: this happens by pushing the collection or document to production through the CMS UI — MCP doesn't have access to that action. `update_document_status` only reverts a document back to `draft`; it can't set `published`.
 
 **Tip**: Use `minimal: true` (default) on all list/get calls to save tokens."""
 

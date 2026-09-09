@@ -84,6 +84,16 @@ DOC_URL = "/api/sdk/projects/{project_id}/workspace/staging/collection/posts/"
 DOC_ITEM_URL = (
     "/api/sdk/projects/{project_id}/workspace/staging/collection/posts/document/{document_id}/"
 )
+STATUS_URL = "/api/sdk/projects/{project_id}/workspace/staging/collection/posts/document/{document_id}/status/"
+# Push-to-production and reading a workspace's raw document state are
+# JWT-only (routers/documents.py) — there's no /api/sdk equivalent, so these
+# use auth_headers, not the API-key headers _setup returns.
+CMS_DOC_ITEM_URL = "/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/posts/document/{document_id}/"
+CMS_COLLECTION_URL = "/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/posts/"
+PUSH_DOC_URL = "/api/cms/projects/{project_id}/workspace/staging/collection/posts/document/{document_id}/push-to-prod/"
+PUSH_COLLECTION_URL = (
+    "/api/cms/projects/{project_id}/workspace/staging/collection/posts/push-to-prod/"
+)
 
 
 def test_create_document_rejects_unknown_field(client, auth_headers):
@@ -114,6 +124,31 @@ def test_create_document_rejects_invalid_status(client, auth_headers):
         headers=headers,
     )
     assert resp.status_code == 400, resp.text
+
+
+def test_create_document_rejects_status_even_when_valid(client, auth_headers):
+    """_status is fully system-owned on create — a valid value ('published')
+    is rejected the same as an invalid one, since a caller can never set it
+    directly. New documents always start as 'draft'; see
+    test_create_document_always_starts_draft."""
+    project_id, headers = _setup(client, auth_headers)
+    resp = client.post(
+        DOC_URL.format(project_id=project_id),
+        json={"title": "Hi", "_status": "published"},
+        headers=headers,
+    )
+    assert resp.status_code == 400, resp.text
+
+
+def test_create_document_always_starts_draft(client, auth_headers):
+    project_id, headers = _setup(client, auth_headers)
+    resp = client.post(
+        DOC_URL.format(project_id=project_id),
+        json={"title": "Hi"},
+        headers=headers,
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["_status"] == "draft"
 
 
 def test_create_document_rejects_missing_required_field(client, auth_headers):
@@ -363,6 +398,24 @@ def test_update_document_rejects_invalid_status(client, auth_headers):
     assert resp.status_code == 400, resp.text
 
 
+def test_update_document_rejects_status_even_when_valid(client, auth_headers):
+    """_status can never be set through the generic update endpoint, valid
+    value or not — only update_document_status (restricted to 'draft') or a
+    push to production can change it."""
+    project_id, headers = _setup(client, auth_headers)
+    create_resp = client.post(
+        DOC_URL.format(project_id=project_id), json={"title": "Hi"}, headers=headers
+    )
+    doc_id = create_resp.json()["_id"]
+
+    resp = client.put(
+        DOC_ITEM_URL.format(project_id=project_id, document_id=doc_id),
+        json={"_status": "published"},
+        headers=headers,
+    )
+    assert resp.status_code == 400, resp.text
+
+
 def test_update_document_rejects_other_underscore_keys(client, auth_headers):
     project_id, headers = _setup(client, auth_headers)
     create_resp = client.post(
@@ -466,3 +519,151 @@ def test_cms_update_document_rejects_id_change(client, auth_headers):
         headers=auth_headers,
     )
     assert resp.status_code == 400, resp.text
+
+
+# ── Status: system-owned, published only via push-to-production ───────────────
+#
+# _status is fully system-owned: 'draft' is always the starting value on
+# create, update_document_status can only revert to 'draft', and the only
+# thing that can ever set 'published' is pushing to production (a JWT/UI-only
+# action — see routers/documents.py's push_document_to_production /
+# push_collection_to_production). Editing a published document's data takes
+# it off the published state (a "dirty" flag) until it's pushed again.
+
+
+def test_update_document_status_rejects_published(client, auth_headers):
+    project_id, headers = _setup(client, auth_headers)
+    create_resp = client.post(
+        DOC_URL.format(project_id=project_id), json={"title": "Hi"}, headers=headers
+    )
+    doc_id = create_resp.json()["_id"]
+
+    resp = client.patch(
+        STATUS_URL.format(project_id=project_id, document_id=doc_id),
+        json={"_status": "published"},
+        headers=headers,
+    )
+    assert resp.status_code == 400, resp.text
+
+
+def test_update_document_status_accepts_draft(client, auth_headers):
+    project_id, headers = _setup(client, auth_headers)
+    create_resp = client.post(
+        DOC_URL.format(project_id=project_id), json={"title": "Hi"}, headers=headers
+    )
+    doc_id = create_resp.json()["_id"]
+
+    resp = client.patch(
+        STATUS_URL.format(project_id=project_id, document_id=doc_id),
+        json={"_status": "draft"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["_status"] == "draft"
+
+
+def test_push_document_to_production_sets_status_published(client, auth_headers):
+    """Pushing is the only thing that marks a document 'published' — proven
+    on both the source workspace's own copy (so a later edit there can
+    detect it's now dirty against production) and the production copy."""
+    project_id, headers = _setup(client, auth_headers)
+    create_resp = client.post(
+        DOC_URL.format(project_id=project_id), json={"title": "Hi"}, headers=headers
+    )
+    doc_id = create_resp.json()["_id"]
+
+    push_resp = client.post(
+        PUSH_DOC_URL.format(project_id=project_id, document_id=doc_id), headers=auth_headers
+    )
+    assert push_resp.status_code == 200, push_resp.text
+
+    source_doc = client.get(
+        CMS_DOC_ITEM_URL.format(
+            project_id=project_id, workspace_name="staging", document_id=doc_id
+        ),
+        headers=auth_headers,
+    )
+    assert source_doc.status_code == 200, source_doc.text
+    assert source_doc.json()["_status"] == "published"
+
+    prod_doc = client.get(
+        CMS_DOC_ITEM_URL.format(
+            project_id=project_id, workspace_name="production", document_id=doc_id
+        ),
+        headers=auth_headers,
+    )
+    assert prod_doc.status_code == 200, prod_doc.text
+    assert prod_doc.json()["_status"] == "published"
+
+
+def test_push_collection_to_production_sets_status_published_and_preserves_order(
+    client, auth_headers
+):
+    project_id, headers = _setup(client, auth_headers)
+    doc_a = client.post(
+        DOC_URL.format(project_id=project_id), json={"title": "A"}, headers=headers
+    ).json()["_id"]
+    doc_b = client.post(
+        DOC_URL.format(project_id=project_id), json={"title": "B"}, headers=headers
+    ).json()["_id"]
+
+    push_resp = client.post(PUSH_COLLECTION_URL.format(project_id=project_id), headers=auth_headers)
+    assert push_resp.status_code == 200, push_resp.text
+
+    prod_listing = client.get(
+        CMS_COLLECTION_URL.format(project_id=project_id, workspace_name="production"),
+        headers=auth_headers,
+    )
+    assert prod_listing.status_code == 200, prod_listing.text
+    body = prod_listing.json()
+    assert body["_document_ids"] == [doc_a, doc_b]
+    assert body["_document_statuses"][doc_a] == "published"
+    assert body["_document_statuses"][doc_b] == "published"
+
+
+def test_update_document_auto_reverts_published_to_draft_on_edit(client, auth_headers):
+    """Editing a document that was pushed to production takes it off the
+    published state — it no longer matches what's live — until explicitly
+    republished (a "dirty" flag), mirroring how the CMS UI itself computes
+    published/draft status from a diff against production."""
+    project_id, headers = _setup(client, auth_headers)
+    create_resp = client.post(
+        DOC_URL.format(project_id=project_id), json={"title": "Hi"}, headers=headers
+    )
+    doc_id = create_resp.json()["_id"]
+
+    push_resp = client.post(
+        PUSH_DOC_URL.format(project_id=project_id, document_id=doc_id), headers=auth_headers
+    )
+    assert push_resp.status_code == 200, push_resp.text
+
+    updated = client.put(
+        DOC_ITEM_URL.format(project_id=project_id, document_id=doc_id),
+        json={"title": "Updated"},
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["_status"] == "draft"
+
+
+def test_update_document_does_not_revert_status_on_empty_data(client, auth_headers):
+    """An update call with no actual field changes shouldn't spuriously
+    dirty a published document."""
+    project_id, headers = _setup(client, auth_headers)
+    create_resp = client.post(
+        DOC_URL.format(project_id=project_id), json={"title": "Hi"}, headers=headers
+    )
+    doc_id = create_resp.json()["_id"]
+
+    push_resp = client.post(
+        PUSH_DOC_URL.format(project_id=project_id, document_id=doc_id), headers=auth_headers
+    )
+    assert push_resp.status_code == 200, push_resp.text
+
+    updated = client.put(
+        DOC_ITEM_URL.format(project_id=project_id, document_id=doc_id),
+        json={},
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["_status"] == "published"

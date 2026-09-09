@@ -674,12 +674,56 @@ class SqliteData(SqliteClient):
     ):
         cursor = self.get_cursor()
 
+        # Pushing is the only thing that marks a document 'published' — it's
+        # a system-driven side effect of promoting content to production,
+        # never a directly-settable value. Stamp it on the source (so a
+        # later edit there can detect it's now "dirty" against production
+        # and auto-revert to draft) in one bulk update via SQLite's JSON1
+        # extension, not a per-row Python loop — this stays O(1) round trips
+        # regardless of collection size.
         cursor.execute(
-            """SELECT document_id, data FROM cms_project_workspace_data
-               WHERE project_id=? AND workspace_name=? AND collection_id=?""",
+            """UPDATE cms_project_workspace_data
+               SET data = json_set(data, '$._status', 'published')
+               WHERE project_id=? AND workspace_name=? AND collection_id=? AND document_id != '_meta_data'""",
             (project_id, source_workspace, collection_id),
         )
-        rows = cursor.fetchall()
+
+        cursor.execute(
+            """SELECT document_id, data FROM cms_project_workspace_data
+               WHERE project_id=? AND workspace_name=? AND collection_id=? AND document_id != '_meta_data'""",
+            (project_id, source_workspace, collection_id),
+        )
+        data_by_id = {r["document_id"]: r["data"] for r in cursor.fetchall()}
+
+        # Preserve the source's authored document order — the SELECT above
+        # has no defined order, so build doc_ids from _document_sequence
+        # (falling back to append order for any row that's somehow missing
+        # from it) rather than raw query result order.
+        cursor.execute(
+            """SELECT data FROM cms_project_workspace_data
+               WHERE project_id=? AND workspace_name=? AND collection_id=? AND document_id='_meta_data'""",
+            (project_id, source_workspace, collection_id),
+        )
+        source_meta_row = cursor.fetchone()
+        source_meta = json.loads(source_meta_row["data"]) if source_meta_row else {}
+        sequence = [
+            doc_id for doc_id in source_meta.get("_document_sequence", []) if doc_id in data_by_id
+        ]
+        sequence += [doc_id for doc_id in data_by_id if doc_id not in sequence]
+
+        statuses = {doc_id: "published" for doc_id in sequence}
+        source_meta["_document_statuses"] = {
+            **source_meta.get("_document_statuses", {}),
+            **statuses,
+        }
+        cursor.execute(
+            """INSERT INTO cms_project_workspace_data
+               (project_id, workspace_name, collection_id, document_id, data)
+               VALUES (?, ?, ?, '_meta_data', ?)
+               ON CONFLICT(project_id, workspace_name, collection_id, document_id)
+               DO UPDATE SET data=excluded.data""",
+            (project_id, source_workspace, collection_id, json.dumps(source_meta)),
+        )
 
         # Replace production's copy of this collection only
         cursor.execute(
@@ -687,13 +731,19 @@ class SqliteData(SqliteClient):
                WHERE project_id=? AND workspace_name='production' AND collection_id=?""",
             (project_id, collection_id),
         )
-        for r in rows:
-            cursor.execute(
-                """INSERT INTO cms_project_workspace_data
-                   (project_id, workspace_name, collection_id, document_id, data)
-                   VALUES (?, 'production', ?, ?, ?)""",
-                (project_id, collection_id, r["document_id"], r["data"]),
-            )
+        cursor.executemany(
+            """INSERT INTO cms_project_workspace_data
+               (project_id, workspace_name, collection_id, document_id, data)
+               VALUES (?, 'production', ?, ?, ?)""",
+            [(project_id, collection_id, doc_id, data_by_id[doc_id]) for doc_id in sequence],
+        )
+        production_meta = {"_document_sequence": sequence, "_document_statuses": statuses}
+        cursor.execute(
+            """INSERT INTO cms_project_workspace_data
+               (project_id, workspace_name, collection_id, document_id, data)
+               VALUES (?, 'production', ?, '_meta_data', ?)""",
+            (project_id, collection_id, json.dumps(production_meta)),
+        )
 
         self.connection.commit()
         cursor.close()
@@ -713,20 +763,54 @@ class SqliteData(SqliteClient):
             cursor.close()
             return False
 
+        # Pushing is the only thing that marks a document 'published' — it's
+        # a system-driven side effect of promoting content to production,
+        # never a directly-settable value. Stamp it on both the source
+        # (so a later edit there can detect it's now "dirty" against
+        # production and auto-revert to draft) and the production copy.
+        published_data = {**json.loads(row["data"]), "_status": "published"}
+        published_data_json = json.dumps(published_data)
+
+        cursor.execute(
+            """UPDATE cms_project_workspace_data SET data=?
+               WHERE project_id=? AND workspace_name=? AND collection_id=? AND document_id=?""",
+            (published_data_json, project_id, source_workspace, collection_id, document_id),
+        )
+        self._set_document_status_in_meta(
+            cursor, project_id, source_workspace, collection_id, document_id, "published"
+        )
+
         cursor.execute(
             """INSERT INTO cms_project_workspace_data
                (project_id, workspace_name, collection_id, document_id, data)
                VALUES (?, 'production', ?, ?, ?)
                ON CONFLICT(project_id, workspace_name, collection_id, document_id)
                DO UPDATE SET data=excluded.data""",
-            (project_id, collection_id, document_id, row["data"]),
+            (project_id, collection_id, document_id, published_data_json),
+        )
+        self._set_document_status_in_meta(
+            cursor, project_id, "production", collection_id, document_id, "published"
         )
 
-        # Register the doc in production's meta for this collection
+        self.connection.commit()
+        cursor.close()
+        return True
+
+    def _set_document_status_in_meta(
+        self,
+        cursor,
+        project_id: str,
+        workspace_name: str,
+        collection_id: str,
+        document_id: str,
+        status: str,
+    ) -> None:
+        """Update a single document's entry in its workspace's _document_statuses
+        meta map, registering it in _document_sequence too if it isn't there yet."""
         cursor.execute(
             """SELECT data FROM cms_project_workspace_data
-               WHERE project_id=? AND workspace_name='production' AND collection_id=? AND document_id='_meta_data'""",
-            (project_id, collection_id),
+               WHERE project_id=? AND workspace_name=? AND collection_id=? AND document_id='_meta_data'""",
+            (project_id, workspace_name, collection_id),
         )
         meta_row = cursor.fetchone()
         meta = json.loads(meta_row["data"]) if meta_row else {}
@@ -734,20 +818,16 @@ class SqliteData(SqliteClient):
         if document_id not in sequence:
             sequence.append(document_id)
         statuses = meta.get("_document_statuses", {})
-        statuses[document_id] = json.loads(row["data"]).get("_status", "draft")
+        statuses[document_id] = status
         new_meta = {**meta, "_document_sequence": sequence, "_document_statuses": statuses}
         cursor.execute(
             """INSERT INTO cms_project_workspace_data
                (project_id, workspace_name, collection_id, document_id, data)
-               VALUES (?, 'production', ?, '_meta_data', ?)
+               VALUES (?, ?, ?, '_meta_data', ?)
                ON CONFLICT(project_id, workspace_name, collection_id, document_id)
                DO UPDATE SET data=excluded.data""",
-            (project_id, collection_id, json.dumps(new_meta)),
+            (project_id, workspace_name, collection_id, json.dumps(new_meta)),
         )
-
-        self.connection.commit()
-        cursor.close()
-        return True
 
     def pull_from_production(
         self,

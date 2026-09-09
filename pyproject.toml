@@ -66,3 +66,9 @@ known-first-party = ["cms_backend", "cms_mcp"]
 [tool.pytest.ini_options]
 pythonpath = ["cms_backend", "."]
 testpaths = ["cms_backend/tests", "cms_mcp/tests"]
+# "live" tests hit a real deployed instance (see test_live_instance.py /
+# test_live_mcp.py) — opt-in only, excluded by default so a plain `pytest`
+# run (and npm run precommit) never depends on staging being reachable or
+# up to date. `npm run test:live` overrides this with `-m live` explicitly.
+markers = ["live: opt-in tests against a real, already-deployed instance"]
+addopts = "-m 'not live'"
