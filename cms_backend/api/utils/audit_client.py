@@ -14,15 +14,31 @@ class SqliteAuditClient:
         if not cls._instance:
             cls._instance = super().__new__(cls)
             cls._instance._local = threading.local()
+            cls._instance._all_connections = []
+            cls._instance._connections_lock = threading.Lock()
             cls._instance._ensure_table()
         return cls._instance
 
-    @staticmethod
-    def _create_connection():
+    def _create_connection(self):
         db_path = config("SQLITE_DB_PATH", default="db.sqlite3")
         conn = sqlite3.connect(db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
+        with self._connections_lock:
+            self._all_connections.append(conn)
         return conn
+
+    def close_all_connections(self):
+        """Close every connection this singleton has ever handed out, across
+        every thread that used it. Used by test teardown — mirrors
+        `SqliteClient.close_all_connections`/`PostgresClient.close_all_connections`.
+        """
+        with self._connections_lock:
+            conns, self._all_connections = self._all_connections, []
+        for conn in conns:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     @property
     def connection(self):

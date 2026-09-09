@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import threading
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -19,14 +20,42 @@ class SqliteClient:
         if not cls._instance:
             cls._instance = super().__new__(cls, *args, **kwargs)
             cls._instance._local = threading.local()
+            # Thread-local storage means a connection made on one thread is
+            # unreachable from any other — including from close_all_connections()
+            # below, which needs to close every connection this singleton has
+            # ever handed out, not just the calling thread's. Tracked here
+            # separately, guarded by a lock since multiple threads create
+            # connections concurrently.
+            cls._instance._all_connections = []
+            cls._instance._connections_lock = threading.Lock()
         return cls._instance
 
-    @staticmethod
-    def _create_connection():
+    def _create_connection(self):
         db_path = config("SQLITE_DB_PATH", default="db.sqlite3")
         conn = sqlite3.connect(db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
+        with self._connections_lock:
+            self._all_connections.append(conn)
         return conn
+
+    def close_all_connections(self):
+        """Close every connection this singleton has ever handed out, across
+        every thread that used it.
+
+        Used by test teardown (see cms_backend/tests/conftest.py) — mirrors
+        `PostgresClient.close_all_connections` for parity between backends;
+        SQLite has no connection-count ceiling like Postgres's
+        max_connections, but leaving file handles open indefinitely across a
+        whole pytest session is still worth avoiding. Safe to call even if
+        some connections are already closed.
+        """
+        with self._connections_lock:
+            conns, self._all_connections = self._all_connections, []
+        for conn in conns:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     @property
     def connection(self):
@@ -46,12 +75,33 @@ class SqliteClient:
             self.connection = self._create_connection()
         return self.connection.cursor()
 
+    def _ensure_with_retry(self, *ensure_fns, attempts=5, delay=1.0):
+        """Run one or more `CREATE TABLE IF NOT EXISTS` methods, retrying on
+        transient operational errors (e.g. "database is locked" from a
+        concurrent writer).
+
+        This class is a singleton instantiated once per process, at module
+        import time — a single failed attempt here would otherwise never be
+        retried, silently breaking every request against this table for the
+        rest of the process's life. The `IF NOT EXISTS` calls are
+        idempotent, so re-running all of them on retry is safe. Mirrors
+        `PostgresClient._ensure_with_retry` for parity between backends.
+        """
+        for attempt in range(1, attempts + 1):
+            try:
+                for fn in ensure_fns:
+                    fn()
+                return
+            except sqlite3.OperationalError:
+                if attempt == attempts:
+                    raise
+                time.sleep(delay)
+
 
 class SqliteAuth(SqliteClient):
     def __init__(self):
         super().__init__()
-        self._ensure_users_table()
-        self._ensure_api_keys_table()
+        self._ensure_with_retry(self._ensure_users_table, self._ensure_api_keys_table)
 
     def _ensure_users_table(self):
         cursor = self.get_cursor()
@@ -410,8 +460,7 @@ class SqliteData(SqliteClient):
     def __init__(self):
         if not hasattr(self, "_caches"):
             self._caches: dict[str, dict] = {}
-        self._ensure_tables()
-        self._ensure_versions_table()
+        self._ensure_with_retry(self._ensure_tables, self._ensure_versions_table)
 
     def _ensure_tables(self):
         cursor = self.get_cursor()

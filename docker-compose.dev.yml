@@ -40,14 +40,23 @@ services:
       # container against the repo's backup/ dir — no docker cp needed. Pass
       # --backup-dir /app/backup when invoking via `docker compose exec`.
       - ./backup:/app/backup
-    env_file: .env
     environment:
-      # DB_TYPE: sqlite or postgres, set via .env (defaults to sqlite). mongodb
-      # is not yet migrated to the FastAPI API and is rejected at startup.
-      # DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD (only used when
-      # DB_TYPE=postgres) come from .env via env_file above.
-      DB_TYPE: ${DB_TYPE:-sqlite}
-      CMS_PUBLIC_URL: https://local.atharvadevasthali.com
+      # sqlite or postgres — set explicitly by `npm run dev`/`dev:postgres`
+      # on the command line, not read from .env. mongodb is not yet migrated
+      # to the FastAPI API and is rejected at startup.
+      DB_TYPE: ${DB_TYPE}
+      # Only used when DB_TYPE=postgres.
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # Only used when DB_TYPE=sqlite.
+      SQLITE_DB_PATH: ${SQLITE_DB_PATH}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      DEBUG: ${DEBUG}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      CMS_PUBLIC_URL: ${CMS_PUBLIC_URL}
     networks:
       - internal
 
@@ -64,9 +73,8 @@ services:
       - ./cms-frontend/postcss.config.cjs:/app/postcss.config.cjs
       - ./cms-frontend/tsconfig.json:/app/tsconfig.json
       - ./cms-frontend/tsconfig.app.json:/app/tsconfig.app.json
-    env_file: .env
     environment:
-      VITE_DEV_ALLOWED_HOST: ${VITE_DEV_ALLOWED_HOST:-local.atharvadevasthali.com}
+      VITE_DEV_ALLOWED_HOST: ${VITE_DEV_ALLOWED_HOST}
     networks:
       - internal
 

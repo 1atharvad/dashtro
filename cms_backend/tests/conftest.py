@@ -90,18 +90,33 @@ def _evict_cms_modules():
 
 
 def _reset_db_singletons():
-    """Reset whichever backend's process-wide singleton(s) this run uses."""
+    """Close and reset whichever backend's process-wide singleton(s) this run uses.
+
+    Each of these classes keeps its own `_instance` (Python's `cls._instance =
+    ...` in `__new__` sets it on the *subclass* being instantiated, not on a
+    shared base) — resetting only the shared base class's attribute, as this
+    used to do, left the real singletons (and their open connections) alive
+    and reused across tests. Closing connections here matters most for
+    Postgres, which has a hard `max_connections` ceiling a whole test session
+    can otherwise exhaust (each fresh TestClient's worker threads leak one
+    connection apiece if nothing ever closes them).
+    """
     if TEST_DB_TYPE == "postgres":
-        from api.utils.postgres_client import PostgresClient
-
-        PostgresClient._instance = None
         from api.utils.postgres_audit_client import PostgresAuditClient
+        from api.utils.postgres_client import PostgresAuth, PostgresData
 
-        PostgresAuditClient._instance = None
+        for cls in (PostgresAuth, PostgresData, PostgresAuditClient):
+            if cls._instance is not None:
+                cls._instance.close_all_connections()
+            cls._instance = None
     else:
-        from api.utils.sqlite_client import SqliteClient
+        from api.utils.audit_client import SqliteAuditClient
+        from api.utils.sqlite_client import SqliteAuth, SqliteData
 
-        SqliteClient._instance = None
+        for cls in (SqliteAuth, SqliteData, SqliteAuditClient):
+            if cls._instance is not None:
+                cls._instance.close_all_connections()
+            cls._instance = None
 
 
 @pytest.fixture

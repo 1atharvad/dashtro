@@ -2,6 +2,7 @@ import hashlib
 import os
 import secrets
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -21,10 +22,17 @@ class PostgresClient:
         if not cls._instance:
             cls._instance = super().__new__(cls, *args, **kwargs)
             cls._instance._local = threading.local()
+            # Thread-local storage means a connection made on one thread is
+            # unreachable from any other — including from close_all_connections()
+            # below, which needs to close every connection this singleton has
+            # ever handed out, not just the calling thread's. Tracked here
+            # separately, guarded by a lock since multiple threads create
+            # connections concurrently.
+            cls._instance._all_connections = []
+            cls._instance._connections_lock = threading.Lock()
         return cls._instance
 
-    @staticmethod
-    def _create_connection():
+    def _create_connection(self):
         conn = psycopg2.connect(
             host=config("DB_HOST", default="localhost"),
             port=config("DB_PORT", default="5432"),
@@ -41,7 +49,28 @@ class PostgresClient:
         # that need atomicity across multiple statements (the promote/pull
         # pipeline, cascading deletes) toggle this off for their duration.
         conn.autocommit = True
+        with self._connections_lock:
+            self._all_connections.append(conn)
         return conn
+
+    def close_all_connections(self):
+        """Close every connection this singleton has ever handed out, across
+        every thread that used it.
+
+        Used by test teardown (see cms_backend/tests/conftest.py) — a test
+        suite that creates a fresh TestClient per test, each spinning up its
+        own worker threads, otherwise leaks one Postgres connection per
+        thread for the life of the pytest process, eventually exhausting
+        Postgres's max_connections. Safe to call even if some connections are
+        already closed.
+        """
+        with self._connections_lock:
+            conns, self._all_connections = self._all_connections, []
+        for conn in conns:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     @property
     def connection(self):
@@ -81,12 +110,33 @@ class PostgresClient:
         finally:
             self.connection.autocommit = True
 
+    def _ensure_with_retry(self, *ensure_fns, attempts=5, delay=1.0):
+        """Run one or more `CREATE TABLE IF NOT EXISTS` methods, retrying on
+        connection errors.
+
+        This class is a singleton instantiated once per process, at module
+        import time — a single failed attempt here (e.g. a freshly-started
+        Postgres container that answers a healthcheck slightly before it's
+        ready to accept real sessions) would otherwise never be retried,
+        silently breaking every request against this table for the rest of
+        the process's life. The `IF NOT EXISTS` calls are idempotent, so
+        re-running all of them on retry is safe.
+        """
+        for attempt in range(1, attempts + 1):
+            try:
+                for fn in ensure_fns:
+                    fn()
+                return
+            except psycopg2.OperationalError:
+                if attempt == attempts:
+                    raise
+                time.sleep(delay)
+
 
 class PostgresAuth(PostgresClient):
     def __init__(self):
         super().__init__()
-        self._ensure_users_table()
-        self._ensure_api_keys_table()
+        self._ensure_with_retry(self._ensure_users_table, self._ensure_api_keys_table)
 
     def _ensure_users_table(self):
         cursor = self.get_cursor()
@@ -424,8 +474,7 @@ class PostgresData(PostgresClient):
     def __init__(self):
         if not hasattr(self, "_caches"):
             self._caches: dict[str, dict] = {}
-        self._ensure_tables()
-        self._ensure_versions_table()
+        self._ensure_with_retry(self._ensure_tables, self._ensure_versions_table)
 
     def _ensure_tables(self):
         cursor = self.get_cursor()
