@@ -42,8 +42,7 @@ services:
       - ./backup:/app/backup
     environment:
       # sqlite or postgres — set explicitly by `npm run dev`/`dev:postgres`
-      # on the command line, not read from .env. mongodb is not yet migrated
-      # to the FastAPI API and is rejected at startup.
+      # on the command line, not read from .env.
       DB_TYPE: ${DB_TYPE}
       # Only used when DB_TYPE=postgres.
       DB_HOST: ${DB_HOST}

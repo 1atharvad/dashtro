@@ -5,7 +5,6 @@ from .postgres_audit_client import PostgresAuditClient
 from .postgres_client import PostgresAuth, PostgresData
 from .sqlite_client import SqliteAuth, SqliteData
 
-# mongodb is not yet migrated to the FastAPI data API, so it stays unsupported.
 _DB_TYPE = config("DB_TYPE", default="sqlite")
 _SUPPORTED_DB_TYPES = ("sqlite", "postgres")
 
