@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Box, TextField, Typography } from "@mui/material";
 import { Button, toast } from "advi-ui";
 import { API_BASE_URL } from "@ts/config";
@@ -10,7 +10,6 @@ export const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [ownerExists, setOwnerExists] = useState(true);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -19,9 +18,11 @@ export const Login = () => {
   useEffect(() => {
     fetch(`${API_BASE_URL}/auth/owner-exists/`)
       .then(res => res.json())
-      .then(data => setOwnerExists(data.exists))
+      .then(data => {
+        if (!data.exists) navigate("/signup/", { replace: true });
+      })
       .catch(() => {});
-  }, []);
+  }, [navigate]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -91,11 +92,6 @@ export const Login = () => {
           <Button type="submit" variant="default" disabled={loading} className="w-full justify-center mt-1">
             {loading ? "Signing in…" : "Sign in"}
           </Button>
-          {!ownerExists && (
-            <Typography variant="body2" color="text.secondary" textAlign="center">
-              <Link to="/signup/" style={{ color: "inherit" }}>Set up your account →</Link>
-            </Typography>
-          )}
         </Box>
       </Box>
     </Box>

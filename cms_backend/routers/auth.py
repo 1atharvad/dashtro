@@ -106,6 +106,8 @@ def refresh(body: RefreshRequest):
 
 @router.post("/auth/login/")
 def login(body: LoginRequest, request: Request):
+    if not db_auth.owner_exists():
+        raise HTTPException(status_code=404, detail="No account has been set up yet")
     try:
         result = db_auth.login_user(body.email, body.password)
         db_audit.log(
