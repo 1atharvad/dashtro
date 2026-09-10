@@ -2,9 +2,10 @@ from pathlib import Path
 
 from api.middleware.auth_middleware import CMSAuthMiddleware
 from config import CORS_ORIGINS
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from routers import (
     audit,
@@ -43,6 +44,21 @@ app.add_middleware(CMSAuthMiddleware)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# FastAPI's default 422 body has `detail` as a list of error objects, unlike
+# every other error response in this app (`detail` as a plain string). The
+# frontend renders `detail` directly in a toast, so flatten it to a string
+# here to keep that consistent.
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    messages = []
+    for err in exc.errors():
+        msg = err.get("msg", "Invalid input")
+        if msg.startswith("Value error, "):
+            msg = msg[len("Value error, ") :]
+        messages.append(msg)
+    return JSONResponse(status_code=422, content={"detail": "; ".join(messages) or "Invalid input"})
 
 
 app.include_router(auth.router, prefix="/api/cms")

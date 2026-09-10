@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { PageNotFound } from 'advi-ui';
+import { PageNotFound, ToastProvider } from 'advi-ui';
 import { Helmet } from 'react-helmet-async';
 import '@/App.scss';
 import { Box, Skeleton, useTheme } from '@mui/material';
@@ -51,36 +51,38 @@ export const App = () => {
         <link rel="icon" type="image/png" sizes="16x16" href={favicon16x16} />
         <link rel="shortcut icon" href={favicon} />
       </Helmet>
-      <Router basename={rootPath}>
-        <Box className="page-content" sx={{ background: theme.palette.pageBkColor }}>
-          <Suspense fallback={<PageFallback />}>
-            <Routes>
-              <Route path="/login/" element={<Login />} />
-              <Route path="/signup/" element={<Signup />} />
+      <ToastProvider>
+        <Router basename={rootPath}>
+          <Box className="page-content" sx={{ background: theme.palette.pageBkColor }}>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/login/" element={<Login />} />
+                <Route path="/signup/" element={<Signup />} />
 
-              <Route path="/" element={<MarketingPage />} />
-              <Route path="/projects/" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
-              <Route path="/settings/:setting_type/" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                <Route path="/" element={<MarketingPage />} />
+                <Route path="/projects/" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
+                <Route path="/settings/:setting_type/" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
-              <Route path="/projects/:project_id/" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
-              <Route path="/projects/:project_id/settings/:section/" element={<ProtectedRoute><ProjectSettingsPage /></ProtectedRoute>} />
-              <Route path="/projects/:project_id/rtdb/" element={<ProtectedRoute><RealtimeDatabase /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/settings/:section/" element={<ProtectedRoute><ProjectSettingsPage /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/rtdb/" element={<ProtectedRoute><RealtimeDatabase /></ProtectedRoute>} />
 
-              <Route path="/projects/:project_id/schema/" element={<ProtectedRoute><Schema /></ProtectedRoute>} />
-              <Route path="/projects/:project_id/schema/:schema_name/" element={<ProtectedRoute><Schema /></ProtectedRoute>} />
-              <Route path="/projects/:project_id/schema/components/" element={<ProtectedRoute><RichTextComponentsList /></ProtectedRoute>} />
-              <Route path="/projects/:project_id/schema/components/new/" element={<ProtectedRoute><RichTextComponentEditor /></ProtectedRoute>} />
-              <Route path="/projects/:project_id/schema/components/:component_id/" element={<ProtectedRoute><RichTextComponentEditor /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/schema/" element={<ProtectedRoute><Schema /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/schema/:schema_name/" element={<ProtectedRoute><Schema /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/schema/components/" element={<ProtectedRoute><RichTextComponentsList /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/schema/components/new/" element={<ProtectedRoute><RichTextComponentEditor /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/schema/components/:component_id/" element={<ProtectedRoute><RichTextComponentEditor /></ProtectedRoute>} />
 
-              <Route path="/projects/:project_id/workspace/:workspace_name/" element={<ProtectedRoute><CollectionContent /></ProtectedRoute>} />
-              <Route path="/projects/:project_id/workspace/:workspace_name/collection/:collection_name/" element={<ProtectedRoute><CollectionContent /></ProtectedRoute>} />
-              <Route path="/projects/:project_id/workspace/:workspace_name/collection/:collection_name/document/:document_id/" element={<ProtectedRoute><DocumentContent /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/workspace/:workspace_name/" element={<ProtectedRoute><CollectionContent /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/workspace/:workspace_name/collection/:collection_name/" element={<ProtectedRoute><CollectionContent /></ProtectedRoute>} />
+                <Route path="/projects/:project_id/workspace/:workspace_name/collection/:collection_name/document/:document_id/" element={<ProtectedRoute><DocumentContent /></ProtectedRoute>} />
 
-              <Route path="*" element={<PageNotFound />} />
-            </Routes>
-          </Suspense>
-        </Box>
-      </Router>
+                <Route path="*" element={<PageNotFound />} />
+              </Routes>
+            </Suspense>
+          </Box>
+        </Router>
+      </ToastProvider>
     </>
   );
 };

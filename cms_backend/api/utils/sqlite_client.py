@@ -194,7 +194,7 @@ class SqliteAuth(SqliteClient):
         cursor.close()
 
         if not row or not self._verify_password(password, row["password"]):
-            raise Exception("Login failed: INVALID_CREDENTIALS")
+            raise Exception("Incorrect email or password")
 
         secret = config("JWT_SECRET_KEY")
         now = datetime.now(tz=UTC)
