@@ -18,6 +18,14 @@ const extractErrorMessage = async (res: Response, fallback: string): Promise<str
   return fallback;
 };
 
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 // Drops empty-string fields so the backend only sees intentionally-set values.
 export const stripEmpty = <T extends object>(input: T): Record<string, unknown> =>
   Object.entries(input).reduce((acc: Record<string, unknown>, [key, value]) => {
@@ -35,7 +43,7 @@ export const apiRequest = async <T>(
     headers: { 'Content-Type': 'application/json', ...requestInit.headers },
   });
   if (!res.ok) {
-    throw new Error(await extractErrorMessage(res, `Request failed: ${res.status} ${path}`));
+    throw new ApiError(await extractErrorMessage(res, `Request failed: ${res.status} ${path}`), res.status);
   }
   if (!parseJson) return undefined as T;
   return res.json();

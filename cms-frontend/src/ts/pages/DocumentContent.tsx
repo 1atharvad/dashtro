@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   Box, Chip, IconButton, Tooltip, Typography, useTheme,
 } from '@mui/material';
-import { Button } from 'advi-ui';
+import { Button, PageNotFound } from 'advi-ui';
 import { Download, Upload } from 'lucide-react';
 import '@/scss/DocCollection.scss';
 import { useCollectionData } from '@/hooks/useCollection';
@@ -12,6 +12,7 @@ import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { PageForm } from '@ts/components/PageForm';
 import { DocumentEntry } from '@ts/components/DocumentEntry';
 import { useDocumentData } from '@/hooks/useDocument';
+import { ApiError } from '@ts/api/client';
 import { Link } from '@ts/components/Link';
 import { AppHeader } from '@ts/components/AppHeader';
 import { VersionHistoryDrawer } from '@ts/components/VersionHistoryDrawer';
@@ -73,6 +74,7 @@ export const DocumentContent = () => {
     restoreVersion,
     versions,
     loading: loading2,
+    error: fetchError,
   } = useDocumentData(project_id ?? '', collection_name ?? '', workspace_name ?? 'production', document_id);
 
   const isProduction = workspace_name === 'production';
@@ -302,6 +304,10 @@ export const DocumentContent = () => {
           });
           return updOrFn;
         }];
+
+  if (!isNew && fetchError instanceof ApiError && fetchError.status === 404) {
+    return <PageNotFound />;
+  }
 
   return (
     <>

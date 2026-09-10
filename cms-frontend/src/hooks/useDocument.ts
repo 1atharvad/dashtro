@@ -133,5 +133,6 @@ export const useDocumentData = (
     versions,
     defaultId,
     loading,
+    error,
   };
 };

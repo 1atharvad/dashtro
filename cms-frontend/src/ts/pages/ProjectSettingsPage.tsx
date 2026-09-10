@@ -4,7 +4,7 @@ import {
   Box, IconButton, InputAdornment, TextField, Tooltip, Typography
 } from '@mui/material';
 import { UserCircle, Info, ClipboardList, AlertTriangle, Copy } from 'lucide-react';
-import { AsideItem, Button } from 'advi-ui';
+import { AsideItem, Button, PageNotFound } from 'advi-ui';
 import { useProjectData } from '@/hooks/useProject';
 import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { LinkDrawer } from '@ts/components/LinkDrawer';
@@ -76,9 +76,7 @@ export const ProjectSettingsPage = () => {
   ];
 
   if (projectsLoading) return null;
-  if (!project) return (
-    <Box sx={{ p: 4 }}><Typography color="text.secondary">Project not found.</Typography></Box>
-  );
+  if (!project) return <PageNotFound />;
 
   const renderContent = () => {
     switch (section) {

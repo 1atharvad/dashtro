@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from "react-router-dom";
 import { Box } from '@mui/material';
-import { AsideItem } from 'advi-ui';
+import { AsideItem, PageNotFound } from 'advi-ui';
 
 import { DocumentList } from '@ts/components/DocumentList';
 import { LinkDrawer } from '@ts/components/LinkDrawer';
@@ -60,6 +60,10 @@ export const CollectionContent = () => {
   ];
 
   if (loading) return <CollectionSkeleton />;
+
+  if (collection_name && !collections.some(c => c['_collection_name'] === collection_name)) {
+    return <PageNotFound />;
+  }
 
   return (
     <>

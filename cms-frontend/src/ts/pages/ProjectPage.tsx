@@ -5,7 +5,7 @@ import {
   Grid, IconButton, Tooltip, Typography
 } from '@mui/material';
 import { Plus, ArrowRight, ArrowLeft, Settings, LayoutTemplate, Database } from 'lucide-react';
-import { Button } from 'advi-ui';
+import { Button, PageNotFound } from 'advi-ui';
 import { useProjectData } from '@/hooks/useProject';
 import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { AppHeader } from '@ts/components/AppHeader';
@@ -34,9 +34,7 @@ export const ProjectPage = () => {
   const nonProdWorkspaces = workspaces.filter(w => !w.is_production);
 
   if (projectsLoading) return null;
-  if (!project) return (
-    <Box sx={{ p: 4 }}><Typography color="text.secondary">Project not found.</Typography></Box>
-  );
+  if (!project) return <PageNotFound />;
 
   return (
     <Box className="project-page">
