@@ -10,11 +10,11 @@ export const logout = async () => {
 
 // Pages reachable while signed out — an expired/missing session here is
 // normal, not a reason to bounce the visitor to /login/.
-const _PUBLIC_PATHS = ['/login/', '/signup/', '/forgot-password/', '/reset-password/'];
+export const PUBLIC_PATHS = ['/login/', '/signup/', '/forgot-password/', '/reset-password/'];
 
 const redirectToLogin = () => {
   const path = window.location.pathname;
-  if (_PUBLIC_PATHS.includes(path)) return;
+  if (PUBLIC_PATHS.includes(path)) return;
   logout();
 };
 

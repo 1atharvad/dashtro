@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL } from '@ts/config';
-import { authFetch } from '@ts/utils/auth';
+import { authFetch, PUBLIC_PATHS } from '@ts/utils/auth';
 import { UserContext } from './userContextValue';
 import type { CurrentUser } from '@ts/types/constants';
 
@@ -25,6 +25,9 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    // No session to check yet on a signed-out-only page (login, signup,
+    // forgot/reset password) — skip the doomed-to-401 request entirely.
+    if (PUBLIC_PATHS.includes(window.location.pathname)) return;
     refreshUser();
   }, [refreshUser]);
 
