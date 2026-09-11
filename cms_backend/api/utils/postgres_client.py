@@ -194,6 +194,12 @@ class PostgresAuth(PostgresClient):
         secret = config("JWT_SECRET_KEY")
         try:
             payload = jwt.decode(id_token, secret, algorithms=["HS256"])
+            # Special-purpose tokens (e.g. auth.py's password-reset token)
+            # are signed with this same secret but must never double as a
+            # session id/refresh token — reject explicitly rather than
+            # relying on them incidentally lacking an "email" claim.
+            if payload.get("purpose"):
+                raise Exception("Token verification failed: wrong token type")
             cursor = self.get_cursor()
             cursor.execute(
                 "SELECT first_name, last_name, role FROM cms_users WHERE id=%s", (payload["uid"],)

@@ -1,39 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
-import { API_BASE_URL } from '@ts/config';
-import { authFetch } from '@ts/utils/auth';
+import { useUser } from '@ts/context/userContextValue';
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
+  const { user, checked, refreshUser } = useUser();
 
   // The idToken lives in an httpOnly cookie, unreadable by JS, so auth state
-  // can't be determined synchronously here — ask the backend instead.
-  const [checking, setChecking] = useState(true);
-  const [allowed, setAllowed] = useState(false);
-
+  // can't be determined synchronously here — ask the backend instead, via
+  // the same UserContext check every other consumer uses (refreshUser
+  // de-dupes concurrent callers into one request, so this never duplicates
+  // UserProvider's own initial check).
   useEffect(() => {
-    let cancelled = false;
-    authFetch(`${API_BASE_URL}/auth/`)
-      .then(res => {
-        if (!cancelled) setAllowed(res.ok);
-      })
-      .catch(() => {
-        if (!cancelled) setAllowed(false);
-      })
-      .finally(() => {
-        if (!cancelled) setChecking(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!checked) refreshUser();
+  }, [checked, refreshUser]);
 
-  if (checking) return (
+  if (!checked) return (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
       <CircularProgress size={32} />
     </Box>
   );
-  if (!allowed) return <Navigate to="/login/" state={{ from: location }} replace />;
+  if (!user) return <Navigate to="/login/" state={{ from: location }} replace />;
   return <>{children}</>;
 };

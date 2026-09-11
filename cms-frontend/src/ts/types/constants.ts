@@ -199,6 +199,7 @@ export interface CurrentUser {
 export interface UserContextValue {
   user: CurrentUser | null;
   refreshUser: () => Promise<void>;
+  checked: boolean;
 }
 
 // ---- workspace ----
