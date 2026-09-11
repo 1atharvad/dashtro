@@ -56,6 +56,14 @@ services:
       DEBUG: ${DEBUG}
       CORS_ORIGINS: ${CORS_ORIGINS}
       CMS_PUBLIC_URL: ${CMS_PUBLIC_URL}
+      # Password-reset email.
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER}
+      EMAIL_FROM: ${EMAIL_FROM}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      RESEND_API_KEY: ${RESEND_API_KEY}
     networks:
       - internal
 

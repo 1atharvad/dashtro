@@ -104,12 +104,13 @@ async def delete_rtdb(project_id: str, request: Request, path: str = ""):
 
 
 @router.websocket("/projects/{project_id}/rtdb/ws")
-async def rtdb_ws(websocket: WebSocket, project_id: str, token: str = ""):
+async def rtdb_ws(websocket: WebSocket, project_id: str):
     # CMSAuthMiddleware only wraps HTTP requests (Starlette's BaseHTTPMiddleware
     # doesn't run over WebSocket routes), so auth is verified here explicitly.
+    # The idToken cookie rides along automatically on the WS handshake (same-origin).
     db_auth = get_auth_client()
     try:
-        db_auth.verify_id_token(token)
+        db_auth.verify_id_token(websocket.cookies.get("idToken", ""))
     except Exception:
         await websocket.close(code=4401)
         return

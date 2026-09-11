@@ -13,6 +13,19 @@ RUN npm ci --legacy-peer-deps
 COPY cms-frontend/ .
 RUN npm run build
 
+# Renders the password-reset email (a React Email component) to the static
+# HTML/text the backend actually sends — see emails/render.ts. Rebuilt fresh
+# on every image build so the shipped email can never go stale relative to
+# whatever's committed in emails/templates/, regardless of whether someone
+# remembered to run `npm run build` there locally.
+FROM node:20-alpine AS emails-build
+
+WORKDIR /emails
+COPY emails/package.json emails/package-lock.json ./
+RUN npm ci
+COPY emails/ .
+RUN npm run build
+
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -22,6 +35,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY cms_backend/ .
 COPY --from=frontend-build /frontend/dist ./static
+COPY --from=emails-build /cms_backend/api/utils/email_templates ./api/utils/email_templates
 
 EXPOSE 7312
 

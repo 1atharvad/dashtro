@@ -1,49 +1,33 @@
 import { API_BASE_URL } from '@ts/config';
 
-export const getToken = (): string | null => {
-  return localStorage.getItem('idToken');
-};
-
-export const isTokenExpired = (token: string): boolean => {
+export const logout = async () => {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.exp * 1000 < Date.now();
-  } catch {
-    return true;
+    await fetch(`${API_BASE_URL}/auth/logout/`, { method: 'POST', credentials: 'include' });
+  } finally {
+    window.location.href = '/login/';
   }
 };
 
-export const logout = () => {
-  localStorage.removeItem('idToken');
-  localStorage.removeItem('refreshToken');
-  window.location.href = '/login/';
-};
+// Pages reachable while signed out — an expired/missing session here is
+// normal, not a reason to bounce the visitor to /login/.
+const _PUBLIC_PATHS = ['/login/', '/signup/', '/forgot-password/', '/reset-password/'];
 
 const redirectToLogin = () => {
   const path = window.location.pathname;
-  if (path === '/login/' || path === '/signup/') return;
+  if (_PUBLIC_PATHS.includes(path)) return;
   logout();
 };
 
 export const refreshTokens = async (): Promise<boolean> => {
-  const refreshToken = localStorage.getItem('refreshToken');
-  if (!refreshToken) {
-    redirectToLogin();
-    return false;
-  }
   try {
     const res = await fetch(`${API_BASE_URL}/auth/refresh/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: 'include',
     });
     if (!res.ok) {
       redirectToLogin();
       return false;
     }
-    const data = await res.json();
-    localStorage.setItem('idToken', data.idToken);
-    localStorage.setItem('refreshToken', data.refreshToken);
     return true;
   } catch {
     redirectToLogin();
@@ -52,26 +36,12 @@ export const refreshTokens = async (): Promise<boolean> => {
 };
 
 export const authFetch = async (input: RequestInfo, init?: RequestInit): Promise<Response> => {
-  let token = getToken();
-
-  if (token && isTokenExpired(token)) {
-    const ok = await refreshTokens();
-    if (!ok) throw new Error('Session expired. Please log in again.');
-    token = getToken();
-  }
-
-  const headers = new Headers(init?.headers);
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-
-  let res = await fetch(input, { ...init, headers });
+  let res = await fetch(input, { ...init, credentials: 'include' });
 
   if (res.status === 401) {
     const ok = await refreshTokens();
     if (ok) {
-      token = getToken();
-      const retryHeaders = new Headers(init?.headers);
-      if (token) retryHeaders.set('Authorization', `Bearer ${token}`);
-      res = await fetch(input, { ...init, headers: retryHeaders });
+      res = await fetch(input, { ...init, credentials: 'include' });
       if (res.status === 401) redirectToLogin();
     }
   }

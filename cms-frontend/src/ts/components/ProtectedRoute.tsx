@@ -1,29 +1,33 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
-import { getToken, isTokenExpired, refreshTokens } from '@ts/utils/auth';
+import { API_BASE_URL } from '@ts/config';
+import { authFetch } from '@ts/utils/auth';
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
 
-  // Synchronously determine initial state from localStorage — no render delay
-  // for the common case where the token is still valid.
-  const [checking, setChecking] = useState<boolean>(() => {
-    const token = getToken();
-    return !!token && isTokenExpired(token);
-  });
-  const [allowed, setAllowed] = useState<boolean>(() => {
-    const token = getToken();
-    return !!token && !isTokenExpired(token);
-  });
+  // The idToken lives in an httpOnly cookie, unreadable by JS, so auth state
+  // can't be determined synchronously here — ask the backend instead.
+  const [checking, setChecking] = useState(true);
+  const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    if (!checking) return;
-    refreshTokens().then(ok => {
-      setAllowed(ok);
-      setChecking(false);
-    });
-  }, [checking]);
+    let cancelled = false;
+    authFetch(`${API_BASE_URL}/auth/`)
+      .then(res => {
+        if (!cancelled) setAllowed(res.ok);
+      })
+      .catch(() => {
+        if (!cancelled) setAllowed(false);
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (checking) return (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>

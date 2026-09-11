@@ -87,7 +87,7 @@ def live_server(tmp_path, monkeypatch):
         assert signup.status_code == 200, signup.text
         login = setup.post("/api/cms/auth/login/", json={"email": email, "password": password})
         assert login.status_code == 200, login.text
-        jwt_headers = {"Authorization": f"Bearer {login.json()['idToken']}"}
+        jwt_cookies = {"idToken": login.cookies["idToken"]}
 
         key_resp = setup.post(
             "/api/cms/auth/api-keys/",
@@ -97,7 +97,7 @@ def live_server(tmp_path, monkeypatch):
                 "collections": None,
                 "scopes": ["read", "write"],
             },
-            headers=jwt_headers,
+            cookies=jwt_cookies,
         )
         assert key_resp.status_code == 200, key_resp.text
         api_key = key_resp.json()["key"]
@@ -106,7 +106,7 @@ def live_server(tmp_path, monkeypatch):
         "cms_schema": cms_schema,
         "base_url": base_url,
         "api_key": api_key,
-        "jwt_headers": jwt_headers,
+        "jwt_cookies": jwt_cookies,
     }
 
     server.should_exit = True
@@ -115,13 +115,13 @@ def live_server(tmp_path, monkeypatch):
     _evict_cms_modules()
 
 
-def _seed_post_schema_via_api(base_url: str, jwt_headers: dict, project_id: str) -> None:
+def _seed_post_schema_via_api(base_url: str, jwt_cookies: dict, project_id: str) -> None:
     """Create a project (name=project_id) with a 'Post' schema and 'posts' collection over the JWT-authenticated API. Returns the real project id."""
     with httpx.Client(base_url=base_url) as client:
         proj = client.post(
             "/api/cms/projects/",
             json={"name": project_id},
-            headers=jwt_headers,
+            cookies=jwt_cookies,
         )
         assert proj.status_code == 201, proj.text
         real_project_id = proj.json()["_id"]
@@ -135,14 +135,14 @@ def _seed_post_schema_via_api(base_url: str, jwt_headers: dict, project_id: str)
                 "_schema_name": "Post",
                 "_display_name": True,
             },
-            headers=jwt_headers,
+            cookies=jwt_cookies,
         )
         assert field.status_code == 201, field.text
 
         coll = client.post(
             f"/api/cms/projects/{real_project_id}/collections/",
             json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
-            headers=jwt_headers,
+            cookies=jwt_cookies,
         )
         assert coll.status_code == 201, coll.text
     return real_project_id
@@ -175,7 +175,7 @@ def test_schema_export_import_http_round_trip(live_server, tmp_path):
     cms_schema = live_server["cms_schema"]
     base_url, api_key = live_server["base_url"], live_server["api_key"]
 
-    src_id = _seed_post_schema_via_api(base_url, live_server["jwt_headers"], "proj-src")
+    src_id = _seed_post_schema_via_api(base_url, live_server["jwt_cookies"], "proj-src")
     backup_dir = tmp_path / "backup"
 
     cms_schema.cmd_export_http(base_url, src_id, backup_dir, api_key=api_key)
@@ -184,7 +184,7 @@ def test_schema_export_import_http_round_trip(live_server, tmp_path):
     # Import into a brand-new, schema-less project via the same HTTP surface.
     with httpx.Client(base_url=base_url) as client:
         dst = client.post(
-            "/api/cms/projects/", json={"name": "proj-dst"}, headers=live_server["jwt_headers"]
+            "/api/cms/projects/", json={"name": "proj-dst"}, cookies=live_server["jwt_cookies"]
         )
         assert dst.status_code == 201, dst.text
         dst_id = dst.json()["_id"]
@@ -241,19 +241,19 @@ def test_documents_and_media_export_import_http_round_trip(live_server, tmp_path
     test.
     """
     cms_schema = live_server["cms_schema"]
-    base_url, api_key, jwt_headers = (
+    base_url, api_key, jwt_cookies = (
         live_server["base_url"],
         live_server["api_key"],
-        live_server["jwt_headers"],
+        live_server["jwt_cookies"],
     )
-    project_id = _seed_post_schema_via_api(base_url, jwt_headers, "proj-docs")
+    project_id = _seed_post_schema_via_api(base_url, jwt_cookies, "proj-docs")
     workspace_name = "staging"
 
     with httpx.Client(base_url=base_url) as client:
         ws = client.post(
             f"/api/cms/projects/{project_id}/workspaces/",
             json={"workspace_name": workspace_name},
-            headers=jwt_headers,
+            cookies=jwt_cookies,
         )
         assert ws.status_code == 201, ws.text
 
@@ -265,14 +265,14 @@ def test_documents_and_media_export_import_http_round_trip(live_server, tmp_path
         image_field = client.post(
             f"/api/cms/projects/{project_id}/schema/",
             json={"_index": 2, "_name": "image", "_type": "String", "_schema_name": "Post"},
-            headers=jwt_headers,
+            cookies=jwt_cookies,
         )
         assert image_field.status_code == 201, image_field.text
 
         doc = client.post(
             f"/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/posts/",
             json={"title": "Hello", "image": "/api/sdk/media/files/photo.png"},
-            headers=jwt_headers,
+            cookies=jwt_cookies,
         )
         assert doc.status_code == 201, doc.text
         doc_id = doc.json()["_id"]
@@ -299,7 +299,7 @@ def test_documents_and_media_export_import_http_round_trip(live_server, tmp_path
     with httpx.Client(base_url=base_url) as client:
         resp = client.get(
             f"/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/posts/document/{doc_id}/",
-            headers=jwt_headers,
+            cookies=jwt_cookies,
         )
         assert resp.status_code == 200, resp.text
         assert resp.json()["title"] == "Hello"

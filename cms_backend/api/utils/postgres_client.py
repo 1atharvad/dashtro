@@ -306,6 +306,29 @@ class PostgresAuth(PostgresClient):
         self.connection.commit()
         cursor.close()
 
+    def get_user_by_email(self, email: str) -> dict | None:
+        cursor = self.get_cursor()
+        cursor.execute("SELECT id, password FROM cms_users WHERE email=%s", (email,))
+        row = cursor.fetchone()
+        cursor.close()
+        return {"uid": row["id"], "password_hash": row["password"]} if row else None
+
+    def get_password_hash(self, uid: str) -> str | None:
+        cursor = self.get_cursor()
+        cursor.execute("SELECT password FROM cms_users WHERE id=%s", (uid,))
+        row = cursor.fetchone()
+        cursor.close()
+        return row["password"] if row else None
+
+    def reset_password(self, uid: str, new_password: str):
+        cursor = self.get_cursor()
+        cursor.execute(
+            "UPDATE cms_users SET password=%s WHERE id=%s",
+            (self._hash_password(new_password), uid),
+        )
+        self.connection.commit()
+        cursor.close()
+
     def _ensure_api_keys_table(self):
         cursor = self.get_cursor()
         cursor.execute("""

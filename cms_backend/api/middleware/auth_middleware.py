@@ -8,6 +8,9 @@ _PUBLIC_ROUTES = {
     ("POST", "/api/cms/auth/signup/"),
     ("POST", "/api/cms/auth/login/"),
     ("POST", "/api/cms/auth/refresh/"),
+    ("POST", "/api/cms/auth/logout/"),
+    ("POST", "/api/cms/auth/forgot-password/"),
+    ("POST", "/api/cms/auth/reset-password/"),
     ("GET", "/api/cms/auth/owner-exists/"),
     # Static, non-sensitive field-type registry fetched at app bootstrap,
     # before login — see cms-frontend/src/main.tsx.
@@ -40,13 +43,12 @@ class CMSAuthMiddleware(BaseHTTPMiddleware):
             if DEBUG:
                 id_token = db_auth.get_admin_token_id()
             else:
-                authorization = request.headers.get("authorization")
-                if not authorization or not authorization.startswith("Bearer "):
+                id_token = request.cookies.get("idToken")
+                if not id_token:
                     return JSONResponse(
                         status_code=401,
-                        content={"detail": "Authorization header missing or invalid"},
+                        content={"detail": "Authentication cookie missing"},
                     )
-                id_token = authorization[len("Bearer ") :].strip()
             actor = db_auth.verify_id_token(id_token)
         except Exception as e:
             return JSONResponse(status_code=401, content={"detail": str(e)})

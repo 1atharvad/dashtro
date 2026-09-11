@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 coverage
+.react-email
 
 # Editor directories and files
 .vscode/*

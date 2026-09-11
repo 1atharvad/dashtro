@@ -4,7 +4,6 @@ import {
   fetchRtdb, putRtdbPath, patchRtdbPath, deleteRtdbPath, rtdbRemoteUpdate,
 } from '@/redux/realtimeDbSlice';
 import type { RootState, AppDispatch, JsonValue, JsonObject } from '@ts/types/constants';
-import { getToken } from '@ts/utils/auth';
 
 export const useRealtimeDb = (projectId: string) => {
   const dispatch = useDispatch<AppDispatch>();
@@ -21,10 +20,11 @@ export const useRealtimeDb = (projectId: string) => {
   useEffect(() => {
     if (!projectId) return;
 
-    const token = getToken();
     const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    // idToken is an httpOnly cookie — the browser attaches it automatically
+    // on the WS handshake (same-origin), no need to pass it explicitly.
     const socket = new WebSocket(
-      `${wsScheme}://${window.location.host}/api/cms/projects/${projectId}/rtdb/ws?token=${encodeURIComponent(token ?? '')}`
+      `${wsScheme}://${window.location.host}/api/cms/projects/${projectId}/rtdb/ws`
     );
     socketRef.current = socket;
 

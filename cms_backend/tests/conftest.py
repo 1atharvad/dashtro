@@ -192,7 +192,10 @@ def signup_owner(client):
     """Create the first (Owner) user via the public signup route and log in.
 
     Returns a dict with the created user's id/email and the tokens from a
-    follow-up login call, since /auth/signup/ itself doesn't return a JWT.
+    follow-up login call. idToken/refreshToken are httpOnly cookies now, set
+    via Set-Cookie on the login response — TestClient (httpx) persists those
+    on `client` automatically, so `client` is already authenticated for every
+    request made after this fixture runs.
     """
     email = "owner@example.com"
     password = "correct-horse-battery-staple"
@@ -207,20 +210,23 @@ def signup_owner(client):
         json={"email": email, "password": password},
     )
     assert login_resp.status_code == 200, login_resp.text
-    login_data = login_resp.json()
 
     return {
         "uid": signup_resp.json()["uid"],
         "email": email,
-        "id_token": login_data["idToken"],
-        "refresh_token": login_data["refreshToken"],
     }
 
 
 @pytest.fixture
 def auth_headers(signup_owner):
-    """Bearer-auth header dict for the signed-up Owner user."""
-    return {"Authorization": f"Bearer {signup_owner['id_token']}"}
+    """No-op placeholder for the many `headers=auth_headers` call sites.
+
+    Auth is now carried by the idToken/refreshToken cookies signup_owner's
+    login call already persisted on the shared `client`, not by a header —
+    this stays around (returning nothing to add) so those call sites don't
+    all need touching.
+    """
+    return {}
 
 
 def make_expired_token() -> str:

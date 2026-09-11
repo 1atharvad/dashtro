@@ -21,8 +21,8 @@ def test_valid_jwt_without_api_key_rejected_on_sdk_route(client, auth_headers):
 
 
 def test_valid_api_key_without_jwt_rejected_on_cms_route(client, auth_headers):
-    """A valid, correctly-scoped API key, with no Authorization/Bearer
-    header, must be rejected on an /api/cms/ route.
+    """A valid, correctly-scoped API key, with no idToken cookie, must be
+    rejected on an /api/cms/ route.
     """
     create_resp = client.post(
         "/api/cms/auth/api-keys/",
@@ -32,6 +32,9 @@ def test_valid_api_key_without_jwt_rejected_on_cms_route(client, auth_headers):
     assert create_resp.status_code == 200, create_resp.text
     api_key = create_resp.json()["key"]
 
+    # Drop the idToken/refreshToken cookies signup_owner's login left on
+    # `client` — this test is about API-key-only access, not JWT+API-key.
+    client.cookies.clear()
     resp = client.get(CMS_URL, headers={"X-API-Key": api_key})
     assert resp.status_code == 401
-    assert resp.json()["detail"] == "Authorization header missing or invalid"
+    assert resp.json()["detail"] == "Authentication cookie missing"

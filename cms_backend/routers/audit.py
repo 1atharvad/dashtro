@@ -3,7 +3,7 @@ import io
 from datetime import UTC, datetime
 
 from api.utils import get_audit_client
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from routers.auth import _get_user
 
@@ -16,10 +16,10 @@ def get_heatmap(
     year: int = Query(default=None),
     month: int | None = Query(default=None, ge=1, le=12),
     project_id: str | None = Query(default=None),
-    authorization: str = Header(default=None),
+    request: Request = None,
 ):
     try:
-        _get_user(authorization)
+        _get_user(request)
     except HTTPException:
         raise
     except Exception as e:
@@ -37,10 +37,10 @@ def export_audit_logs(
     user_id: str | None = Query(default=None),
     from_date: str | None = Query(default=None),
     to_date: str | None = Query(default=None),
-    authorization: str = Header(default=None),
+    request: Request = None,
 ):
     try:
-        _get_user(authorization)
+        _get_user(request)
     except HTTPException:
         raise
     except Exception as e:
@@ -96,10 +96,10 @@ def list_audit_logs(
     to_date: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    authorization: str = Header(default=None),
+    request: Request = None,
 ):
     try:
-        _get_user(authorization)
+        _get_user(request)
     except HTTPException:
         raise
     except Exception as e:
