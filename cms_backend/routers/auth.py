@@ -16,6 +16,7 @@ db_audit = get_audit_client()
 
 _PASSWORD_RESET_TTL_SECONDS = 900  # 15 minutes
 
+
 # idToken/refreshToken are httpOnly cookies, never exposed to frontend JS —
 # see cms-frontend/src/ts/utils/auth.ts for why (XSS-safe token storage).
 def _is_secure_request(request: Request) -> bool:
@@ -26,8 +27,15 @@ def _is_secure_request(request: Request) -> bool:
     return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
 
 
-def _set_auth_cookies(request: Request, response: Response, id_token: str, refresh_token: str) -> None:
-    kwargs = {"httponly": True, "secure": _is_secure_request(request), "samesite": "lax", "path": "/"}
+def _set_auth_cookies(
+    request: Request, response: Response, id_token: str, refresh_token: str
+) -> None:
+    kwargs = {
+        "httponly": True,
+        "secure": _is_secure_request(request),
+        "samesite": "lax",
+        "path": "/",
+    }
     response.set_cookie("idToken", id_token, **kwargs)
     response.set_cookie("refreshToken", refresh_token, **kwargs)
 

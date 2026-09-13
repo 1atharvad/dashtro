@@ -49,7 +49,13 @@ class ResendEmailClient:
             resp = httpx.post(
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={"from": sender, "to": [to], "subject": subject, "html": html_body, "text": text_body},
+                json={
+                    "from": sender,
+                    "to": [to],
+                    "subject": subject,
+                    "html": html_body,
+                    "text": text_body,
+                },
                 timeout=10,
             )
             resp.raise_for_status()

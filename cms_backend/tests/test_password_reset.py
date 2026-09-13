@@ -96,12 +96,14 @@ def test_reset_password_token_is_single_use(client, signup_owner, captured_email
     token = _extract_token(captured_emails[0]["reset_url"])
 
     first = client.post(
-        "/api/cms/auth/reset-password/", json={"token": token, "new_password": "first-new-password-1"}
+        "/api/cms/auth/reset-password/",
+        json={"token": token, "new_password": "first-new-password-1"},
     )
     assert first.status_code == 200, first.text
 
     second = client.post(
-        "/api/cms/auth/reset-password/", json={"token": token, "new_password": "second-new-password-2"}
+        "/api/cms/auth/reset-password/",
+        json={"token": token, "new_password": "second-new-password-2"},
     )
     assert second.status_code == 400
     assert "already been used" in second.json()["detail"]
@@ -109,7 +111,8 @@ def test_reset_password_token_is_single_use(client, signup_owner, captured_email
 
 def test_reset_password_rejects_garbage_token(client):
     resp = client.post(
-        "/api/cms/auth/reset-password/", json={"token": "not-a-jwt", "new_password": "whatever-12345"}
+        "/api/cms/auth/reset-password/",
+        json={"token": "not-a-jwt", "new_password": "whatever-12345"},
     )
     assert resp.status_code == 400
 
@@ -132,7 +135,8 @@ def test_reset_password_rejects_expired_token(client, signup_owner):
     )
 
     resp = client.post(
-        "/api/cms/auth/reset-password/", json={"token": expired_token, "new_password": "whatever-12345"}
+        "/api/cms/auth/reset-password/",
+        json={"token": expired_token, "new_password": "whatever-12345"},
     )
     assert resp.status_code == 400
     assert "expired" in resp.json()["detail"].lower()
@@ -151,10 +155,13 @@ def test_reset_password_rejects_short_password(client, signup_owner, captured_em
 def test_forgot_password_and_reset_password_bypass_auth_middleware(client):
     """Both routes are public — CMSAuthMiddleware must not 401 them for
     missing an idToken cookie, since they're used by a signed-out visitor."""
-    forgot_resp = client.post("/api/cms/auth/forgot-password/", json={"email": "nobody@example.com"})
+    forgot_resp = client.post(
+        "/api/cms/auth/forgot-password/", json={"email": "nobody@example.com"}
+    )
     assert forgot_resp.status_code != 401 or "cookie" not in forgot_resp.json().get("detail", "")
 
     reset_resp = client.post(
-        "/api/cms/auth/reset-password/", json={"token": "not-a-jwt", "new_password": "whatever-12345"}
+        "/api/cms/auth/reset-password/",
+        json={"token": "not-a-jwt", "new_password": "whatever-12345"},
     )
     assert reset_resp.status_code != 401 or "cookie" not in reset_resp.json().get("detail", "")

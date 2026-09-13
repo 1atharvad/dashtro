@@ -69,7 +69,9 @@ async def _signup_and_provision_api_key(transport: httpx.ASGITransport) -> dict:
             "/api/cms/auth/login/", json={"email": email, "password": password}
         )
         assert login.status_code == 200, login.text
-        jwt_token = login.json()["idToken"]
+        # idToken/refreshToken are httpOnly cookies now, not JSON body fields —
+        # `client` already carries the cookie login set for the next request.
+        jwt_token = login.cookies["idToken"]
 
         key_resp = await client.post(
             "/api/cms/auth/api-keys/",
@@ -79,7 +81,6 @@ async def _signup_and_provision_api_key(transport: httpx.ASGITransport) -> dict:
                 "collections": None,
                 "scopes": ["read", "write"],
             },
-            headers={"Authorization": f"Bearer {jwt_token}"},
         )
         assert key_resp.status_code == 200, key_resp.text
 
@@ -132,16 +133,16 @@ def mcp_env(tmp_path, monkeypatch):
 
 async def _create_project_fixture_data(jwt_token: str) -> dict:
     """Create a project with a 'staging' workspace, a 'Post' schema, and a 'posts' collection."""
-    headers = {"Authorization": f"Bearer {jwt_token}"}
-    async with httpx.AsyncClient(base_url="http://testserver") as client:
-        proj = await client.post("/api/cms/projects/", json={"name": "Blog"}, headers=headers)
+    async with httpx.AsyncClient(
+        base_url="http://testserver", cookies={"idToken": jwt_token}
+    ) as client:
+        proj = await client.post("/api/cms/projects/", json={"name": "Blog"})
         assert proj.status_code == 201, proj.text
         project_id = proj.json()["_id"]
 
         ws = await client.post(
             f"/api/cms/projects/{project_id}/workspaces/",
             json={"workspace_name": "staging"},
-            headers=headers,
         )
         assert ws.status_code == 201, ws.text
 
@@ -154,14 +155,12 @@ async def _create_project_fixture_data(jwt_token: str) -> dict:
                 "_schema_name": "Post",
                 "_display_name": True,
             },
-            headers=headers,
         )
         assert field.status_code == 201, field.text
 
         coll = await client.post(
             f"/api/cms/projects/{project_id}/collections/",
             json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
-            headers=headers,
         )
         assert coll.status_code == 201, coll.text
 
@@ -238,7 +237,9 @@ async def _signup_and_provision_api_key_http(base_url: str) -> dict:
             "/api/cms/auth/login/", json={"email": email, "password": password}
         )
         assert login.status_code == 200, login.text
-        jwt_token = login.json()["idToken"]
+        # idToken/refreshToken are httpOnly cookies now, not JSON body fields —
+        # `client` already carries the cookie login set for the next request.
+        jwt_token = login.cookies["idToken"]
 
         key_resp = await client.post(
             "/api/cms/auth/api-keys/",
@@ -248,7 +249,6 @@ async def _signup_and_provision_api_key_http(base_url: str) -> dict:
                 "collections": None,
                 "scopes": ["read", "write"],
             },
-            headers={"Authorization": f"Bearer {jwt_token}"},
         )
         assert key_resp.status_code == 200, key_resp.text
 

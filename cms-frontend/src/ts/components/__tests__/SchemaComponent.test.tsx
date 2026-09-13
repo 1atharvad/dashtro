@@ -115,7 +115,7 @@ describe("SchemaComponent", () => {
     renderSchemaComponent("Article");
     await screen.findByText("title");
 
-    await user.click(screen.getByRole("button", { name: "Actions" }));
+    await user.click(screen.getAllByRole("button", { name: "Actions" })[0]);
     await user.click(await screen.findByText("Delete Schema"));
     await user.click(screen.getByRole("button", { name: "Delete Schema" }));
 

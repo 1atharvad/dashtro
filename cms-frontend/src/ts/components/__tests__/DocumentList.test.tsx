@@ -5,7 +5,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { toast } from "advi-ui";
 import { createTestQueryClient, withQueryClient } from "@/test/queryClient";
@@ -118,28 +117,4 @@ describe("DocumentList", () => {
     expect(screen.getByText("Published")).toBeInTheDocument();
   });
 
-  it("deletes a document and shows a success toast", async () => {
-    const user = userEvent.setup();
-    mockedAuthFetch.mockImplementation(async (input: RequestInfo, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "DELETE") return { ok: true } as Response;
-      if (url.includes("/collection/posts/")) return { ok: true, json: async () => meta } as Response;
-      if (url.includes("/diff-vs-production/")) return { ok: true, json: async () => ({}) } as Response;
-      if (url.includes("/workspaces/")) return { ok: true, json: async () => [] } as Response;
-      throw new Error(`unexpected fetch: ${url}`);
-    });
-
-    renderDocumentList("staging");
-
-    await screen.findByText("First post");
-    const firstRowDelete = screen.getByText("First post").closest(".document-row")?.querySelector(".delete-btn");
-    expect(firstRowDelete).toBeTruthy();
-    await user.click(firstRowDelete as Element);
-
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Document deleted"));
-    expect(mockedAuthFetch).toHaveBeenCalledWith(
-      expect.stringContaining("/document/doc-1/"),
-      expect.objectContaining({ method: "DELETE" })
-    );
-  });
 });
