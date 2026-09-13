@@ -1,9 +1,9 @@
-import { MouseEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Box, Chip, Divider, IconButton, Typography, Grid, Paper,
 } from "@mui/material";
 import { Button, Menu as AdviMenu } from 'advi-ui';
-import { ChevronRight as NavigateNextIcon, GripVertical as DragIndicatorIcon, Trash2 as DeleteIcon, LayoutTemplate as SchemaIcon, FilePlus as NewDocIcon, CloudUpload as UploadIcon, CloudDownload as DownloadIcon, MoreVertical as MoreIcon } from "lucide-react";
+import { ChevronRight as NavigateNextIcon, GripVertical as DragIndicatorIcon, LayoutTemplate as SchemaIcon, FilePlus as NewDocIcon, CloudUpload as UploadIcon, CloudDownload as DownloadIcon, MoreVertical as MoreIcon } from "lucide-react";
 import { Link as BrowserLink } from "react-router-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageWrapper } from "@ts/components/PageForm";
@@ -22,13 +22,11 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 const SortableDocumentItem = ({
-  id, label, base, isProduction, onDelete, status
+  id, label, base, status
 }: {
   id: string;
   label?: string;
   base: string;
-  isProduction: boolean;
-  onDelete: (id: string) => void;
   status?: string;
 }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id });
@@ -59,7 +57,12 @@ const SortableDocumentItem = ({
                 {status && (
                   <Grid>
                     <Chip
-                      label={status === 'published' ? 'Published' : 'Draft'}
+                      label={
+                        <>
+                          <span className="hidden md:inline">{status === 'published' ? 'Published' : 'Draft'}</span>
+                          <span className="md:hidden">{status === 'published' ? 'P' : 'D'}</span>
+                        </>
+                      }
                       size="small"
                       color={status === 'published' ? 'success' : 'default'}
                       sx={{ height: 18, fontSize: '0.65rem', ml: 1 }}
@@ -68,16 +71,6 @@ const SortableDocumentItem = ({
                 )}
               </Grid>
               <Grid container columnSpacing={1} className="document-icon-bar">
-                {!isProduction && (
-                  <Grid>
-                    <IconButton className="delete-btn" onClick={(event: MouseEvent<HTMLButtonElement>) => {
-                      event.preventDefault();
-                      onDelete(id);
-                    }}>
-                      <DeleteIcon className="h-4 w-4" />
-                    </IconButton>
-                  </Grid>
-                )}
                 <Grid><NavigateNextIcon className="navigation-icon h-4 w-4" /></Grid>
               </Grid>
             </Grid>
@@ -103,7 +96,7 @@ export const DocumentList = ({
   const { project_id = '' } = useParams<{ project_id: string }>();
   const navigate = useNavigate();
   const {
-    collDocumentIds, collDocumentLabels, deleteDocumentData, loading,
+    collDocumentIds, collDocumentLabels, loading,
     pushCollectionData, pullCollectionData, refreshCollection,
   } = useDocumentData(project_id, collectionName, workspaceName);
   const { fetchDiff, getCachedDiff } = useWorkspaceData(project_id);
@@ -167,7 +160,7 @@ export const DocumentList = ({
     </Button>
   );
 
-  const ActionsMenu = () => (
+  const ActionsMenu = ({ includeNewDocument = false }: { includeNewDocument?: boolean }) => (
     <AdviMenu
       align="end"
       contentClassName="cms-actions-menu"
@@ -177,6 +170,14 @@ export const DocumentList = ({
         </IconButton>
       }
       items={[
+        ...(includeNewDocument && !isProduction ? [
+          {
+            value: 'new-document',
+            label: 'New Document',
+            icon: <NewDocIcon className="h-4 w-4" />,
+            onSelect: () => navigate(`${base}/document/new/`),
+          },
+        ] : []),
         {
           value: 'schema',
           label: 'View schema',
@@ -208,8 +209,13 @@ export const DocumentList = ({
         isProduction
           ? [<ActionsMenu key="actions" />]
           : [
-              ...(orderedIds.length > 0 ? [<NewDocumentBtn key="new" />] : []),
-              <ActionsMenu key="actions" />,
+              ...(orderedIds.length > 0 ? [
+                <span key="new" className="hidden md:inline-flex"><NewDocumentBtn /></span>,
+              ] : []),
+              <span key="actions-desktop" className="hidden md:inline-flex"><ActionsMenu /></span>,
+              <span key="actions-mobile" className="md:hidden">
+                <ActionsMenu includeNewDocument={orderedIds.length > 0} />
+              </span>,
             ]
       }>
       <WorkspaceSyncModal
@@ -234,8 +240,6 @@ export const DocumentList = ({
                   id={id}
                   label={labels[id]}
                   base={base}
-                  isProduction={isProduction}
-                  onDelete={deleteDocumentData}
                   status={statuses[id]}
                 />
               ))}

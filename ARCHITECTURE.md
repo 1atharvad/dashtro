@@ -14,6 +14,7 @@ this file in the same change; don't let it drift.
 - [Key naming convention: underscore prefix = system variable](#key-naming-convention-underscore-prefix--system-variable)
 - [Document publish status & push-to-production](#document-publish-status--push-to-production)
 - [Where validation lives](#where-validation-lives)
+- [Frontend: mobile-responsive breakpoint convention](#frontend-mobile-responsive-breakpoint-convention)
 
 ## System Overview
 
@@ -104,3 +105,16 @@ Any tool/endpoint surface that accepts free-form data on behalf of a caller (MCP
 ## Where Validation Lives
 
 Validation belongs on the backend, not duplicated across clients (the MCP servers, the official SDKs, a future integration). A client-side pre-check is, at best, a fast/friendly-error convenience layered on top of a real backend guarantee — never the only thing standing between a caller and an invalid write. Concretely: `cms_backend/models/*.py` Pydantic models are the source of truth for shape/type validation, `api/utils/document_validation.py::validate_document_data` is the source of truth for document-field validation against a collection's schema, and uniqueness/cross-record checks (e.g. one `_display_name` per schema) belong in the router handler, checked atomically against the in-process data-client cache right before the write.
+
+## Frontend: Mobile-Responsive Breakpoint Convention
+
+`cms-frontend` uses a single breakpoint, 768px, applied consistently two ways:
+
+- **Tailwind utility classes** (`hidden`, `md:flex`, `md:inline-flex`, `md:hidden`, etc.) for toggling whole elements between a desktop and mobile variant.
+- **SCSS `@media (max-width: 767px)` / `(min-width: 768px)`** for adjusting padding, `flex-direction`, and other layout details that Tailwind utilities alone don't cover.
+
+Page-level action buttons (Save, New Document, Add Folder, Add Workspace, etc.) collapse into a 3-dot dropdown menu (a MUI `Menu` triggered by a `MoreVertical` icon button) below 768px instead of staying inline — see `SchemaActionsMenu.tsx`, `DocumentActionsMenu.tsx`, `SchemaComponent.tsx`'s `CollectionActionsMenu`, and `ProjectPage.tsx`'s `SingleActionMenu` for the established pattern: render the plain button wrapped in `hidden md:inline-flex` for desktop, and a `md:hidden`-wrapped dropdown with the same actions for mobile — rather than hiding/showing the same interactive element outright, since that duplicates event handlers awkwardly.
+
+The sidebar/aside (`LinkDrawer.tsx`) uses advi-ui's `PageAside` (desktop, `hidden md:flex`) and `AsideDrawer` (mobile, `md:hidden`) side by side, always both rendered — visibility is toggled by CSS class, not by conditionally rendering one or the other, since advi-ui's `Modal` internals do not tolerate being unmounted/remounted across a breakpoint change.
+
+**Gotcha — Tailwind utility vs. component-library/MUI inline styles**: applying `hidden`/`md:flex` directly to an element that a UI library (advi-ui or MUI) also assigns its own `display` value to (e.g. a MUI `Grid container`, which sets `display:flex` via its own emotion-injected styles, or advi-ui's `.vi-header-desktop` which sets `display:flex` via its own stylesheet) is unreliable — the two single-class-specificity rules can end up in either cascade order, so the element may not actually hide/show as expected. The fix used throughout this codebase is to wrap the library component in a plain `<span>`/`<Box>` and put the Tailwind visibility classes on that wrapper instead, leaving the library component's own `display` untouched.

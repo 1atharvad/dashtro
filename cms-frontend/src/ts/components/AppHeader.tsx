@@ -7,13 +7,15 @@ import dashtroLogo from '@/assets/images/favicon-96x96.png';
 
 interface AppHeaderProps {
   actions?: ReactNode;
+  /** Overrides the logo's link target (defaults to this project's page, or the projects list outside a project). */
+  logoUrl?: string;
 }
 
-export const AppHeader = ({ actions }: AppHeaderProps) => {
+export const AppHeader = ({ actions, logoUrl }: AppHeaderProps) => {
   const navigate = useNavigate();
   const { user, refreshUser } = useUser();
   const { project_id } = useParams<{ project_id?: string }>();
-  const logoUrl = project_id ? `/projects/${project_id}/` : '/projects/';
+  const resolvedLogoUrl = logoUrl ?? (project_id ? `/projects/${project_id}/` : '/projects/');
 
   useEffect(() => {
     if (!user) {
@@ -26,7 +28,7 @@ export const AppHeader = ({ actions }: AppHeaderProps) => {
         <LogoLink
           name="DashTro!"
           image={{ url: dashtroLogo, alt: 'DashTro Logo' }}
-          link={{ url: logoUrl, isExternal: false }}
+          link={{ url: resolvedLogoUrl, isExternal: false }}
         />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginLeft: 'auto' }}>
           {actions}

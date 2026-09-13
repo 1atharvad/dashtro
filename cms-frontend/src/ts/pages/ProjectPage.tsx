@@ -1,19 +1,46 @@
-import { useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-  Box, Card, CardContent, Chip,
-  Grid, IconButton, Tooltip, Typography
-} from '@mui/material';
-import { Plus, ArrowRight, ArrowLeft, Settings, LayoutTemplate, Database } from 'lucide-react';
+import { Box, IconButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
+import { Plus, LayoutTemplate, MoreVertical } from 'lucide-react';
 import { Button, PageNotFound } from 'advi-ui';
 import { useProjectData } from '@/hooks/useProject';
 import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { AppHeader } from '@ts/components/AppHeader';
+import { ProjectOverviewCards } from '@ts/components/ProjectOverviewCards';
 import { WorkspaceRow } from '@ts/components/WorkspaceRow';
 import { WorkspaceSyncModal } from '@ts/components/dialogs/WorkspaceSyncModal';
 import { CreateWorkspaceDialog } from '@ts/components/dialogs/CreateWorkspaceDialog';
 import { ArchiveWorkspaceDialog } from '@ts/components/dialogs/ArchiveWorkspaceDialog';
+import { recordProjectVisit } from '@ts/utils/recentProjects';
 import '@/scss/ProjectPage.scss';
+
+const SingleActionMenu = ({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) => {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const close = () => setAnchorEl(null);
+
+  return (
+    <>
+      <Tooltip title="Actions">
+        <IconButton size="small" onClick={e => setAnchorEl(e.currentTarget)}>
+          <MoreVertical className="h-4 w-4" />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={close}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        slotProps={{ paper: { sx: { width: 200, mt: 0.5, borderRadius: 1.5 } } }}
+      >
+        <MenuItem onClick={() => { close(); onClick(); }} sx={{ fontSize: 13 }}>
+          <ListItemIcon>{icon}</ListItemIcon>
+          {label}
+        </MenuItem>
+      </Menu>
+    </>
+  );
+};
 
 export const ProjectPage = () => {
   const navigate = useNavigate();
@@ -27,6 +54,10 @@ export const ProjectPage = () => {
 
   const project = projects.find(p => p._id === project_id);
 
+  useEffect(() => {
+    if (project_id && project) recordProjectVisit(project_id);
+  }, [project_id, project]);
+
   const [addingWs, setAddingWs] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
   const [syncModal, setSyncModal] = useState<{ workspaceName: string; mode: 'push' | 'pull' } | null>(null);
@@ -39,18 +70,13 @@ export const ProjectPage = () => {
   return (
     <Box className="project-page">
 
-      <AppHeader />
+      <AppHeader logoUrl="/projects/" />
 
       <Box className="project-page-body">
 
         {/* ── Page title row ───────────────────────────────────────────── */}
         <Box className="project-page-header">
           <Box className="project-page-title">
-            <Tooltip title="Back to projects">
-              <IconButton size="small" onClick={() => navigate('/projects/')}>
-                <ArrowLeft className="h-4 w-4" />
-              </IconButton>
-            </Tooltip>
             <Box>
               <Typography variant="h5" fontWeight={700}>{project.name}</Typography>
               {project.description && (
@@ -66,79 +92,24 @@ export const ProjectPage = () => {
         </Box>
 
         {/* ── Info cards ──────────────────────────────────────────────── */}
-        <Grid container spacing={3} className="project-page-cards">
-
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Card className="pp-card pp-card--production" elevation={0}>
-              <CardContent className="pp-card-content">
-                <Box className="pp-card-header">
-                  <Chip label="Production" size="small" color="success" />
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 2, flex: 1 }}>
-                  The live workspace connected to your website. Push from any workspace to update it.
-                </Typography>
-                <Button variant="secondary" 
-                  onClick={() => navigate(`/projects/${project_id}/workspace/production/`)}>
-                  View Production <ArrowRight className="h-4 w-4" />
-                </Button>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Card className="pp-card" elevation={0}>
-              <CardContent className="pp-card-content">
-                <Box className="pp-card-header">
-                  <Typography variant="overline" color="text.secondary" lineHeight={1}>
-                    Realtime Database
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 2, flex: 1 }}>
-                  A live JSON data store for this project, synced instantly across every connected client.
-                </Typography>
-                <Button variant="secondary" 
-                  onClick={() => navigate(`/projects/${project_id}/rtdb/`)}>
-                  <Database className="h-4 w-4" /> Open Realtime Database
-                </Button>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Card className="pp-card" elevation={0}>
-              <CardContent className="pp-card-content">
-                <Box className="pp-card-header">
-                  <Typography variant="overline" color="text.secondary" lineHeight={1}>
-                    Project Info
-                  </Typography>
-                  <Tooltip title="Project settings">
-                    <IconButton size="small" sx={{ p: 1 }} onClick={() => navigate(`/projects/${project_id}/settings/identity/`)}>
-                      <Settings className="h-4 w-4" />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-
-                <Box sx={{ mt: 1.5 }}>
-                  <Typography variant="body1" fontWeight={600}>{project.name}</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {project.description || 'No description.'}
-                  </Typography>
-                  <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 2 }}>
-                    Created {new Date(project.created_at).toLocaleDateString()}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+        <ProjectOverviewCards projectId={project_id ?? ''} project={project} />
 
         {/* ── Workspaces ──────────────────────────────────────────────── */}
         <Box className="project-workspaces">
           <Box className="project-workspaces-header">
             <Typography variant="h6" fontWeight={600}>Workspaces</Typography>
-            <Button variant="default" onClick={() => setAddingWs(true)}>
-              <Plus className="h-4 w-4" /> Add Workspace
-            </Button>
+            <span className="hidden md:inline-flex">
+              <Button variant="default" onClick={() => setAddingWs(true)}>
+                <Plus className="h-4 w-4" /> Add Workspace
+              </Button>
+            </span>
+            <span className="md:hidden">
+              <SingleActionMenu
+                icon={<Plus className="h-4 w-4" />}
+                label="Add Workspace"
+                onClick={() => setAddingWs(true)}
+              />
+            </span>
           </Box>
 
           <CreateWorkspaceDialog

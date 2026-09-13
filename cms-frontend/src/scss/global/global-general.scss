@@ -226,6 +226,11 @@ html.dark input[type="week"] {
     margin: 0 auto;
     width: 100%;
     box-sizing: border-box;
+    padding: 8px 12px;
+
+    @media (min-width: 768px) {
+      padding: 1rem 1.5rem;
+    }
   }
 
   .vi-header-logo-text,
@@ -247,6 +252,37 @@ html.dark input[type="week"] {
       html.dark & {
         color: var(--cms-text);
       }
+    }
+  }
+}
+
+.link-drawer-mobile-header {
+  width: 100%;
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: colors.$chrome-bg;
+  border-bottom: 1px solid colors.$chrome-border;
+
+  html.dark & {
+    background: var(--cms-surface);
+    border-bottom-color: var(--cms-border);
+  }
+
+  .vi-header-logo-text,
+  .vi-logo-text {
+    font-family: vars.$font-slackey;
+    font-size: 1.25rem;
+    color: colors.$gold;
+  }
+
+  a, button, span {
+    font-family: 'Raleway', 'Roboto', Arial, sans-serif;
+    color: colors.$chrome-text;
+
+    html.dark & {
+      color: var(--cms-text);
     }
   }
 }
@@ -310,6 +346,11 @@ html.dark input[type="week"] {
       }
     }
   }
+
+  .vi-aside-item.vi-btn-size-sm {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
 
 .vi-link-logo-wrapper:hover {
@@ -318,6 +359,11 @@ html.dark input[type="week"] {
 
 .vi-btn-variant-default {
   border-color: color-mix(in srgb, hsl(var(--primary)) 65%, black);
+}
+
+.vi-modal-overlay,
+.vi-aside-modal {
+  z-index: 1100;
 }
 
 .page-content {
@@ -361,6 +407,14 @@ html.dark input[type="week"] {
       }
     }
   }
+}
+
+.vi-card-content > * + * {
+  margin-top: 16px;
+}
+
+.MuiDialogContent-root.dialog-content-tight:first-of-type {
+  padding-top: 12px;
 }
 
 // ── Actions dropdown (advi-ui Menu) ─────────────────────────────────────────

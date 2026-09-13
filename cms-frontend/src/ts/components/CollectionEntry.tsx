@@ -3,6 +3,7 @@ import { Accordion, AccordionDetails, AccordionSummary, Divider, Grid, MenuItem,
 import { Trash2 as DeleteIcon, ChevronDown as ExpandMoreIcon } from "lucide-react";
 import { Button } from "advi-ui";
 import { ConfirmDialog } from "@ts/components/dialogs/ConfirmDialog";
+import { useExtraSmallBreakpoint } from "@/hooks/useExtraSmallBreakpoint";
 import type { CollectionUiSchema, CollectionEntryData } from '@ts/types/constants';
 
 export const CollectionEntry = ({
@@ -25,6 +26,7 @@ export const CollectionEntry = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [entryIsDirty, setEntryIsDirty] = useState(false);
   const [schemaNamePresent, setSchemaNamePresent] = useState(false);
+  const isExtraSmall = useExtraSmallBreakpoint();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -73,7 +75,7 @@ export const CollectionEntry = ({
             const labelValue = collectionEntryData[key] || '';
 
             return (
-              <Grid size={6} key={key}>
+              <Grid size={isExtraSmall ? 12 : 6} key={key}>
                 {value.type === 'input' ? (
                   <TextField
                       fullWidth

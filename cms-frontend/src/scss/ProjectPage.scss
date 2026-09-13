@@ -15,11 +15,16 @@
     margin: 0 auto;
     width: 100%;
     box-sizing: border-box;
+
+    @media (max-width: 767px) {
+      padding: 16px 32px;
+      padding-top: calc(16px + 57px);
+    }
   }
 
   &-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 16px;
     margin-bottom: 28px;
@@ -33,6 +38,10 @@
 
   &-cards {
     margin-bottom: 36px;
+
+    &-carousel {
+      margin-bottom: 36px;
+    }
   }
 }
 
@@ -43,6 +52,10 @@
   min-height: 100vh;
   background: colors.$page_bk_color;
 
+  @media (max-width: 767px) {
+    flex-direction: column;
+  }
+
   html.dark & {
     background: var(--cms-bg);
   }
@@ -51,6 +64,10 @@
     flex: 1;
     min-width: 0;
     padding: 32px;
+
+    @media (max-width: 767px) {
+      padding: 16px;
+    }
 
     .MuiTypography-subtitle1 {
       font-size: 1.35rem !important;
@@ -131,7 +148,6 @@
 .workspace-list {
   border: 1px solid var(--cms-border);
   border-radius: 10px;
-  overflow: hidden;
   background: var(--cms-surface);
 }
 
@@ -140,8 +156,15 @@
   align-items: center;
   border-bottom: 1px solid var(--cms-border);
 
+  &:first-child {
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+  }
+
   &:last-child {
     border-bottom: none;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
   }
 
   &:hover {
@@ -156,14 +179,13 @@
     flex: 1;
     display: flex;
     align-items: center;
-    gap: 24px;
+    justify-content: space-between;
     padding: 14px 20px;
     text-decoration: none;
     color: inherit;
   }
 
   &-name {
-    min-width: 160px;
     color: colors.$product-title-color;
 
     html.dark & {

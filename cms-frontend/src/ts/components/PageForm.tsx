@@ -13,6 +13,7 @@ export const PageForm = ({
   afterSubmitButtons,
   titleBadge,
   readOnly,
+  hideSubmitOnMobile,
   children
 }: {
   formType: string,
@@ -25,6 +26,8 @@ export const PageForm = ({
   afterSubmitButtons?: ReactNode[]
   titleBadge?: ReactNode
   readOnly?: boolean
+  /** Hides the built-in submit button below the `md` breakpoint — for pages that surface Save through a mobile dropdown instead. */
+  hideSubmitOnMobile?: boolean
   children: ReactNode
 }) => {
   const theme = useTheme();
@@ -76,7 +79,12 @@ export const PageForm = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {extraButtons && extraButtons.map((btn, index) => <Box key={`button-${index}`}>{btn}</Box>)}
           {!readOnly && (
-            <Button type="submit" variant="default" onClick={handleValidation}>
+            <Button
+              type="submit"
+              variant="default"
+              onClick={handleValidation}
+              className={hideSubmitOnMobile ? 'hidden md:inline-flex' : undefined}
+            >
               {submitBtnText}
             </Button>
           )}

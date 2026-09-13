@@ -67,7 +67,7 @@ export const SettingsAPI = () => {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Base URL section */}
       <Box className="settings-section">
-        <Box className="settings-section-header">
+        <Box className="settings-section-header settings-header-no-gap">
           <Typography variant="subtitle1" fontWeight={700}>API Base URL</Typography>
           <Typography variant="body2" color="text.secondary">Use this URL as the root for all API requests</Typography>
         </Box>
@@ -95,7 +95,7 @@ export const SettingsAPI = () => {
 
       {/* API Keys section */}
       <Box className="settings-section">
-        <Box className="settings-section-header" sx={{ flexDirection: 'row !important', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box className="settings-section-header settings-header-row">
           <Box>
             <Typography variant="subtitle1" fontWeight={700}>API Keys</Typography>
             <Typography variant="body2" color="text.secondary">Keys used to authenticate SDK requests, scoped by project, collection, and operation</Typography>
@@ -107,7 +107,7 @@ export const SettingsAPI = () => {
           )}
         </Box>
 
-        <Box className="settings-section-body" sx={{ pt: '0 !important' }}>
+        <Box className="settings-section-body settings-body-flush-top">
           <ApiKeysTable
             apiKeys={apiKeys}
             canManage={canManage}

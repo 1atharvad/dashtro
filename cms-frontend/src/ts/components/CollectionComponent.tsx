@@ -1,21 +1,22 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
-import { Box, Divider, Fab, MenuItem, Paper, TextField, Typography } from "@mui/material";
+import {
+  Box, Dialog, DialogContent, DialogTitle, Divider,
+  Fab, IconButton, ListItemIcon, Menu, MenuItem, Paper, TextField, Tooltip, Typography,
+} from "@mui/material";
 import { Button, toast } from 'advi-ui';
-import { Plus as AddIcon } from 'lucide-react';
+import { MoreVertical, Plus as AddIcon, Save, X as CloseIcon } from 'lucide-react';
 import { Loading } from 'advi-ui';
 import { CollectionEntry } from '@ts/components/CollectionEntry';
 import { PageForm } from '@ts/components/PageForm';
-import { ModalContentBtn } from '@ts/components/dialogs/ModalContentBtn';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSchemaMetaData } from '@/hooks/useSchemaMetaData';
 import { useCollectionData } from '@/hooks/useCollection';
 import { useCategory } from '@/hooks/useCategory';
 import type { NewCollectionInput, CollectionEntryData } from '@ts/types/constants';
 
-const NewSchemaModalBtn = () => {
+const NewSchemaModal = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const navigate = useNavigate();
   const { project_id = '' } = useParams<{ project_id: string }>();
-  const [closeModal, setCloseModal] = useState<boolean>(false);
   const [labelValue, setLabelValue] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -44,53 +45,95 @@ const NewSchemaModalBtn = () => {
           toast.error('Failed to update folder');
         });
       }
-      setCloseModal(true);
+      onClose();
       navigate(`/projects/${project_id}/schema/${labelValue}/`);
-      setTimeout(setCloseModal.bind(null, false), 0);
     } else {
       setErrorMessage(error);
     }
   };
 
   return (
-    <ModalContentBtn id="new-schema" modalTitle="Create New Schema" modalBtn={(handleClick) => (
-      <Button variant="secondary" onClick={handleClick}>
-        Add new Schema
-      </Button>
-    )} closeModal={closeModal}>
-      <Box component="form" className="new-schema-model" onSubmit={addNewSchema}
-        sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <TextField
-          fullWidth
-          id="new-schema-name"
-          name="new-schema-name"
-          label="Schema Name"
-          value={labelValue}
-          onChange={handleChange}
-          error={!!errorMessage}
-          helperText={errorMessage || 'PascalCase, e.g. BlogPost'}
-          required
-          autoFocus
-        />
-        <TextField
-          fullWidth
-          select
-          label="Category (optional)"
-          value={categoryId}
-          onChange={e => setCategoryId(e.target.value)}
-        >
-          <MenuItem value="">General</MenuItem>
-          {categories.map(cat => (
-            <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>
-          ))}
-        </TextField>
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Button variant="default" type="submit">
-            <AddIcon className="h-4 w-4" /> Save
-          </Button>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+        Create New Schema
+        <IconButton size="small" onClick={onClose} aria-label="Close">
+          <CloseIcon className="h-4 w-4" />
+        </IconButton>
+      </DialogTitle>
+      <Divider />
+      <DialogContent sx={{ pt: 2 }}>
+        <Box component="form" className="new-schema-model" onSubmit={addNewSchema}
+          sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <TextField
+            fullWidth
+            id="new-schema-name"
+            name="new-schema-name"
+            label="Schema Name"
+            value={labelValue}
+            onChange={handleChange}
+            error={!!errorMessage}
+            helperText={errorMessage || 'PascalCase, e.g. BlogPost'}
+            required
+            autoFocus
+          />
+          <TextField
+            fullWidth
+            select
+            label="Category (optional)"
+            value={categoryId}
+            onChange={e => setCategoryId(e.target.value)}
+          >
+            <MenuItem value="">General</MenuItem>
+            {categories.map(cat => (
+              <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>
+            ))}
+          </TextField>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button variant="default" type="submit">
+              <AddIcon className="h-4 w-4" /> Save
+            </Button>
+          </Box>
         </Box>
-      </Box>
-    </ModalContentBtn>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const CollectionActionsMenu = ({
+  onSave,
+  onNewSchema,
+}: {
+  onSave: () => void;
+  onNewSchema: () => void;
+}) => {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const close = () => setAnchorEl(null);
+
+  return (
+    <>
+      <Tooltip title="Actions">
+        <IconButton size="small" onClick={e => setAnchorEl(e.currentTarget)}>
+          <MoreVertical className="h-4 w-4" />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={close}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        slotProps={{ paper: { sx: { width: 200, mt: 0.5, borderRadius: 1.5 } } }}
+      >
+        <MenuItem onClick={() => { close(); onSave(); }} sx={{ fontSize: 13 }}>
+          <ListItemIcon><Save className="h-4 w-4" /></ListItemIcon>
+          Save Collections
+        </MenuItem>
+        <MenuItem onClick={() => { close(); onNewSchema(); }} sx={{ fontSize: 13 }}>
+          <ListItemIcon><AddIcon className="h-4 w-4" /></ListItemIcon>
+          Add new Schema
+        </MenuItem>
+      </Menu>
+    </>
   );
 };
 
@@ -109,6 +152,7 @@ export const CollectionComponent = () => {
   const [updatedCollectionDetails, setUpdatedCollectionDetails] = useState<Record<string, NewCollectionInput>>({});
   const [newCollectionEntry, setNewCollectionEntry] = useState<CollectionEntryData[]>([]);
   const [openedPanel, setOpenedPanel] = useState<string[]>([]);
+  const [newSchemaOpen, setNewSchemaOpen] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -134,8 +178,8 @@ export const CollectionComponent = () => {
     ]);
   };
 
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = (event?: FormEvent) => {
+    event?.preventDefault();
     if (newCollectionEntry.length !== 0) addCollectionData(newCollectionEntry);
     if (Object.keys(updatedCollectionDetails).length !== 0) updateCollectionData(updatedCollectionDetails);
     setUpdatedCollectionDetails({});
@@ -144,6 +188,8 @@ export const CollectionComponent = () => {
 
   return (
     <>
+      <NewSchemaModal open={newSchemaOpen} onClose={() => setNewSchemaOpen(false)} />
+
       {!loading ? (
         <PageForm
           formType="schema"
@@ -151,7 +197,22 @@ export const CollectionComponent = () => {
           formTitle="Collection Schema"
           submitBtnText="Save Collections"
           setOpenedPanel={setOpenedPanel}
-          extraButtons={[<NewSchemaModalBtn key="new-schema" />]}>
+          hideSubmitOnMobile
+          extraButtons={[
+            <span key="new-schema" className="hidden md:inline-flex">
+              <Button variant="secondary" onClick={() => setNewSchemaOpen(true)}>
+                Add new Schema
+              </Button>
+            </span>,
+          ]}
+          afterSubmitButtons={[
+            <span key="actions-mobile" className="md:hidden">
+              <CollectionActionsMenu
+                onSave={() => handleSubmit()}
+                onNewSchema={() => setNewSchemaOpen(true)}
+              />
+            </span>,
+          ]}>
           {(collections && collections.length > 0) || (newCollectionEntry && newCollectionEntry.length > 0) ? (
             <Box>
               {collections && collections.map((entry, index: number) => (

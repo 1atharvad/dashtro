@@ -2,6 +2,12 @@
 @use './global/global-mixins' as mixins;
 @use './global/global-vars' as vars;
 
+@media (max-width: 767px) {
+  .schema {
+    flex-direction: column;
+  }
+}
+
 // ── Schema field DnD ─────────────────────────────────────────────────────────
 
 .schema-entry-wrapper--dragging {

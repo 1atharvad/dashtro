@@ -196,8 +196,8 @@ export const SchemaComponent = ({
     }, {})]);
   }
 
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = (event?: FormEvent) => {
+    event?.preventDefault();
     console.log("Form Data Submitted:", schema, newSchemaEntry, updatedSchemaDetails);
 
     if (Object.keys(updatedSchemaDetails).length !== 0) updateSchemaData(updatedSchemaDetails);
@@ -301,19 +301,38 @@ export const SchemaComponent = ({
             submitBtnText='Save Schema'
             readOnly={isLocked}
             setOpenedPanel={setOpenedPanel}
-            extraButtons={[folderBadge].filter(Boolean) as React.ReactNode[]}
-            afterSubmitButtons={newSchema ? [
-              <Button key="import-json" variant="secondary" onClick={() => setImportOpen(true)}>
-                <Upload className="h-4 w-4" /> Import from JSON
-              </Button>
-            ] : [
-              <SchemaActionsMenu
-                key="actions"
-                isLocked={isLocked}
-                onToggleLock={handleToggleLock}
-                onDownload={handleDownload}
-                onDelete={() => setDeleteSchemaOpen(true)}
-              />
+            hideSubmitOnMobile
+            extraButtons={[
+              <span key="folder" className="hidden md:inline-flex">{folderBadge}</span>,
+            ]}
+            afterSubmitButtons={[
+              ...(newSchema ? [
+                <Button key="import-json" variant="secondary" onClick={() => setImportOpen(true)}>
+                  <Upload className="h-4 w-4" /> Import from JSON
+                </Button>
+              ] : [
+                <span key="actions-desktop" className="hidden md:inline-flex">
+                  <SchemaActionsMenu
+                    isLocked={isLocked}
+                    onToggleLock={handleToggleLock}
+                    onDownload={handleDownload}
+                    onDelete={() => setDeleteSchemaOpen(true)}
+                  />
+                </span>
+              ]),
+              <span key="actions-mobile" className="md:hidden">
+                <SchemaActionsMenu
+                  onSave={isLocked ? undefined : () => handleSubmit()}
+                  folderLabel={currentCategoryId ? currentCategoryName : 'Add folder'}
+                  onManageFolder={(anchorEl) => setFolderMenuAnchor(anchorEl)}
+                  {...(!newSchema ? {
+                    isLocked,
+                    onToggleLock: handleToggleLock,
+                    onDownload: handleDownload,
+                    onDelete: () => setDeleteSchemaOpen(true),
+                  } : {})}
+                />
+              </span>,
             ]}>
           <Box>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>

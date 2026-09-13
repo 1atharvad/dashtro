@@ -45,7 +45,7 @@ export const SettingsUsers = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box className="settings-section">
-        <Box className="settings-section-header" sx={{ flexDirection: 'row !important', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box className="settings-section-header settings-header-row">
           <Box>
             <Typography variant="subtitle1" fontWeight={700}>Team Members</Typography>
             <Typography variant="body2" color="text.secondary">Manage who has access to this CMS</Typography>
@@ -55,7 +55,7 @@ export const SettingsUsers = () => {
           </Button>
         </Box>
 
-        <Box className="settings-section-body" sx={{ pt: '0 !important' }}>
+        <Box className="settings-section-body settings-body-flush-top">
           <Box className="settings-table">
             <Table size="small">
               <TableHead>
@@ -108,7 +108,7 @@ export const SettingsUsers = () => {
 
       <Dialog open={inviteOpen} onClose={() => { setInviteOpen(false); setInviteEmail(''); }} fullWidth maxWidth="xs">
         <DialogTitle>Invite User</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '12px !important' }}>
+        <DialogContent className="dialog-content-tight" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography variant="body2" color="text.secondary">
             Enter their email to generate a signup link. Share it with them directly.
           </Typography>

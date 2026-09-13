@@ -19,7 +19,13 @@ export const AuditLogPagination = ({
   if (total === 0) return null;
 
   return (
-    <Box sx={{ px: 3, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid', borderColor: 'divider' }}>
+    <Box sx={{
+      px: 3, py: 1.5, display: 'flex',
+      flexDirection: { xs: 'column', sm: 'row' },
+      alignItems: { xs: 'stretch', sm: 'center' },
+      justifyContent: 'space-between', gap: 1.5,
+      borderTop: '1px solid', borderColor: 'divider',
+    }}>
       <Typography variant="body2" color="text.secondary">
         {total} total {total === 1 ? 'entry' : 'entries'}
         {totalPages > 1 ? ` · page ${page + 1} of ${totalPages}` : ''}

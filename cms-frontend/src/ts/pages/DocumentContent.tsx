@@ -122,6 +122,13 @@ export const DocumentContent = () => {
   }, [workspace_name, collection_name]);
 
   useEffect(() => {
+    loadedDocumentIdRef.current = null;
+    hasLoadedRef.current = false;
+    setDocumentData({});
+    setUpdatedDocumentDetails({});
+  }, [document_id]);
+
+  useEffect(() => {
     if (!loading && collection_name && !isNew && document_id &&
         document_id !== loadedDocumentIdRef.current &&
         collection_name in collDocumentContent &&
@@ -135,13 +142,6 @@ export const DocumentContent = () => {
       }
     }
   }, [loading, collection_name, document_id, collDocumentContent, isNew]);
-
-  useEffect(() => {
-    loadedDocumentIdRef.current = null;
-    hasLoadedRef.current = false;
-    setDocumentData({});
-    setUpdatedDocumentDetails({});
-  }, [document_id]);
 
   const createEmptyDocumentData = useCallback((details: Record<string, SchemaFieldItem[]>, name: string, depth = 0): DocumentData => {
     const data = details[name];
@@ -181,8 +181,8 @@ export const DocumentContent = () => {
     return !isTitle ? label.replace(/\s+/g, '') : label;
   };
 
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = (event?: FormEvent) => {
+    event?.preventDefault();
     if (isNew) {
       addDocumentData(emptyDocumentData)?.then(result => {
         const newId = result?.['_id'];
@@ -215,7 +215,12 @@ export const DocumentContent = () => {
   const statusBadge = ((!isNew && !isProduction) || (isProduction && currentDoc)) && currentStatus ? (
     <Tooltip title={currentStatus === 'published' ? 'Matches production' : 'Differs from production'}>
       <Chip
-        label={currentStatus === 'published' ? 'Published' : 'Draft'}
+        label={
+          <>
+            <span className="hidden md:inline">{currentStatus === 'published' ? 'Published' : 'Draft'}</span>
+            <span className="md:hidden">{currentStatus === 'published' ? 'P' : 'D'}</span>
+          </>
+        }
         color={currentStatus === 'published' ? 'success' : 'default'}
         size="small"
         sx={{ fontWeight: 600, height: 24 }}
@@ -223,16 +228,30 @@ export const DocumentContent = () => {
     </Tooltip>
   ) : null;
 
-  const actionsButton = !isNew && !isProduction ? (
-    <DocumentActionsMenu
-      outOfSync={outOfSync}
-      notInProduction={notInProduction}
-      onPush={() => setSyncConfirm('push')}
-      onPull={() => setSyncConfirm('pull')}
-      onOpenHistory={handleOpenHistory}
-      onDownload={() => handleExportDocument()}
-      onDelete={() => setDeleteOpen(true)}
-    />
+  const existingDocActionProps = !isNew ? {
+    outOfSync,
+    notInProduction,
+    onPush: () => setSyncConfirm('push'),
+    onPull: () => setSyncConfirm('pull'),
+    onOpenHistory: handleOpenHistory,
+    onDownload: () => handleExportDocument(),
+    onDelete: () => setDeleteOpen(true),
+  } : {};
+
+  // Desktop keeps the existing layout: a standalone Save button plus this
+  // menu only for existing (non-new) documents. Mobile folds Save into the
+  // same dropdown so it's reachable even for a brand-new document, which
+  // otherwise has no menu here at all.
+  const desktopActionsButton = !isNew && !isProduction ? (
+    <span className="hidden md:inline-flex">
+      <DocumentActionsMenu {...existingDocActionProps} />
+    </span>
+  ) : null;
+
+  const mobileActionsButton = !isProduction ? (
+    <span className="md:hidden">
+      <DocumentActionsMenu onSave={() => handleSubmit()} {...existingDocActionProps} />
+    </span>
   ) : null;
 
   // Production is read-only: no push/pull/history/delete, but export is still allowed.
@@ -314,7 +333,7 @@ export const DocumentContent = () => {
       <AppHeader />
       {error === '' ? (
         isReady ? (
-          <Box className="document" sx={{ paddingTop: '72px' }}>
+          <Box className="document">
             <PageForm
                 formType="document"
                 onSubmit={handleSubmit}
@@ -329,8 +348,9 @@ export const DocumentContent = () => {
                     documentId={displayLabel}
                   />
                 }
-                afterSubmitButtons={[actionsButton, downloadButton, importDocButton].filter(Boolean) as React.ReactNode[]}
+                afterSubmitButtons={[desktopActionsButton, mobileActionsButton, downloadButton, importDocButton].filter(Boolean) as React.ReactNode[]}
                 submitBtnText="Save Document"
+                hideSubmitOnMobile
               >
                 <Box className="document-body">
                   <Box className="document-fields" sx={{ '--border-color': theme.palette.borderColor }}>

@@ -106,7 +106,7 @@ export const SettingsAuditLog = () => {
 
       {/* ── Log table card ────────────────────────────────────────────────── */}
       <Box className="settings-section">
-        <Box className="settings-section-header" sx={{ flexDirection: 'row !important', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box className="settings-section-header settings-header-row">
           <Box>
             <Typography variant="subtitle1" fontWeight={700}>Audit Log</Typography>
             <Typography variant="body2" color="text.secondary">
@@ -148,7 +148,7 @@ export const SettingsAuditLog = () => {
 
         <Divider />
 
-        <Box className="settings-section-body" sx={{ pt: '0 !important' }}>
+        <Box className="settings-section-body settings-body-flush-top">
           <AuditLogTable logs={logs} loading={loading} />
         </Box>
 

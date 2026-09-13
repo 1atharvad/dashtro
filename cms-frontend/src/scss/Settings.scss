@@ -18,6 +18,10 @@
   min-height: 100vh;
   background: colors.$page_bk_color;
 
+  @media (max-width: 767px) {
+    flex-direction: column;
+  }
+
   html.dark & {
     background: var(--cms-bg);
   }
@@ -27,6 +31,10 @@
     min-width: 0;
     overflow: hidden;
     padding: 32px;
+
+    @media (max-width: 767px) {
+      padding: 16px;
+    }
 
     .MuiTypography-subtitle1 {
       font-size: 1.35rem !important;
@@ -56,7 +64,18 @@
     padding: 20px 24px 16px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 16px;
+
+    &.settings-header-row {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0;
+    }
+
+    &.settings-header-no-gap {
+      gap: 0;
+    }
   }
 
   &-body {
@@ -65,6 +84,16 @@
     flex-direction: column;
     gap: 16px;
     margin-top: 20px;
+
+    &.settings-body-row {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    &.settings-body-flush-top {
+      padding-top: 0;
+    }
   }
 }
 

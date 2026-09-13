@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { Divider, IconButton, ListItemIcon, Menu, MenuItem, Tooltip } from '@mui/material';
-import { Download, Lock, MoreHorizontal, Trash2, Unlock } from 'lucide-react';
+import { Download, FolderOpen, Lock, MoreVertical, Save, Trash2, Unlock } from 'lucide-react';
 
 export const SchemaActionsMenu = ({
+  onSave,
+  folderLabel,
+  onManageFolder,
   isLocked,
   onToggleLock,
   onDownload,
   onDelete,
 }: {
-  isLocked: boolean;
-  onToggleLock: () => void;
-  onDownload: () => void;
-  onDelete: () => void;
+  onSave?: () => void;
+  folderLabel?: string;
+  onManageFolder?: (anchorEl: HTMLElement) => void;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
+  onDownload?: () => void;
+  onDelete?: () => void;
 }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const close = () => setAnchorEl(null);
@@ -20,7 +26,7 @@ export const SchemaActionsMenu = ({
     <>
       <Tooltip title="Actions">
         <IconButton size="small" onClick={e => setAnchorEl(e.currentTarget)}>
-          <MoreHorizontal className="h-4 w-4" />
+          <MoreVertical className="h-4 w-4" />
         </IconButton>
       </Tooltip>
       <Menu
@@ -31,23 +37,42 @@ export const SchemaActionsMenu = ({
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
         slotProps={{ paper: { sx: { width: 200, mt: 0.5, borderRadius: 1.5 } } }}
       >
-        <MenuItem onClick={() => { close(); onToggleLock(); }} sx={{ fontSize: 13 }}>
-          <ListItemIcon>
-            {isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-          </ListItemIcon>
-          {isLocked ? 'Unlock Schema' : 'Lock Schema'}
-        </MenuItem>
-        <MenuItem onClick={() => { close(); onDownload(); }} sx={{ fontSize: 13 }}>
-          <ListItemIcon><Download className="h-4 w-4" /></ListItemIcon>
-          Download Schema
-        </MenuItem>
-        <Divider />
-        <MenuItem onClick={() => { close(); onDelete(); }} sx={{ color: 'error.main', fontSize: 13 }}>
-          <ListItemIcon sx={{ color: 'error.main' }}>
-            <Trash2 className="h-4 w-4" />
-          </ListItemIcon>
-          Delete Schema
-        </MenuItem>
+        {onSave && (
+          <MenuItem onClick={() => { close(); onSave(); }} sx={{ fontSize: 13 }}>
+            <ListItemIcon><Save className="h-4 w-4" /></ListItemIcon>
+            Save Schema
+          </MenuItem>
+        )}
+        {onManageFolder && (
+          <MenuItem onClick={(e) => { close(); onManageFolder(e.currentTarget); }} sx={{ fontSize: 13 }}>
+            <ListItemIcon><FolderOpen className="h-4 w-4" /></ListItemIcon>
+            {folderLabel ?? 'Add folder'}
+          </MenuItem>
+        )}
+        {(onSave || onManageFolder) && (onToggleLock || onDownload || onDelete) && <Divider />}
+        {onToggleLock && (
+          <MenuItem onClick={() => { close(); onToggleLock(); }} sx={{ fontSize: 13 }}>
+            <ListItemIcon>
+              {isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+            </ListItemIcon>
+            {isLocked ? 'Unlock Schema' : 'Lock Schema'}
+          </MenuItem>
+        )}
+        {onDownload && (
+          <MenuItem onClick={() => { close(); onDownload(); }} sx={{ fontSize: 13 }}>
+            <ListItemIcon><Download className="h-4 w-4" /></ListItemIcon>
+            Download Schema
+          </MenuItem>
+        )}
+        {onDelete && <Divider />}
+        {onDelete && (
+          <MenuItem onClick={() => { close(); onDelete(); }} sx={{ color: 'error.main', fontSize: 13 }}>
+            <ListItemIcon sx={{ color: 'error.main' }}>
+              <Trash2 className="h-4 w-4" />
+            </ListItemIcon>
+            Delete Schema
+          </MenuItem>
+        )}
       </Menu>
     </>
   );

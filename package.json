@@ -21,7 +21,9 @@
   },
   "scripts": {
     "dev": "DB_TYPE=sqlite docker compose -f docker-compose.dev.yml up --build",
+    "dev:build": "DB_TYPE=sqlite docker compose -f docker-compose.dev.yml build --no-cache && DB_TYPE=sqlite docker compose -f docker-compose.dev.yml up",
     "dev:postgres": "DB_TYPE=postgres docker compose -f docker-compose.dev.yml --profile postgres up --build",
+    "dev:postgres:build": "DB_TYPE=postgres docker compose -f docker-compose.dev.yml --profile postgres build --no-cache && DB_TYPE=postgres docker compose -f docker-compose.dev.yml --profile postgres up",
     "dev:down": "docker compose -f docker-compose.dev.yml down",
     "lint": "npm run lint:frontend && npm run lint:backend",
     "lint:frontend": "npm --prefix cms-frontend run lint",

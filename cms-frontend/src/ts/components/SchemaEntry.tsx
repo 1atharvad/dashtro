@@ -1,12 +1,13 @@
 import { Dispatch, ReactNode, SetStateAction, useEffect, useRef, useState } from 'react';
 import {
   Accordion, AccordionDetails, AccordionSummary, Divider, FormControlLabel,
-  Grid, MenuItem, Switch, TextField, Typography,
+  Grid, MenuItem, Switch, TextField, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { Trash2, ChevronDown } from 'lucide-react';
 import { Button } from 'advi-ui';
 import { ConfirmDialog } from '@ts/components/dialogs/ConfirmDialog';
 import { ColorPickerField } from '@ts/components/fields/ColorPickerField';
+import { useExtraSmallBreakpoint } from '@/hooks/useExtraSmallBreakpoint';
 import type { SchemaVariablesSchema, SchemaEntryData } from '@ts/types/constants';
 
 export const SchemaEntry = ({
@@ -29,6 +30,9 @@ export const SchemaEntry = ({
   const [name, setName] = useState(schemaEntryData['_name'] ? schemaEntryData['_name'] : '<em>New Entry - Schema</em>');
   const inputRefs = useRef<HTMLDivElement[]>([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down(768));
+  const isExtraSmall = useExtraSmallBreakpoint();
 
   useEffect(() => {
     if (schemaEntryData['_name']) setName(schemaEntryData['_name'])
@@ -64,9 +68,11 @@ export const SchemaEntry = ({
 
   const accordionContent = (
     <>
-      <Grid container spacing={2} sx={{ mt: 1 }}>
-        <Grid container size={8} spacing={2}>
-          {schemaStructure && schemaEntryData ? Object.entries(schemaStructure).filter(([, value]) => {
+      <Grid container spacing={2} sx={{ mt: 1, flexDirection: 'row', '@media (max-width: 767px)': { flexDirection: 'column' } }}>
+        <Grid container size={isMobile ? 12 : 8} spacing={2}>
+          {schemaStructure && schemaEntryData ? Object.entries(schemaStructure).filter(([key, value]) => {
+            if (value.type === 'radio') return false;
+            if (key === '_default_value' && schemaEntryData['_type'] === 'URL') return false;
             if (value.hide_field_for) {
               return !Object.entries(value.hide_field_for).find(([_key, _value]) => {
                 if (_value === 'all') return true;
@@ -82,7 +88,7 @@ export const SchemaEntry = ({
             const validationError = () => touched[key] && inputRefs.current[index]?.querySelector<HTMLInputElement>(':invalid') instanceof HTMLElement;
 
             return (
-              <Grid size={6} key={key} ref={gridEl => inputRefs.current[index] = gridEl!}>
+              <Grid size={isExtraSmall ? 12 : 6} key={key} ref={gridEl => inputRefs.current[index] = gridEl!}>
                 {value.type === 'input' && key === '_default_value' && schemaEntryData['_type'] === 'Boolean' ? (
                   <TextField
                       fullWidth
@@ -131,8 +137,6 @@ export const SchemaEntry = ({
                       label={labelName}
                       value={labelValue}
                       onChange={handleChange}/>
-                ) : value.type === 'input' && key === '_default_value' && schemaEntryData['_type'] === 'URL' ? (
-                  null
                 ) : value.type === 'input' ? (
                   <TextField
                       fullWidth
@@ -197,24 +201,27 @@ export const SchemaEntry = ({
             );
           }) : <></>}
         </Grid>
-        <Divider orientation='vertical' variant='middle' flexItem sx={{my: 0}}/>
+        <Divider
+          orientation={isMobile ? 'horizontal' : 'vertical'}
+          variant='middle'
+          flexItem={!isMobile}
+          sx={{ my: 0, ...(isMobile && { width: '100%', alignSelf: 'stretch', mx: 0 }) }}
+        />
         <Grid>
-          {schemaStructure && schemaEntryData ? Object.entries(schemaStructure).map(([key, value]) => {
+          {schemaStructure && schemaEntryData ? Object.entries(schemaStructure).filter(([, value]) => value.type === 'radio').map(([key]) => {
             const labelName = key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
             const labelValue = schemaEntryData[key];
             return (
               <Grid size={12} key={key}>
-                {value.type === 'radio' ? (
-                  <FormControlLabel
-                      disabled={disabled}
-                      control={
-                        <Switch
-                            name={key}
-                            checked={String(labelValue) === 'true'}
-                            onChange={handleChange}/>
-                      }
-                      label={labelName}/>
-                ) : <></>}
+                <FormControlLabel
+                    disabled={disabled}
+                    control={
+                      <Switch
+                          name={key}
+                          checked={String(labelValue) === 'true'}
+                          onChange={handleChange}/>
+                    }
+                    label={labelName}/>
               </Grid>
             );
           }) : <></>}

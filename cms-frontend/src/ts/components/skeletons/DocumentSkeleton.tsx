@@ -1,9 +1,9 @@
 import { Box, Skeleton } from '@mui/material';
 
 export const DocumentSkeleton = () => (
-  <Box className="document" sx={{ paddingTop: '72px' }}>
+  <Box className="document">
     <Box className="document-component">
-      {/* Title bar — mirrors .document-component-title-bar padding (12px 24px) */}
+      {/* Title bar — mirrors .document-component-title-bar padding (12px) */}
       <Box className="document-component-title-bar" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Skeleton width={110} height={13} sx={{ mb: 0.5 }} />

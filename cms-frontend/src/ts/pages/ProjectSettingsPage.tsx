@@ -126,7 +126,7 @@ export const ProjectSettingsPage = () => {
                 <Typography variant="subtitle1" fontWeight={700}>Backup</Typography>
                 <Typography variant="body2" color="text.secondary">Create a full copy of this project</Typography>
               </Box>
-              <Box className="settings-section-body" sx={{ flexDirection: 'row !important', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box className="settings-section-body settings-body-row">
                 <Box>
                   <Typography variant="body2" fontWeight={500}>Duplicate Project</Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -144,7 +144,7 @@ export const ProjectSettingsPage = () => {
                 <Typography variant="subtitle1" fontWeight={700} color="error">Delete Project</Typography>
                 <Typography variant="body2" color="text.secondary">This action cannot be undone</Typography>
               </Box>
-              <Box className="settings-section-body" sx={{ flexDirection: 'row !important', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box className="settings-section-body settings-body-row">
                 <Box>
                   <Typography variant="body2" fontWeight={500}>Delete Project</Typography>
                   <Typography variant="caption" color="text.secondary">
