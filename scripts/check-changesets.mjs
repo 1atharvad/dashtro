@@ -1,23 +1,13 @@
-import { readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { hasPendingChangeset } from "./lib/changesets.mjs";
 
 const packages = ["sdk/js", "sdk/mcp"];
 
-function hasPendingChangeset(dir) {
-  try {
-    return readdirSync(`${dir}/.changeset`).some(
-      (f) => f.endsWith(".md") && f !== "README.md",
-    );
-  } catch {
-    return false;
-  }
-}
-
-function changedFiles() {
-  return execSync("git diff --name-only HEAD", { encoding: "utf-8" })
+/** Paths changed relative to HEAD, per `git diff --name-only`. */
+const changedFiles = () =>
+  execSync("git diff --name-only HEAD", { encoding: "utf-8" })
     .split("\n")
     .filter(Boolean);
-}
 
 const changed = changedFiles();
 const missing = packages.filter(

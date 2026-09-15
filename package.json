@@ -35,6 +35,16 @@
     "test:mcp": "npm --prefix sdk/mcp test",
     "test:live": "pytest -m live cms_backend/tests/test_live_instance.py cms_mcp/tests/test_live_mcp.py",
     "precommit": "npm run lint && npm run test && npm run precommit:changesets",
-    "precommit:changesets": "node scripts/check-changesets.mjs"
+    "precommit:changesets": "node scripts/check-changesets.mjs",
+    "ci": "act -j lint -j build-and-push -j merge-manifest --secret-file .secrets",
+    "ci:lint": "act -j lint",
+    "ci:build": "act -j build-and-push --secret-file .secrets",
+    "ci:merge-manifest": "act -j merge-manifest --secret-file .secrets",
+    "ci:dry-run": "act -n",
+    "backup-build-ci": "node scripts/with-timer.mjs \"npm run ci && npm run release\"",
+    "release": "node scripts/manual-release.mjs all",
+    "release:dashtro": "node scripts/manual-release.mjs dashtro",
+    "release:sdk": "node scripts/manual-release.mjs sdk",
+    "release:mcp": "node scripts/manual-release.mjs mcp"
   }
 }

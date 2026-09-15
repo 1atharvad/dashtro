@@ -5,7 +5,7 @@
 # managed Postgres database below.
 #
 # Deploys the same pre-built image CI publishes on every push to main
-# (ghcr.io/1atharvad/dashtro, public — no registry credentials needed).
+# (docker.io/atharvad216/dashtro, public — no registry credentials needed).
 # Note: pointing at the mutable `:latest` tag does NOT auto-redeploy when a
 # new image is published — Render only auto-deploys on its own trigger
 # (git push for source-based services). For an image-based service, use
@@ -38,7 +38,7 @@ services:
     name: dashtro-staging
     runtime: image
     image:
-      url: ghcr.io/1atharvad/dashtro:latest
+      url: docker.io/atharvad216/dashtro:latest
     plan: free
     healthCheckPath: /health
     envVars:

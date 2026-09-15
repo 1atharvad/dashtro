@@ -1,14 +1,14 @@
 # Dashtro
 
 [![CI](https://github.com/1atharvad/dashtro/actions/workflows/build-image.yml/badge.svg)](https://github.com/1atharvad/dashtro/actions/workflows/build-image.yml)
-[![Docker image](https://img.shields.io/badge/ghcr.io-1atharvad%2Fdashtro-2496ED?logo=docker&logoColor=white)](https://github.com/1atharvad/dashtro/pkgs/container/dashtro)
+[![Docker image](https://img.shields.io/docker/v/atharvad216/dashtro?label=docker.io%2Fatharvad216%2Fdashtro&logo=docker&logoColor=white)](https://hub.docker.com/r/atharvad216/dashtro)
 [![npm @dashtro/client](https://img.shields.io/npm/v/%40dashtro%2Fclient?label=%40dashtro%2Fclient)](https://www.npmjs.com/package/@dashtro/client)
 [![npm @dashtro/mcp](https://img.shields.io/npm/v/%40dashtro%2Fmcp?label=%40dashtro%2Fmcp)](https://www.npmjs.com/package/@dashtro/mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A self-hosted CMS with a project → workspace → collection → document model, a
 FastAPI backend, and a React/TypeScript frontend. Ships as a single Docker
-image, published to `ghcr.io/1atharvad/dashtro`. This repo only builds and
+image, published to `atharvad216/dashtro`. This repo only builds and
 publishes that image — running it in production (nginx, tunnel/domain
 routing, etc.) is owned by the consuming project (e.g. the portfolio site
 that embeds Dashtro as its admin/CMS backend).
@@ -44,7 +44,7 @@ Everything this repo publishes, and what it's for:
 
 | Package | Registry | Install | What it's for |
 | --- | --- | --- | --- |
-| `ghcr.io/1atharvad/dashtro` | [GHCR](https://github.com/1atharvad/dashtro/pkgs/container/dashtro) | `docker pull ghcr.io/1atharvad/dashtro` | The CMS itself — backend + built frontend in one image. See [Running the image elsewhere](#running-the-image-elsewhere). |
+| `atharvad216/dashtro` | [Docker Hub](https://hub.docker.com/r/atharvad216/dashtro) | `docker pull atharvad216/dashtro` | The CMS itself — backend + built frontend in one image. See [Running the image elsewhere](#running-the-image-elsewhere). |
 | [`@dashtro/client`](sdk/js/) | [npm](https://www.npmjs.com/package/@dashtro/client) | `npm install @dashtro/client` | JS/TS client SDK for `/api/sdk/*` — read/write a project's documents and RTDB from an external app. |
 | [`dashtro-client`](sdk/python/) | [PyPI](https://pypi.org/project/dashtro-client/) | `pip install dashtro-client` | Python equivalent of `@dashtro/client`, released in lockstep with it. |
 | [`@dashtro/mcp`](sdk/mcp/) | [npm](https://www.npmjs.com/package/@dashtro/mcp) | `npx @dashtro/mcp init` | npx-runnable MCP server — lets Claude/other MCP clients read and write your CMS content. Node port of `cms_mcp/`, no Python needed. |
@@ -110,7 +110,7 @@ whichever `DB_TYPE` backend you point it at:
 
 ```yaml
 dashtro:
-  image: ghcr.io/1atharvad/dashtro:latest
+  image: atharvad216/dashtro:latest
   environment:
     JWT_SECRET_KEY: ...
     CORS_ORIGINS: ...
@@ -212,7 +212,7 @@ dashtro import media --base-url https://dest.com --api-key <key>
 on every push to `main` (or manually via `workflow_dispatch`):
 
 1. **`lint`** — frontend `npm run lint` + backend `isort`/`black`/`ruff --check`. Must pass before anything builds.
-2. **`build-and-push`** — builds `Dockerfile.dashtro`, pushes to `ghcr.io/1atharvad/dashtro` tagged `latest` and the commit SHA.
+2. **`build-and-push`** — builds `Dockerfile.dashtro`, pushes to `atharvad216/dashtro` on Docker Hub, tagged `latest` and the commit SHA.
 
 That's it — this repo doesn't deploy anywhere itself. Whatever consumes the
 image (e.g. the portfolio project) is responsible for pulling and running it.

@@ -26,6 +26,7 @@ coverage
 *.sw?
 service-key.json
 cloudflared/credentials.json
+.secrets
 __pycache__
 **/**.pyc
 .env

@@ -8,7 +8,7 @@ content directly.
 It's a pure HTTP client against your Dashtro instance's `/api/sdk` — the
 same API-key-authorized surface the client SDKs use, never a user's JWT. No
 database access, no other install. Point it at a self-hosted instance (e.g.
-the `ghcr.io/1atharvad/dashtro` Docker image) via `CMS_API_URL` and it works
+the `atharvad216/dashtro` Docker image) via `CMS_API_URL` and it works
 from anywhere.
 
 ## Setup
