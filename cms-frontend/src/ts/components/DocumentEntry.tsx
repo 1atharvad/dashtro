@@ -263,6 +263,7 @@ export const DocumentEntry = ({
             onChange={val => setVariableEntry(prev => ({ ...prev, [fieldName]: val }))}
             onImmediateSave={onImmediateSave ? val => onImmediateSave(fieldName, val) : undefined}
             readOnly={readOnly}
+            excludeValues={excludeValues}
           />
         )}
 
@@ -291,6 +292,7 @@ export const DocumentEntry = ({
                       const currentNested = (variableEntry[fieldName] ?? {}) as DocumentData;
                       onImmediateSave(fieldName, { ...currentNested, [nestedFieldName]: val });
                     } : undefined}
+                    excludeValues={excludeValues}
                   />
                 </Grid>
               ))}

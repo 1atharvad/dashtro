@@ -250,7 +250,11 @@ export const DocumentContent = () => {
 
   const mobileActionsButton = !isProduction ? (
     <span className="md:hidden">
-      <DocumentActionsMenu onSave={() => handleSubmit()} {...existingDocActionProps} />
+      <DocumentActionsMenu
+        onSave={() => handleSubmit()}
+        onImport={isNew ? () => setImportDocOpen(true) : undefined}
+        {...existingDocActionProps}
+      />
     </span>
   ) : null;
 
@@ -295,9 +299,11 @@ export const DocumentContent = () => {
   };
 
   const importDocButton = isNew && !isProduction ? (
-    <Button key="import-doc" variant="secondary" onClick={() => setImportDocOpen(true)}>
-      <Upload className="h-4 w-4" /> Import from JSON
-    </Button>
+    <span className="hidden md:inline-flex">
+      <Button key="import-doc" variant="secondary" onClick={() => setImportDocOpen(true)}>
+        <Upload className="h-4 w-4" /> Import from JSON
+      </Button>
+    </span>
   ) : null;
 
   // For a new document, edits write straight into emptyDocumentData. For an
@@ -363,6 +369,7 @@ export const DocumentContent = () => {
                           variableEntryState={getVariableEntryState()}
                           schemaDetails={schemaDetails}
                           onImmediateSave={!isNew ? onImmediateSave : undefined}
+                          excludeValues={!isNew && document_id ? [document_id] : []}
                         />
                       </Box>
                     ))}

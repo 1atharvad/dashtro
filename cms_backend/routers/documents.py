@@ -86,11 +86,18 @@ async def _resolve_one_reference(
     workspace_name: str,
     level: int,
     max_depth: int,
+    ancestor_ids: frozenset[str],
 ) -> dict | None:
     """Resolve a single reference ID to its document (recursing into its own references),
-    or wrap it as {'_document_id': ref_id} if the depth limit is reached or it can't be found."""
+    or wrap it as {'_document_id': ref_id} if the depth limit is reached or it can't be found.
+    If ref_id is already in ancestor_ids (a document upstream on this exact resolution path
+    referenced it), stop and flag it as a cycle instead of recursing into it again — a document
+    reached twice via different, non-looping branches (a "diamond") is not upstream of itself and
+    is not affected by this check."""
     if not isinstance(ref_id, str) or not ref_id:
         return None
+    if ref_id in ancestor_ids:
+        return {"_document_id": ref_id, "_cycle": True}
     if level >= max_depth:
         return {"_document_id": ref_id}
 
@@ -115,6 +122,7 @@ async def _resolve_one_reference(
                 workspace_name,
                 level + 1,
                 max_depth,
+                ancestor_ids | {ref_id},
             )
             resolved["_document_id"] = ref_id
             return resolved
@@ -128,11 +136,20 @@ async def _resolve_references(
     workspace_name: str,
     level: int = 1,
     max_depth: int = 3,
+    ancestor_ids: frozenset[str] = frozenset(),
 ) -> dict:
     """Inline referenced documents in place of their IDs, recursively, up to max_depth levels
     (the root document is level 1). Beyond max_depth, or if a reference can't be resolved,
     the field is returned as {'_document_id': <id>} instead of a bare ID string so callers can
-    tell an unresolved reference apart from a plain string field."""
+    tell an unresolved reference apart from a plain string field.
+
+    ancestor_ids is the set of document ids upstream of `doc` on this specific resolution path
+    (not a global "every document seen so far" list — a fresh set per branch, so a document
+    reached via two different non-looping branches is never mistaken for a cycle). Referencing one
+    of them back is a real cycle and is flagged via {'_document_id': ref_id, '_cycle': True}
+    instead of being walked into again. This is independent of, and in addition to, the max_depth
+    cap above — max_depth still bounds a long non-repeating chain someone builds by hand; this
+    catches an identity loop that could resurface well within max_depth."""
     result = dict(doc)
 
     for field in schema_fields:
@@ -150,13 +167,13 @@ async def _resolve_references(
                 for v in value
                 if (
                     resolved := await _resolve_one_reference(
-                        v, ref_colls, project_id, workspace_name, level, max_depth
+                        v, ref_colls, project_id, workspace_name, level, max_depth, ancestor_ids
                     )
                 )
             ]
         else:
             resolved = await _resolve_one_reference(
-                value, ref_colls, project_id, workspace_name, level, max_depth
+                value, ref_colls, project_id, workspace_name, level, max_depth, ancestor_ids
             )
             if resolved is not None:
                 result[field_name] = resolved
@@ -233,7 +250,12 @@ async def get_document(
         if schema_fields:
             doc = _apply_schema_defaults(doc, schema_fields)
         doc = await _resolve_references(
-            doc, schema_fields, project_id, workspace_name, max_depth=depth
+            doc,
+            schema_fields,
+            project_id,
+            workspace_name,
+            max_depth=depth,
+            ancestor_ids=frozenset({document_id}),
         )
         doc = {
             k: v

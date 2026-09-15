@@ -42,6 +42,7 @@ const SortableAccordion = ({
   onImmediateSaveItem,
   readOnly,
   fieldName,
+  excludeValues,
 }: {
   id: string;
   index: number;
@@ -55,6 +56,7 @@ const SortableAccordion = ({
   onImmediateSaveItem?: (updated: Item) => void;
   readOnly: boolean;
   fieldName: string;
+  excludeValues: string[];
 }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id });
 
@@ -125,6 +127,7 @@ const SortableAccordion = ({
                   onImmediateSave={onImmediateSaveItem ? (nestedFieldName, val) => {
                     onImmediateSaveItem({ ...(item ?? {}), [nestedFieldName]: val });
                   } : undefined}
+                  excludeValues={excludeValues}
                 />
               </Box>
             ))}
@@ -144,6 +147,7 @@ export const NestedDocumentArrayField = ({
   onChange,
   onImmediateSave,
   readOnly = false,
+  excludeValues = [],
 }: {
   label: string;
   fieldName: string;
@@ -153,6 +157,7 @@ export const NestedDocumentArrayField = ({
   onChange: (value: Item[]) => void;
   onImmediateSave?: (value: Item[]) => void;
   readOnly?: boolean;
+  excludeValues?: string[];
 }) => {
   const [expanded, setExpanded] = useState<string | false>(false);
 
@@ -239,6 +244,7 @@ export const NestedDocumentArrayField = ({
                 onImmediateSaveItem={onImmediateSave ? updated => saveItemImmediately(index, updated) : undefined}
                 readOnly={readOnly}
                 fieldName={fieldName}
+                excludeValues={excludeValues}
               />
             ))}
           </Box>

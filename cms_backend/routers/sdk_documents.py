@@ -90,7 +90,12 @@ async def get_document(
         if schema_fields:
             doc = _apply_schema_defaults(doc, schema_fields)
         doc = await _resolve_references(
-            doc, schema_fields, project_id, workspace_name, max_depth=depth
+            doc,
+            schema_fields,
+            project_id,
+            workspace_name,
+            max_depth=depth,
+            ancestor_ids=frozenset({document_id}),
         )
         doc = {
             k: v
