@@ -34,6 +34,21 @@ export class DashtroRtdbClient {
     if (!res.ok) throw new Error(`Dashtro RTDB: ${res.status} PUT ${path}`);
   }
 
+  /** Appends `value` as a new child under a generated key, rather than an
+   *  explicit path — the recommended way to add an item to an ordered
+   *  collection: deleting a push-keyed child never shifts a sibling's
+   *  address, unlike deleting a numeric list index would. Returns the
+   *  generated key. */
+  async push(path: string, value: unknown): Promise<string> {
+    const res = await fetch(this.url(path), {
+      method: 'POST',
+      headers: { 'X-API-Key': this.apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(value),
+    });
+    if (!res.ok) throw new Error(`Dashtro RTDB: ${res.status} POST ${path}`);
+    return (await res.json()).key;
+  }
+
   /** Shallow-merges `value` (must be an object) into the existing node. */
   async update(path: string, value: Record<string, unknown>): Promise<void> {
     const res = await fetch(this.url(path), {
@@ -53,16 +68,39 @@ export class DashtroRtdbClient {
   }
 
   /** Opens a websocket and calls `onUpdate` for every push message whose path
-   *  is at or below `path` (default: the whole tree). Returns an unsubscribe
-   *  function that closes the socket. */
+   *  is at or below `path` (default: the whole tree). Reconnects automatically
+   *  on an unexpected drop (with backoff), so a network blip doesn't silently
+   *  end live updates until the caller notices. Returns an unsubscribe
+   *  function that stops reconnecting and closes the socket. */
   subscribe(onUpdate: (update: RtdbUpdate) => void, path = ''): () => void {
-    const ws = new WebSocket(`${this.wsBase}/ws?api_key=${encodeURIComponent(this.apiKey)}`);
-    ws.onmessage = (event) => {
-      const update: RtdbUpdate = JSON.parse(event.data);
-      if (!path || update.path === path || update.path.startsWith(`${path}/`)) {
-        onUpdate(update);
-      }
+    let closedByCaller = false;
+    let ws: WebSocket | null = null;
+    let retryDelay = 1000;
+    const maxRetryDelay = 30000;
+
+    const connect = () => {
+      ws = new WebSocket(`${this.wsBase}/ws`);
+      ws.onopen = () => {
+        retryDelay = 1000;
+        ws?.send(JSON.stringify({ api_key: this.apiKey }));
+      };
+      ws.onmessage = (event) => {
+        const update: RtdbUpdate = JSON.parse(event.data);
+        if (!path || update.path === path || update.path.startsWith(`${path}/`)) {
+          onUpdate(update);
+        }
+      };
+      ws.onclose = () => {
+        if (closedByCaller) return;
+        setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+      };
     };
-    return () => ws.close();
+    connect();
+
+    return () => {
+      closedByCaller = true;
+      ws?.close();
+    };
   }
 }

@@ -1,6 +1,10 @@
+import asyncio
+import json
 import time
+from collections.abc import Awaitable, Callable
 
 import httpx
+import websockets
 
 
 class _Cache:
@@ -34,7 +38,12 @@ def _validate_base_url(base_url: str) -> str:
 
 class RtdbClient:
     """Realtime Database access — user-updatable dynamic content, separate
-    from the read-oriented, cached document endpoints on DashtroClient."""
+    from the read-oriented, cached document endpoints on DashtroClient.
+
+    Sync client only: live push updates (`subscribe`) need an async event
+    loop to run the websocket's reconnect loop against, so that's only
+    offered on AsyncRtdbClient (via AsyncDashtroClient) — use that instead
+    if you need live updates, not just request/response reads and writes."""
 
     def __init__(self, http: httpx.Client, base_url: str, project_id: str):
         self._http = http
@@ -53,8 +62,22 @@ class RtdbClient:
         resp.raise_for_status()
 
     def update(self, path: str, value: dict) -> None:
+        """Shallow-merges `value` into the existing node — nested dicts are
+        replaced wholesale, not deep-merged. A value like
+        `{"profile": {"name": "x"}}` overwrites the whole `profile` object,
+        it doesn't merge into its existing keys."""
         resp = self._http.patch(self._url(path), json=value)
         resp.raise_for_status()
+
+    def push(self, path: str, value) -> str:
+        """Appends `value` as a new child under a generated key, rather than
+        an explicit path — the recommended way to add an item to an ordered
+        collection: deleting a push-keyed child never shifts a sibling's
+        address, unlike deleting a numeric list index would. Returns the
+        generated key."""
+        resp = self._http.post(self._url(path), json=value)
+        resp.raise_for_status()
+        return resp.json()["key"]
 
     def remove(self, path: str = "") -> None:
         resp = self._http.delete(self._url(path))
@@ -65,6 +88,7 @@ class AsyncRtdbClient:
     def __init__(self, http: httpx.AsyncClient, base_url: str, project_id: str):
         self._http = http
         self._base = base_url.rstrip("/") + f"/api/sdk/projects/{project_id}/rtdb"
+        self._ws_base = self._base.replace("https://", "wss://").replace("http://", "ws://")
 
     def _url(self, path: str = "") -> str:
         return f"{self._base}/{path.lstrip('/')}" if path else f"{self._base}/"
@@ -79,12 +103,85 @@ class AsyncRtdbClient:
         resp.raise_for_status()
 
     async def update(self, path: str, value: dict) -> None:
+        """Shallow-merges `value` into the existing node — nested dicts are
+        replaced wholesale, not deep-merged. A value like
+        `{"profile": {"name": "x"}}` overwrites the whole `profile` object,
+        it doesn't merge into its existing keys."""
         resp = await self._http.patch(self._url(path), json=value)
         resp.raise_for_status()
+
+    async def push(self, path: str, value) -> str:
+        """Appends `value` as a new child under a generated key, rather than
+        an explicit path — the recommended way to add an item to an ordered
+        collection: deleting a push-keyed child never shifts a sibling's
+        address, unlike deleting a numeric list index would. Returns the
+        generated key."""
+        resp = await self._http.post(self._url(path), json=value)
+        resp.raise_for_status()
+        return resp.json()["key"]
 
     async def remove(self, path: str = "") -> None:
         resp = await self._http.delete(self._url(path))
         resp.raise_for_status()
+
+    def subscribe(
+        self, on_update: Callable[[dict], Awaitable[None] | None], path: str = ""
+    ) -> Callable[[], Awaitable[None]]:
+        """Opens a websocket and calls `on_update` (sync or async) for every
+        push message whose path is at or below `path` (default: the whole
+        tree). Reconnects automatically on an unexpected drop, with backoff,
+        so a network blip doesn't silently end live updates. Returns an
+        async `unsubscribe()` that stops reconnecting and closes the socket."""
+        api_key = self._http.headers.get("X-API-Key", "")
+        stopped = asyncio.Event()
+
+        async def _run():
+            retry_delay = 1.0
+            max_retry_delay = 30.0
+            while not stopped.is_set():
+                try:
+                    async with websockets.connect(f"{self._ws_base}/ws") as ws:
+                        await ws.send(json.dumps({"api_key": api_key}))
+                        retry_delay = 1.0
+                        async for message in ws:
+                            if stopped.is_set():
+                                break
+                            update = json.loads(message)
+                            if (
+                                not path
+                                or update["path"] == path
+                                or update["path"].startswith(f"{path}/")
+                            ):
+                                try:
+                                    result = on_update(update)
+                                    if asyncio.iscoroutine(result):
+                                        await result
+                                except Exception:
+                                    # A bug in the caller's callback must not
+                                    # kill the reconnect loop — that would
+                                    # silently end live updates for good,
+                                    # contradicting this method's whole
+                                    # point. Skip this one update and keep
+                                    # the socket open for the next message.
+                                    pass
+                except (websockets.exceptions.WebSocketException, OSError):
+                    pass
+                if stopped.is_set():
+                    break
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, max_retry_delay)
+
+        task = asyncio.create_task(_run())
+
+        async def unsubscribe():
+            stopped.set()
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        return unsubscribe
 
 
 class DashtroClient:

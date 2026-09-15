@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import secrets
 import threading
@@ -10,6 +11,15 @@ from datetime import UTC, datetime, timedelta
 import jwt
 import psycopg2
 import psycopg2.extras
+from api.utils.rtdb_tree import (
+    rtdb_apply_delete,
+    rtdb_apply_push,
+    rtdb_apply_set,
+    rtdb_apply_update,
+    rtdb_get_child,
+    rtdb_segments,
+    validate_tree_size,
+)
 from api.utils.schema import reindex_schema_after_delete
 from api.utils.workspace_diff import diff_workspaces
 from decouple import config
@@ -1341,95 +1351,44 @@ class PostgresData(PostgresClient):
         return row["data"] if row else {}
 
     def _save_rtdb(self, project_id: str, tree: dict):
+        # Serialize once and reuse it for both the size check and the actual
+        # write — psycopg2.extras.Json's `dumps` param lets it take an
+        # already-serialized string instead of re-running json.dumps(tree)
+        # itself, which would otherwise pay full-tree serialization twice on
+        # every single RTDB write.
+        serialized = json.dumps(tree)
+        validate_tree_size(len(serialized))
         cursor = self.get_cursor()
         cursor.execute(
             "INSERT INTO cms_project_rtdb (project_id, data) VALUES (%s, %s)"
             " ON CONFLICT(project_id) DO UPDATE SET data=excluded.data",
-            (project_id, psycopg2.extras.Json(tree)),
+            (project_id, psycopg2.extras.Json(tree, dumps=lambda _: serialized)),
         )
         self.connection.commit()
         cursor.close()
 
-    @staticmethod
-    def _rtdb_segments(path: str) -> list[str]:
-        return [seg for seg in path.split("/") if seg]
-
-    @staticmethod
-    def _rtdb_get_child(node, seg: str):
-        """Reads `seg` off a dict (by key) or list (by numeric index); None if absent."""
-        if isinstance(node, dict):
-            return node.get(seg)
-        if isinstance(node, list):
-            return node[int(seg)] if seg.isdigit() and int(seg) < len(node) else None
-        return None
-
-    @staticmethod
-    def _rtdb_set_child(node, seg: str, value):
-        """Writes `seg` into a dict (by key) or list (by index; appends when seg == len(node))."""
-        if isinstance(node, list):
-            idx = int(seg) if seg.isdigit() else len(node)
-            if idx < len(node):
-                node[idx] = value
-            else:
-                node.extend([None] * (idx - len(node)))
-                node.append(value)
-        else:
-            node[seg] = value
-
     def get_rtdb_path(self, project_id: str, path: str):
         node = self.get_rtdb(project_id)
-        for seg in self._rtdb_segments(path):
-            node = self._rtdb_get_child(node, seg)
+        for seg in rtdb_segments(path):
+            node = rtdb_get_child(node, seg)
             if node is None:
                 return None
         return node
 
     def set_rtdb_path(self, project_id: str, path: str, value):
-        segments = self._rtdb_segments(path)
-        if not segments:
-            tree = value if isinstance(value, dict) else {}
-        else:
-            tree = self.get_rtdb(project_id)
-            node = tree
-            for seg in segments[:-1]:
-                nxt = self._rtdb_get_child(node, seg)
-                if not isinstance(nxt, (dict, list)):
-                    nxt = {}
-                    self._rtdb_set_child(node, seg, nxt)
-                node = nxt
-            self._rtdb_set_child(node, segments[-1], value)
+        segments = rtdb_segments(path)
+        tree = rtdb_apply_set(self.get_rtdb(project_id) if segments else {}, segments, value)
         self._save_rtdb(project_id, tree)
 
     def update_rtdb_path(self, project_id: str, path: str, value: dict):
-        segments = self._rtdb_segments(path)
-        tree = self.get_rtdb(project_id)
-        node = tree
-        for seg in segments:
-            nxt = self._rtdb_get_child(node, seg)
-            if not isinstance(nxt, (dict, list)):
-                nxt = {}
-                self._rtdb_set_child(node, seg, nxt)
-            node = nxt
-        if isinstance(node, dict):
-            node.update(value)
+        tree = rtdb_apply_update(self.get_rtdb(project_id), rtdb_segments(path), value)
         self._save_rtdb(project_id, tree)
 
+    def push_rtdb_path(self, project_id: str, path: str, value) -> str:
+        tree, key = rtdb_apply_push(self.get_rtdb(project_id), rtdb_segments(path), value)
+        self._save_rtdb(project_id, tree)
+        return key
+
     def delete_rtdb_path(self, project_id: str, path: str):
-        segments = self._rtdb_segments(path)
-        tree = self.get_rtdb(project_id)
-        if not segments:
-            self._save_rtdb(project_id, {})
-            return
-        node = tree
-        for seg in segments[:-1]:
-            nxt = self._rtdb_get_child(node, seg)
-            if nxt is None:
-                return
-            node = nxt
-        last = segments[-1]
-        if isinstance(node, list):
-            if last.isdigit() and int(last) < len(node):
-                node.pop(int(last))
-        elif isinstance(node, dict):
-            node.pop(last, None)
+        tree = rtdb_apply_delete(self.get_rtdb(project_id), rtdb_segments(path))
         self._save_rtdb(project_id, tree)
