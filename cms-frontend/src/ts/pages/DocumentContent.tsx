@@ -12,6 +12,7 @@ import { useWorkspaceData } from '@/hooks/useWorkspace';
 import { PageForm } from '@ts/components/PageForm';
 import { DocumentEntry } from '@ts/components/DocumentEntry';
 import { useDocumentData } from '@/hooks/useDocument';
+import { useRichTextComponentsQuery } from '@ts/api/richTextComponents';
 import { ApiError } from '@ts/api/client';
 import { Link } from '@ts/components/Link';
 import { AppHeader } from '@ts/components/AppHeader';
@@ -51,6 +52,14 @@ export const DocumentContent = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [syncConfirm, setSyncConfirm] = useState<'push' | 'pull' | null>(null);
   const [importDocOpen, setImportDocOpen] = useState(false);
+
+  // RichTextModal (mounted per-field, only once the whole form below is
+  // ready) fetches this same query lazily on its own — firing it here too,
+  // in parallel with the document/schema fetches, means React Query's cache
+  // (deduped by query key) is already warm by the time any RichText field
+  // mounts, instead of that fetch only starting after everything else has
+  // already rendered.
+  useRichTextComponentsQuery(project_id ?? '');
 
   const { collections } = useCollectionData(project_id ?? '');
   const schemaName = collections.reduce((prev, curr) =>

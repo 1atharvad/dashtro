@@ -1,5 +1,6 @@
 cms-frontend/node_modules
 cms-frontend/dist
+cms_backend/react_render/node_modules
 .git
 .env
 **/__pycache__

@@ -1,0 +1,7 @@
+react_render/node_modules
+.env
+service-key.json
+**/__pycache__
+**/*.pyc
+**/*.pyo
+*.sqlite3

@@ -35,6 +35,11 @@ services:
         required: false
     volumes:
       - ./cms_backend:/app
+      # Mask two build-only outputs from the bind mount above: node_modules
+      # (built for the host's OS/arch, wrong for Linux) and dist/ (compiled
+      # only at image build time, never on the host).
+      - /app/react_render/node_modules
+      - /app/react_render/dist
       - uploads_data:/app/uploads
       # Lets the backup CLI (scripts/cms_schema.py) run directly inside the
       # container against the repo's backup/ dir — no docker cp needed. Pass

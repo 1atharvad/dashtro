@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from typing import Any
 
@@ -5,6 +6,11 @@ from api.utils import get_audit_client, get_data_client
 from api.utils.actor import get_client_ip
 from api.utils.api_key_auth import check_key_scope, require_api_key
 from api.utils.document_validation import DocumentValidationError, validate_document_data
+from api.utils.rich_text_render import (
+    RichTextComponentNotFoundError,
+    RichTextRenderError,
+    bake_rich_text_fields,
+)
 from api.utils.schema import schema_jsonify
 from config import CMS_PUBLIC_URL
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -77,6 +83,7 @@ async def get_document(
     collection_name: str,
     document_id: str,
     depth: int = 3,
+    raw: bool = False,
     key_info: dict = Depends(require_api_key("read")),
 ):
     check_key_scope(key_info, project_id, collection_name)
@@ -89,24 +96,46 @@ async def get_document(
         schema_keys = {f["_name"] for f in schema_fields} if schema_fields else set()
         if schema_fields:
             doc = _apply_schema_defaults(doc, schema_fields)
-        doc = await _resolve_references(
-            doc,
-            schema_fields,
-            project_id,
-            workspace_name,
-            max_depth=depth,
-            ancestor_ids=frozenset({document_id}),
-        )
-        doc = {
-            k: v
-            for k, v in doc.items()
-            if k in schema_keys
-            or (v not in ("", [], None) and not (isinstance(v, str) and v.strip() == ""))
-        }
-        media_base = (
-            CMS_PUBLIC_URL.rstrip("/") if CMS_PUBLIC_URL else str(request.base_url).rstrip("/")
-        )
-        doc = _absolutify_media(doc, media_base)
+        # Fetched once up front so nested referenced documents (below) don't
+        # each re-fetch the same project's component list.
+        custom_components = db.get_rich_text_components(project_id) if not raw else None
+        try:
+            doc = await _resolve_references(
+                doc,
+                schema_fields,
+                project_id,
+                workspace_name,
+                max_depth=depth,
+                ancestor_ids=frozenset({document_id}),
+                bake_rich_text=not raw,
+                custom_components=custom_components,
+            )
+            doc = {
+                k: v
+                for k, v in doc.items()
+                if k in schema_keys
+                or (v not in ("", [], None) and not (isinstance(v, str) and v.strip() == ""))
+            }
+            media_base = (
+                CMS_PUBLIC_URL.rstrip("/") if CMS_PUBLIC_URL else str(request.base_url).rstrip("/")
+            )
+            doc = _absolutify_media(doc, media_base)
+            if not raw:
+                # Off the event loop — bake_rich_text_fields spawns a
+                # blocking Node subprocess per inline component tag.
+                doc = await asyncio.to_thread(
+                    bake_rich_text_fields, doc, project_id, schema_fields, custom_components
+                )
+        except RichTextComponentNotFoundError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"RichText component '{e.name}' referenced in '{collection_name}/{document_id}' "
+                "is not defined. Fix the content, or fetch with ?raw=true to bypass rendering.",
+            ) from e
+        except RichTextRenderError as e:
+            raise HTTPException(
+                status_code=502, detail=f"Failed to render a RichText component: {e}"
+            ) from e
     return doc
 
 

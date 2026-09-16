@@ -102,7 +102,7 @@ export const RichTextModal = ({
 }) => {
   const [open, setOpen] = useState(false);
   const { project_id } = useParams<{ project_id: string }>();
-  const { data: customComponents = [] } = useRichTextComponentsQuery(project_id ?? '');
+  const { data: customComponents = [], isLoading: componentsLoading } = useRichTextComponentsQuery(project_id ?? '');
 
   const editorValue: string | string[] = Array.isArray(value) ? value : (typeof value === 'string' ? value : '');
   const previewSource = editorValue ? (Array.isArray(editorValue) ? editorValue.join('\n') : editorValue) : '';
@@ -113,7 +113,7 @@ export const RichTextModal = ({
       <Box className="rich-text-trigger" onClick={() => setOpen(true)}>
         {previewSource ? (
           <Box className="rich-text-preview">
-            <RichTextWrapperRenderer wrapperKey={wrapperKey} source={previewSource} customComponents={customComponents} />
+            <RichTextWrapperRenderer wrapperKey={wrapperKey} source={previewSource} customComponents={customComponents} componentsLoading={componentsLoading} />
           </Box>
         ) : (
           <Typography variant="body2" color="text.disabled" className="rich-text-empty">

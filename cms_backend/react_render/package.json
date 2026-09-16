@@ -1,0 +1,22 @@
+{
+  "name": "cms-backend-react-render",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Headless static-HTML renderer for RichText wrapper components, invoked by the Python backend as a subprocess. Written in TypeScript, compiled ahead of time (see `npm run build`) so each render is a plain `node` invocation — no per-call JIT/transform overhead.",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@babel/standalone": "^7.25.0",
+    "advi-ui": "0.9.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/babel__standalone": "^7.1.9",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.6.3"
+  }
+}

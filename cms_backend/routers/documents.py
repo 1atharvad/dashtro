@@ -5,6 +5,7 @@ from typing import Any
 from api.utils import get_audit_client, get_data_client
 from api.utils.actor import get_actor, get_client_ip
 from api.utils.document_validation import DocumentValidationError, validate_document_data
+from api.utils.rich_text_render import bake_rich_text_fields
 from api.utils.schema import get_schema_for_collection, schema_jsonify
 from config import CMS_PUBLIC_URL
 from fastapi import APIRouter, HTTPException, Request
@@ -87,6 +88,8 @@ async def _resolve_one_reference(
     level: int,
     max_depth: int,
     ancestor_ids: frozenset[str],
+    bake_rich_text: bool = False,
+    custom_components: dict | None = None,
 ) -> dict | None:
     """Resolve a single reference ID to its document (recursing into its own references),
     or wrap it as {'_document_id': ref_id} if the depth limit is reached or it can't be found.
@@ -123,7 +126,14 @@ async def _resolve_one_reference(
                 level + 1,
                 max_depth,
                 ancestor_ids | {ref_id},
+                bake_rich_text=bake_rich_text,
+                custom_components=custom_components,
             )
+            if bake_rich_text:
+                # Off the event loop — see bake_rich_text_fields' docstring.
+                resolved = await asyncio.to_thread(
+                    bake_rich_text_fields, resolved, project_id, ref_schema_fields, custom_components
+                )
             resolved["_document_id"] = ref_id
             return resolved
     return {"_document_id": ref_id}
@@ -137,6 +147,8 @@ async def _resolve_references(
     level: int = 1,
     max_depth: int = 3,
     ancestor_ids: frozenset[str] = frozenset(),
+    bake_rich_text: bool = False,
+    custom_components: dict | None = None,
 ) -> dict:
     """Inline referenced documents in place of their IDs, recursively, up to max_depth levels
     (the root document is level 1). Beyond max_depth, or if a reference can't be resolved,
@@ -149,7 +161,14 @@ async def _resolve_references(
     of them back is a real cycle and is flagged via {'_document_id': ref_id, '_cycle': True}
     instead of being walked into again. This is independent of, and in addition to, the max_depth
     cap above — max_depth still bounds a long non-repeating chain someone builds by hand; this
-    catches an identity loop that could resurface well within max_depth."""
+    catches an identity loop that could resurface well within max_depth.
+
+    bake_rich_text (only ever True from the SDK reader) also bakes each
+    inlined referenced document's own RichText fields, using its own
+    collection's schema — otherwise a reference's RichText field would stay
+    raw even when the top-level document's fields get baked. Pass a
+    pre-fetched custom_components so nested documents don't each re-fetch
+    the same project's component list."""
     result = dict(doc)
 
     for field in schema_fields:
@@ -167,13 +186,29 @@ async def _resolve_references(
                 for v in value
                 if (
                     resolved := await _resolve_one_reference(
-                        v, ref_colls, project_id, workspace_name, level, max_depth, ancestor_ids
+                        v,
+                        ref_colls,
+                        project_id,
+                        workspace_name,
+                        level,
+                        max_depth,
+                        ancestor_ids,
+                        bake_rich_text=bake_rich_text,
+                        custom_components=custom_components,
                     )
                 )
             ]
         else:
             resolved = await _resolve_one_reference(
-                value, ref_colls, project_id, workspace_name, level, max_depth, ancestor_ids
+                value,
+                ref_colls,
+                project_id,
+                workspace_name,
+                level,
+                max_depth,
+                ancestor_ids,
+                bake_rich_text=bake_rich_text,
+                custom_components=custom_components,
             )
             if resolved is not None:
                 result[field_name] = resolved

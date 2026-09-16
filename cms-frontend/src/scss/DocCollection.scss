@@ -835,6 +835,13 @@
   flex: 1;
 }
 
+.rich-text-unknown-component {
+  flex: 1;
+  color: colors.$danger;
+  font-size: 0.8125rem;
+  font-family: monospace;
+}
+
 .rich-text-edit-btn {
   flex-shrink: 0;
   opacity: 0.5;
