@@ -25,24 +25,41 @@ export const useResizableSplit = ({
   const isResizingRef = useRef(false);
 
   useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
+    const updateFromClientY = (clientY: number) => {
       if (!isResizingRef.current || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const percent = ((event.clientY - rect.top) / rect.height) * 100;
+      const percent = ((clientY - rect.top) / rect.height) * 100;
       setSplitPercent(Math.min(maxPercent, Math.max(minPercent, percent)));
     };
-    const handleMouseUp = () => {
+    const finishResize = () => {
       if (!isResizingRef.current) return;
       isResizingRef.current = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       localStorage.setItem(storageKey, String(splitPercentRef.current));
     };
+
+    const handleMouseMove = (event: MouseEvent) => updateFromClientY(event.clientY);
+    // Dragging the handle would otherwise also scroll the page on touch
+    // devices, since a touchmove is ambiguous between "resize" and "scroll"
+    // — preventDefault only while a resize is actually in progress.
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!isResizingRef.current) return;
+      event.preventDefault();
+      updateFromClientY(event.touches[0].clientY);
+    };
+
     window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mouseup', finishResize);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', finishResize);
+    window.addEventListener('touchcancel', finishResize);
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mouseup', finishResize);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', finishResize);
+      window.removeEventListener('touchcancel', finishResize);
     };
   }, [storageKey, minPercent, maxPercent]);
 

@@ -10,7 +10,7 @@ export const ProjectOverviewCards = ({ projectId, project }: { projectId: string
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const productionCard = (
-    <Card className="pp-card pp-card--production" elevation={0}>
+    <Card key="production" className="pp-card pp-card--production" elevation={0}>
       <CardContent className="pp-card-content">
         <Box className="pp-card-header">
           <Chip label="Production" size="small" color="success" />
@@ -27,7 +27,7 @@ export const ProjectOverviewCards = ({ projectId, project }: { projectId: string
   );
 
   const rtdbCard = (
-    <Card className="pp-card" elevation={0}>
+    <Card key="rtdb" className="pp-card" elevation={0}>
       <CardContent className="pp-card-content">
         <Box className="pp-card-header">
           <Typography variant="overline" color="text.secondary" lineHeight={1}>
@@ -46,7 +46,7 @@ export const ProjectOverviewCards = ({ projectId, project }: { projectId: string
   );
 
   const infoCard = (
-    <Card className="pp-card" elevation={0}>
+    <Card key="info" className="pp-card" elevation={0}>
       <CardContent className="pp-card-content">
         <Box className="pp-card-header">
           <Typography variant="overline" color="text.secondary" lineHeight={1}>

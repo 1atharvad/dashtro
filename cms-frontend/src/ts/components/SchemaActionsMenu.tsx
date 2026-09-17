@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Divider, IconButton, ListItemIcon, Menu, MenuItem, Tooltip } from '@mui/material';
-import { Download, FolderOpen, Lock, MoreVertical, Save, Trash2, Unlock } from 'lucide-react';
+import { Download, FolderOpen, Lock, MoreVertical, Save, Trash2, Unlock, Upload } from 'lucide-react';
 
 export const SchemaActionsMenu = ({
   onSave,
+  onImport,
   folderLabel,
   onManageFolder,
   isLocked,
@@ -12,6 +13,7 @@ export const SchemaActionsMenu = ({
   onDelete,
 }: {
   onSave?: () => void;
+  onImport?: () => void;
   folderLabel?: string;
   onManageFolder?: (anchorEl: HTMLElement) => void;
   isLocked?: boolean;
@@ -43,13 +45,19 @@ export const SchemaActionsMenu = ({
             Save Schema
           </MenuItem>
         )}
+        {onImport && (
+          <MenuItem onClick={() => { close(); onImport(); }} sx={{ fontSize: 13 }}>
+            <ListItemIcon><Upload className="h-4 w-4" /></ListItemIcon>
+            Import from JSON
+          </MenuItem>
+        )}
         {onManageFolder && (
           <MenuItem onClick={(e) => { close(); onManageFolder(e.currentTarget); }} sx={{ fontSize: 13 }}>
             <ListItemIcon><FolderOpen className="h-4 w-4" /></ListItemIcon>
             {folderLabel ?? 'Add folder'}
           </MenuItem>
         )}
-        {(onSave || onManageFolder) && (onToggleLock || onDownload || onDelete) && <Divider />}
+        {(onSave || onImport || onManageFolder) && (onToggleLock || onDownload || onDelete) && <Divider />}
         {onToggleLock && (
           <MenuItem onClick={() => { close(); onToggleLock(); }} sx={{ fontSize: 13 }}>
             <ListItemIcon>

@@ -16,6 +16,10 @@
   }
 }
 
+.document-component .document-component-actions {
+  gap: 8px;
+}
+
 .collection-content {
   flex-grow: 1;
   min-height: 100vh;
@@ -178,10 +182,15 @@
       @include mixins.flex-center($direction: column);
 
       gap: 16px;
-      padding: 56px 0;
+      padding: 56px 16px;
 
       html.dark & {
         background: var(--cms-surface);
+      }
+
+      @media (max-width: 767px) {
+        padding: 32px 16px;
+        text-align: center;
       }
     }
   }
@@ -293,6 +302,30 @@
   .variable-input {
     display: block;
     width: 100%;
+
+    // advi-ui's Select (used only here, for ReferenceDocument fields) — its
+    // own defaults are sized/spaced for a compact inline control, not a full
+    // document field: 36px trigger height and a 4px label gap read as
+    // noticeably smaller than every other field in this form. It also needs
+    // its own display back — the block above is right for every other field
+    // type here, but it clobbers advi-ui's flex column layout (label above
+    // box), which is what actually lets a gap apply between the two at all.
+    &.vi-select-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .vi-select-label {
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 600;
+      opacity: 0.6;
+    }
+
+    .vi-select-trigger {
+      height: 56px;
+    }
   }
 
   .variable-helper-text {

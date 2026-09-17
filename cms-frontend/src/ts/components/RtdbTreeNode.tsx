@@ -116,6 +116,7 @@ const AddEntryForm = ({ showKeyField, existingKeys = [], onAdd, onCancel }: {
   const [draft, setDraft] = useState('');
   const [dictEntries, setDictEntries] = useState<JsonObject>({});
   const [listEntries, setListEntries] = useState<JsonValue[]>([]);
+  const [entriesExpanded, setEntriesExpanded] = useState(true);
 
   const trimmedKey = key.trim();
   const isDuplicateKey = showKeyField && !!trimmedKey && existingKeys.includes(trimmedKey);
@@ -138,38 +139,56 @@ const AddEntryForm = ({ showKeyField, existingKeys = [], onAdd, onCancel }: {
   return (
     <Box className="rtdb-add-form-wrapper">
       <Box className="rtdb-add-form">
-        {showKeyField && (
-          <>
-            <TextField size="small" placeholder="key" value={key} autoFocus
-              error={isDuplicateKey}
-              helperText={isDuplicateKey ? 'Key already exists' : undefined}
-              onChange={e => setKey(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && type !== 'dict' && type !== 'list') submit(); if (e.key === 'Escape') onCancel?.(); }} />
-            <Tooltip title="Auto-generate key">
-              <IconButton size="small" onClick={() => setKey(crypto.randomUUID())}>
-                <Wand2 className="h-4 w-4" />
+        <Box className="rtdb-node-primary">
+          {isContainerType ? (
+            <IconButton size="small" className="rtdb-expand-btn" onClick={() => setEntriesExpanded(e => !e)}>
+              {entriesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </IconButton>
+          ) : (
+            <Box className="rtdb-expand-spacer" />
+          )}
+
+          {showKeyField && (
+            <>
+              <TextField size="small" placeholder="key" value={key} autoFocus
+                error={isDuplicateKey}
+                helperText={isDuplicateKey ? 'Key already exists' : undefined}
+                onChange={e => setKey(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && type !== 'dict' && type !== 'list') submit(); if (e.key === 'Escape') onCancel?.(); }} />
+              <Tooltip title="Auto-generate key">
+                <IconButton size="small" onClick={() => setKey(crypto.randomUUID())}>
+                  <Wand2 className="h-4 w-4" />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+        </Box>
+
+        <Box className="rtdb-node-value-row">
+          <TextField select size="small" className="rtdb-type-select" value={type}
+            onChange={e => setType(e.target.value as RtdbValueType)}>
+            {TYPE_OPTIONS.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
+          </TextField>
+          <ValueEntryFields type={type} draft={draft} setDraft={setDraft} onSubmit={submit} error={isValueMissing && draft !== ''} />
+        </Box>
+
+        <Box className="rtdb-node-actions">
+          <Tooltip title="Add">
+            <span>
+              <IconButton size="small" onClick={submit} disabled={!canSubmit}>
+                <Check className="h-4 w-4" />
               </IconButton>
-            </Tooltip>
-          </>
-        )}
-        <TextField select size="small" className="rtdb-type-select" value={type}
-          onChange={e => setType(e.target.value as RtdbValueType)}>
-          {TYPE_OPTIONS.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
-        </TextField>
-        <ValueEntryFields type={type} draft={draft} setDraft={setDraft} onSubmit={submit} error={isValueMissing && draft !== ''} />
-        <Tooltip title="Add">
-          <IconButton size="small" onClick={submit} disabled={!canSubmit}>
-            <Check className="h-4 w-4" />
-          </IconButton>
-        </Tooltip>
-        {onCancel && (
-          <Tooltip title="Cancel">
-            <IconButton size="small" onClick={onCancel}><X className="h-4 w-4" /></IconButton>
+            </span>
           </Tooltip>
-        )}
+          {onCancel && (
+            <Tooltip title="Cancel">
+              <IconButton size="small" onClick={onCancel}><X className="h-4 w-4" /></IconButton>
+            </Tooltip>
+          )}
+        </Box>
       </Box>
 
-      {type === 'dict' && (
+      {type === 'dict' && entriesExpanded && (
         <Box className="rtdb-nested-entries">
           {Object.entries(dictEntries).map(([k, v]) => (
             <Box key={k} className="rtdb-pending-entry">
@@ -185,7 +204,7 @@ const AddEntryForm = ({ showKeyField, existingKeys = [], onAdd, onCancel }: {
         </Box>
       )}
 
-      {type === 'list' && (
+      {type === 'list' && entriesExpanded && (
         <Box className="rtdb-nested-entries">
           {listEntries.map((v, i) => (
             <Box key={i} className="rtdb-pending-entry">
@@ -233,6 +252,10 @@ export const RtdbTreeNode = ({
   const isList = Array.isArray(value);
   const isDict = isPlainObject(value);
   const container = isList || isDict;
+  // While actively editing, the type dropdown can turn a leaf into a
+  // dict/list (or vice versa) before it's saved — show the expand affordance
+  // for whichever type is currently selected, not just the saved value's.
+  const showAsContainer = editingValue ? (type === 'dict' || type === 'list') : container;
 
   // Only leaf nodes flash — a container's `value` reference changes on every
   // write to any descendant, which would light up the whole ancestor chain
@@ -290,42 +313,62 @@ export const RtdbTreeNode = ({
   return (
     <Box className="rtdb-node">
       <Box className={`rtdb-node-row${editingValue || editingKey ? ' rtdb-node-row--active' : ''}${flash ? ' rtdb-node-row--flash' : ''}`}>
-        {container ? (
-          <IconButton size="small" className="rtdb-expand-btn" onClick={() => setExpanded(e => !e)}>
-            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </IconButton>
-        ) : (
-          <Box className="rtdb-expand-spacer" />
-        )}
+        <Box className="rtdb-node-primary">
+          {container ? (
+            <IconButton size="small" className="rtdb-expand-btn" onClick={() => setExpanded(e => !e)}>
+              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </IconButton>
+          ) : showAsContainer ? (
+            <Box className="rtdb-expand-btn" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.4 }}>
+              <ChevronRight className="h-4 w-4" />
+            </Box>
+          ) : (
+            <Box className="rtdb-expand-spacer" />
+          )}
 
-        {editingKey ? (
-          <TextField size="small" className="rtdb-key-input" value={keyDraft} autoFocus
-            error={isDuplicateKeyDraft}
-            helperText={isDuplicateKeyDraft ? 'Key already exists' : undefined}
-            onChange={e => setKeyDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') commitEditKey(); if (e.key === 'Escape') setEditingKey(false); }} />
-        ) : (
-          <span className={`rtdb-node-key${keyEditable ? '' : ' rtdb-node-key--fixed'}`} onClick={startEditKey}>
-            {isList ? `[${nodeKey}]` : nodeKey}
-          </span>
-        )}
+          {editingKey ? (
+            <TextField size="small" className="rtdb-key-input" value={keyDraft} autoFocus
+              error={isDuplicateKeyDraft}
+              helperText={isDuplicateKeyDraft ? 'Key already exists' : undefined}
+              onChange={e => setKeyDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') commitEditKey(); if (e.key === 'Escape') setEditingKey(false); }} />
+          ) : (
+            <span className={`rtdb-node-key${keyEditable ? '' : ' rtdb-node-key--fixed'}`} onClick={startEditKey}>
+              {isList ? `[${nodeKey}]` : nodeKey}
+            </span>
+          )}
 
-        {container ? (
-          <span className="rtdb-node-badge">{isList ? '[ ]' : '{ }'}</span>
-        ) : editingValue ? (
-          <ValueEntryFields type={type} draft={draft} setDraft={setDraft} onSubmit={commitEditValue} error={isValueInvalid} />
-        ) : (
-          <span className={`rtdb-node-value ${valueTypeClass(value)}`} onClick={startEditValue}>{displayValue(value)}</span>
+          {showAsContainer && (
+            <span className="rtdb-node-badge">
+              {(editingValue ? type === 'list' : isList) ? '[ ]' : '{ }'}
+            </span>
+          )}
+        </Box>
+
+        {!container && (
+          editingValue ? (
+            <Box className="rtdb-node-value-row">
+              <TextField select size="small" className="rtdb-type-select" value={type}
+                onChange={e => setType(e.target.value as RtdbValueType)}>
+                {TYPE_OPTIONS.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
+              </TextField>
+              <ValueEntryFields type={type} draft={draft} setDraft={setDraft} onSubmit={commitEditValue} error={isValueInvalid} />
+            </Box>
+          ) : (
+            <span className={`rtdb-node-value ${valueTypeClass(value)}`} onClick={startEditValue}>{displayValue(value)}</span>
+          )
         )}
 
         <Box className="rtdb-node-actions">
           {editingValue || editingKey ? (
             <>
               <Tooltip title="Save">
-                <IconButton size="small" disabled={editingKey ? (!trimmedKeyDraft || isDuplicateKeyDraft) : isValueInvalid}
-                  onClick={editingKey ? commitEditKey : commitEditValue}>
-                  <Check className="h-4 w-4" />
-                </IconButton>
+                <span>
+                  <IconButton size="small" disabled={editingKey ? (!trimmedKeyDraft || isDuplicateKeyDraft) : isValueInvalid}
+                    onClick={editingKey ? commitEditKey : commitEditValue}>
+                    <Check className="h-4 w-4" />
+                  </IconButton>
+                </span>
               </Tooltip>
               <Tooltip title="Cancel">
                 <IconButton size="small" onClick={() => { setEditingValue(false); setEditingKey(false); }}>

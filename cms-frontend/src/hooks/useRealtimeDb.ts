@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'advi-ui';
 import {
   fetchRtdb, putRtdbPath, patchRtdbPath, deleteRtdbPath, rtdbRemoteUpdate,
 } from '@/redux/realtimeDbSlice';
@@ -88,17 +89,27 @@ export const useRealtimeDb = (projectId: string) => {
     };
   }, [dispatch, projectId]);
 
+  // dispatch(...).unwrap() surfaces a thunk's rejection here — without it,
+  // a failed write (e.g. a size/depth-limit or path-conflict error from the
+  // backend) was silently swallowed: the form's local state had already
+  // reset by the time the request failed, so the UI looked like it saved
+  // when the data was never actually persisted.
   const setPath = (path: string, value: JsonValue, raw?: string) =>
-    dispatch(putRtdbPath({ projectId, path, value, raw }));
+    dispatch(putRtdbPath({ projectId, path, value, raw })).unwrap()
+      .catch(err => { console.error(err); toast.error('Failed to save value'); });
   const updatePath = (path: string, value: JsonObject) =>
-    dispatch(patchRtdbPath({ projectId, path, value }));
-  const removePath = (path: string) => dispatch(deleteRtdbPath({ projectId, path }));
+    dispatch(patchRtdbPath({ projectId, path, value })).unwrap()
+      .catch(err => { console.error(err); toast.error('Failed to save value'); });
+  const removePath = (path: string) =>
+    dispatch(deleteRtdbPath({ projectId, path })).unwrap()
+      .catch(err => { console.error(err); toast.error('Failed to delete value'); });
   const renamePath = (oldPath: string, newPath: string, value: JsonValue) => {
     // Write under the new key first, then remove the old one — if the
     // rename is interrupted, the value survives (under the new key)
     // instead of being lost.
-    dispatch(putRtdbPath({ projectId, path: newPath, value }));
-    dispatch(deleteRtdbPath({ projectId, path: oldPath }));
+    dispatch(putRtdbPath({ projectId, path: newPath, value })).unwrap()
+      .then(() => dispatch(deleteRtdbPath({ projectId, path: oldPath })).unwrap())
+      .catch(err => { console.error(err); toast.error('Failed to rename key'); });
   };
 
   return { tree, loading, error, connected, setPath, updatePath, removePath, renamePath };

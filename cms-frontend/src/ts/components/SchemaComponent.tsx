@@ -307,9 +307,11 @@ export const SchemaComponent = ({
             ]}
             afterSubmitButtons={[
               ...(newSchema ? [
-                <Button key="import-json" variant="secondary" onClick={() => setImportOpen(true)}>
-                  <Upload className="h-4 w-4" /> Import from JSON
-                </Button>
+                <span key="import-json" className="hidden md:inline-flex">
+                  <Button variant="secondary" onClick={() => setImportOpen(true)}>
+                    <Upload className="h-4 w-4" /> Import from JSON
+                  </Button>
+                </span>
               ] : [
                 <span key="actions-desktop" className="hidden md:inline-flex">
                   <SchemaActionsMenu
@@ -323,6 +325,7 @@ export const SchemaComponent = ({
               <span key="actions-mobile" className="md:hidden">
                 <SchemaActionsMenu
                   onSave={isLocked ? undefined : () => handleSubmit()}
+                  onImport={newSchema ? () => setImportOpen(true) : undefined}
                   folderLabel={currentCategoryId ? currentCategoryName : 'Add folder'}
                   onManageFolder={(anchorEl) => setFolderMenuAnchor(anchorEl)}
                   {...(!newSchema ? {

@@ -1,11 +1,12 @@
 import { IconButton } from '@mui/material';
 import { Menu as AdviMenu } from 'advi-ui';
-import { CloudDownload, CloudUpload, Download, History, MoreVertical, Save, Trash2 } from 'lucide-react';
+import { CloudDownload, CloudUpload, Download, History, MoreVertical, Save, Trash2, Upload } from 'lucide-react';
 
 export const DocumentActionsMenu = ({
   onSave,
   outOfSync,
   notInProduction,
+  onImport,
   onPush,
   onPull,
   onOpenHistory,
@@ -15,6 +16,7 @@ export const DocumentActionsMenu = ({
   onSave?: () => void;
   outOfSync?: boolean;
   notInProduction?: boolean;
+  onImport?: () => void;
   onPush?: () => void;
   onPull?: () => void;
   onOpenHistory?: () => void;
@@ -32,8 +34,14 @@ export const DocumentActionsMenu = ({
     items={[
       ...(onSave ? [
         { value: 'save', label: 'Save Document', icon: <Save className="h-4 w-4" />, onSelect: onSave },
-        ...(onPush || onPull || onOpenHistory || onDownload || onDelete
+        ...(onImport || onPush || onPull || onOpenHistory || onDownload || onDelete
           ? [{ type: 'separator' as const, value: 'sep-save' }]
+          : []),
+      ] : []),
+      ...(onImport ? [
+        { value: 'import', label: 'Import from JSON', icon: <Upload className="h-4 w-4" />, onSelect: onImport },
+        ...(onPush || onPull || onOpenHistory || onDownload || onDelete
+          ? [{ type: 'separator' as const, value: 'sep-import' }]
           : []),
       ] : []),
       ...(onPush ? [{

@@ -8,9 +8,8 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Button } from 'advi-ui';
-import { Pencil, X, Eye } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 import { useRichTextComponentsQuery } from '@ts/api/richTextComponents';
-import type { RichTextComponent } from '@ts/types/constants';
 import { RichTextWrapperRenderer } from '@ts/components/RichTextWrapper';
 
 // Legacy array values become newline-joined text — literal text, no HTML parsing.
@@ -22,20 +21,15 @@ const EditorInner = ({
   onSave,
   onClose,
   disabled,
-  wrapperKey,
-  customComponents,
 }: {
   value: string | string[];
   onSave: (text: string) => void;
   onClose: () => void;
   disabled: boolean;
-  wrapperKey?: string;
-  customComponents: RichTextComponent[];
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const [text, setText] = useState(() => toEditorText(value));
-  const [previewOpen, setPreviewOpen] = useState(false);
 
   const handleSave = () => {
     onSave(text);
@@ -57,9 +51,6 @@ const EditorInner = ({
         </Box>
       </DialogContent>
       <DialogActions className="rich-text-dialog-actions">
-        <Button variant="secondary" onClick={() => setPreviewOpen(true)} style={{ marginRight: 'auto' }}>
-          <Eye className="h-4 w-4" /> Preview
-        </Button>
         <Button variant="secondary" onClick={onClose}>
           {disabled ? 'Close' : 'Cancel'}
         </Button>
@@ -69,20 +60,6 @@ const EditorInner = ({
           </Button>
         )}
       </DialogActions>
-
-      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle className="rich-text-dialog-title">
-          <Typography fontWeight={600}>Preview</Typography>
-          <IconButton size="small" onClick={() => setPreviewOpen(false)}>
-            <X className="h-4 w-4" />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent className="rich-text-preview-content">
-          <Box className="rich-text-preview-canvas">
-            <RichTextWrapperRenderer wrapperKey={wrapperKey} source={text} customComponents={customComponents} />
-          </Box>
-        </DialogContent>
-      </Dialog>
     </>
   );
 };
@@ -149,8 +126,6 @@ export const RichTextModal = ({
             onSave={onChange}
             onClose={() => setOpen(false)}
             disabled={!!disabled}
-            wrapperKey={wrapperKey}
-            customComponents={customComponents}
           />
         )}
       </Dialog>

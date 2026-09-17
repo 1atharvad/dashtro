@@ -9,6 +9,13 @@
   html.dark & {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3) !important;
   }
+
+  @media (max-width: 767px) {
+    margin-left: 16px !important;
+    margin-right: 16px !important;
+    width: calc(100% - 32px) !important;
+    max-width: calc(100% - 32px) !important;
+  }
 }
 
 .MuiDialogTitle-root {

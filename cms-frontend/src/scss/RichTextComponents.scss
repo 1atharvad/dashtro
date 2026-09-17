@@ -61,6 +61,32 @@
   padding: 0 24px 24px;
   background: var(--cms-bg);
   box-sizing: border-box;
+
+  @media (max-width: 1023px) {
+    padding: 0 16px 16px;
+  }
+}
+
+.rtc-code-tabs-wrapper {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rtc-code-tabs {
+  flex: 1;
+  min-height: 0;
+
+  .vi-tabs-list {
+    flex-shrink: 0;
+  }
+
+  .vi-tabs-content:not([hidden]) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 .rtc-code-row {
@@ -69,7 +95,7 @@
   min-height: 0;
 }
 
-// Draggable divider between the code row and the preview pane.
+// Draggable divider between the code row/tabs and the preview pane.
 .rtc-resize-handle {
   flex: 0 0 10px;
   position: relative;
@@ -111,6 +137,7 @@
 .rtc-css-editor {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: #1e1e1e;
@@ -141,6 +168,28 @@
   }
 }
 
+.rtc-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 12px;
+}
+
+.rtc-preview-mode-select {
+  width: 90px;
+  flex-shrink: 0;
+  margin: 6px 0 !important;
+
+  .MuiInputBase-root {
+    min-height: 0;
+  }
+
+  .MuiSelect-select {
+    padding: 4px 28px 4px 10px !important;
+    font-size: 0.8rem;
+  }
+}
+
 .rtc-preview-body {
   flex: 1;
   overflow: auto;
@@ -152,6 +201,7 @@
   // `text-*`) still override this since they're more specific.
   color-scheme: light;
   color: #1a1a1a;
+  background: #ffffff;
 
   .wmde-markdown-var,
   .wmde-markdown,
@@ -159,6 +209,12 @@
   [data-color-mode] {
     background: none !important;
     background-color: transparent !important;
+  }
+
+  &--dark {
+    color-scheme: dark;
+    color: #f0f0f0;
+    background: #000000;
   }
 }
 

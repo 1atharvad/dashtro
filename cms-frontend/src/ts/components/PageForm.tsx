@@ -76,7 +76,7 @@ export const PageForm = ({
             </Box>
           </Grid>
         </Grid>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box className={`page-form-actions ${formType}-component-actions`} sx={{ display: 'flex', alignItems: 'center' }}>
           {extraButtons && extraButtons.map((btn, index) => <Box key={`button-${index}`}>{btn}</Box>)}
           {!readOnly && (
             <Button

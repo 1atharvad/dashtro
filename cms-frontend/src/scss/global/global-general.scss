@@ -208,6 +208,34 @@ html.dark input[type="week"] {
   color-scheme: dark;
 }
 
+// advi-ui's Select trigger is built from the same shared .vi-btn base as
+// real buttons, so it inherits .vi-btn:active's press-down scale/opacity —
+// a fine affordance for a button, but a jarring flicker on a persistent
+// form control (the selected text visibly shifts on every click). Override
+// at higher specificity than .vi-btn:active (0,2,0) rather than !important.
+.vi-select-wrapper .vi-select-trigger:active {
+  transform: none;
+  opacity: 1;
+}
+
+.vi-select-trigger {
+  border-color: var(--cms-border-input);
+  // The trigger's own justify-content: space-between treats the label, the
+  // clear button, and the chevron as 3 evenly-spaced items — so with a
+  // selection (and its clear button) present, the clear button gets shoved
+  // to the middle instead of sitting next to the chevron. Let the label grow
+  // to fill the space instead, so the trailing icons pack together at the end.
+  justify-content: flex-start;
+
+  > span:first-child {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 // Header — matches aside orientation (same palette, same fonts)
 .vi-header-mobile { display: none !important; }
 
@@ -415,6 +443,10 @@ html.dark input[type="week"] {
 
 .MuiDialogContent-root.dialog-content-tight:first-of-type {
   padding-top: 12px;
+}
+
+.page-form-actions {
+  gap: 16px;
 }
 
 // ── Actions dropdown (advi-ui Menu) ─────────────────────────────────────────

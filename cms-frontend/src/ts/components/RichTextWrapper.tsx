@@ -4,22 +4,9 @@ import rehypeRaw from 'rehype-raw';
 import { ADVI_WRAPPER_COMPONENTS } from '@ts/utils/adviWrapperComponents';
 import { MermaidDiagram } from '@ts/components/MermaidDiagram';
 import type { RichTextComponent } from '@ts/types/constants';
+import { componentScopeClass, scopeCss } from '@ts/utils/richTextScoping';
 
 const REHYPE_PLUGINS = [rehypeRaw];
-
-// A component's raw CSS is author-supplied and often uses broad selectors
-// (`p`, `.highlight`, ...) that would otherwise leak onto the rest of the
-// page. Scope it to a wrapper class via native CSS nesting (supported in
-// all current evergreen browsers) instead — no new build dependency.
-export function componentScopeClass(name: string): string {
-  return `rtc-comp-${name.replace(/[^A-Za-z0-9_-]/g, '') || 'component'}`;
-}
-
-export function scopeCss(css: string | undefined, name: string): string {
-  const trimmed = css?.trim();
-  if (!trimmed) return '';
-  return `.${componentScopeClass(name)} {\n${trimmed}\n}`;
-}
 
 // Matches an inline component reference's opening tag, same convention as
 // the backend's `_INLINE_TAG_RE` in rich_text_render.py — a capitalized

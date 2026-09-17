@@ -78,6 +78,8 @@ export const ProjectSettingsPage = () => {
   if (projectsLoading) return null;
   if (!project) return <PageNotFound />;
 
+  const pageTitle = navItems.find(item => item.active)?.label ?? 'Project Settings';
+
   const renderContent = () => {
     switch (section) {
       case 'info':
@@ -184,7 +186,7 @@ export const ProjectSettingsPage = () => {
       <LinkDrawer className="settings-drawer" items={navItems} />
       <Box className="project-settings-content">
         <Box sx={{ mb: 3 }}>
-          <Typography variant="h5" fontWeight={700}>Project Settings</Typography>
+          <Typography variant="h5" fontWeight={700}>{pageTitle}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{project.name}</Typography>
         </Box>
         {renderContent()}
