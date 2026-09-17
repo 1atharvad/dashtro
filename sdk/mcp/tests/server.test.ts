@@ -197,7 +197,7 @@ describe("createServer tools", () => {
     });
 
     expect(calls[0].path).toBe(
-      "/api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/?depth=2",
+      "/api/sdk/projects/p1/workspace/staging/collection/posts/document/d1/?depth=2&raw=1",
     );
     expect(calls[0].apiKey).toBe("test-api-key");
   });

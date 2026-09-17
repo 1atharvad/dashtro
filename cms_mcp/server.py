@@ -848,12 +848,16 @@ async def get_document(
 ) -> str:
     """
     Fetch a document. minimal=True (default) skips reference inlining (depth=0).
+
+    RichText fields come back as their raw stored markdown/component tags
+    (e.g. `<HighlightedText>...</HighlightedText>`), not rendered HTML — this
+    is an authoring surface, unlike a deployed project's SDK reads.
     """
     pid = _resolve_project_id(project_id)
     return _dump(
         await _get(
             f"/projects/{pid}/workspace/{workspace_name}/collection/{collection_name}/document/{document_id}/",
-            params={"depth": 0 if minimal else depth},
+            params={"depth": 0 if minimal else depth, "raw": True},
         )
     )
 

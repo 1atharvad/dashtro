@@ -81,6 +81,40 @@ _SKIP_EXPORT = {"_id", "_schema_name"}
 _PRESERVE_IMPORT = {"_nested_schema", "_reference_schema"}
 _META_KEY = "_meta_data"
 
+
+def _filter_names(available: list[str], wanted: list[str] | None, label: str) -> list[str]:
+    """Restrict `available` to `wanted` (preserving `available`'s order), or
+    return it unchanged if no filter was given. Exits with an error if a
+    requested name doesn't exist, rather than silently exporting/importing
+    less than what was asked for."""
+    if not wanted:
+        return available
+    missing = sorted(set(wanted) - set(available))
+    if missing:
+        print(f"Error: {label} not found: {', '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
+    wanted_set = set(wanted)
+    return [n for n in available if n in wanted_set]
+
+
+def _require_single_collection_for_document_ids(
+    collections: list[str] | None, document_ids: list[str] | None
+) -> None:
+    """Document ids are only unique within a collection, so `--document-id`
+    must be paired with exactly one `--collection` — otherwise the same id
+    filter gets applied independently to every collection, potentially
+    exporting/importing the wrong document. Enforced here (not just in the
+    CLI's arg parsing) so it also holds for direct callers of the
+    cmd_documents_* functions."""
+    if document_ids and (not collections or len(collections) != 1):
+        print(
+            "Error: --document-id requires exactly one --collection "
+            "(document ids are only unique within a collection).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 # Mirrors routers/media.py's UPLOAD_DIR. Overridable via env var since this
 # script may run on a host machine where /app/uploads isn't the real mount
 # point (that path is a Docker-container convention, not a config.py setting).
@@ -137,18 +171,18 @@ def _put(base: str, path: str, payload: dict, api_key: str | None = None) -> dic
 # ─── Schema export ─────────────────────────────────────────────────────────────
 
 
-def cmd_export(project_id: str, backup_dir: Path) -> None:
+def cmd_export(project_id: str, backup_dir: Path, schema_names: list[str] | None = None) -> None:
     db = get_data_client()
     schemas_dir = backup_dir / "schemas"
     schemas_dir.mkdir(parents=True, exist_ok=True)
 
     schema = db.get_schema(project_id)
-    schema_names = get_schema_names(schema)
+    names = _filter_names(get_schema_names(schema), schema_names, "schema")
     categories = db.get_categories(project_id)  # {cat_id: {name: ...}}
     category_map = db.get_category_map(project_id)  # {schema_name: cat_id}
 
-    print(f"Exporting {len(schema_names)} schema(s) → {schemas_dir}/")
-    for name in schema_names:
+    print(f"Exporting {len(names)} schema(s) → {schemas_dir}/")
+    for name in names:
         result = schema_jsonify(schema, allowed_schema_name=name, sort_indices=True)
         raw_fields = result.get(name, [])
         fields = [{k: v for k, v in f.items() if k not in _SKIP_EXPORT} for f in raw_fields]
@@ -161,14 +195,14 @@ def cmd_export(project_id: str, backup_dir: Path) -> None:
         out_path.write_text(json.dumps({_META_KEY: meta, "fields": fields}, indent=2))
         print(f"  ✓ {name}" + (f"  (folder: {folder})" if folder else ""))
 
-    _export_collections(db, project_id, backup_dir)
+    _export_collections(db, project_id, backup_dir, schema_names=names)
     print("Done.")
 
 
 # ─── Schema import ─────────────────────────────────────────────────────────────
 
 
-def cmd_import(project_id: str, backup_dir: Path) -> None:
+def cmd_import(project_id: str, backup_dir: Path, schema_names: list[str] | None = None) -> None:
     db = get_data_client()
     schemas_dir = backup_dir / "schemas"
     if not schemas_dir.exists():
@@ -176,6 +210,9 @@ def cmd_import(project_id: str, backup_dir: Path) -> None:
         sys.exit(1)
 
     files = sorted(schemas_dir.glob("*.json"))
+    if schema_names:
+        wanted = _filter_names([f.stem for f in files], schema_names, "schema backup file")
+        files = [f for f in files if f.stem in wanted]
     if not files:
         print(f"No .json files in {schemas_dir}.", file=sys.stderr)
         sys.exit(1)
@@ -279,31 +316,41 @@ def cmd_import(project_id: str, backup_dir: Path) -> None:
                 category_map[schema_name] = cat_id
                 print(f"    → folder: {folder_name}")
 
-    _import_collections(db, project_id, backup_dir)
+    _import_collections(db, project_id, backup_dir, schema_names=schema_names)
     print("\nDone.")
 
 
 # ─── Collections (called by export/import automatically) ───────────────────────
 
 
-def _export_collections(db, project_id: str, backup_dir: Path) -> None:
+def _export_collections(
+    db, project_id: str, backup_dir: Path, schema_names: list[str] | None = None
+) -> None:
     collections = db.get_collections(project_id)
     exportable = [
         {"_collection_name": c["_collection_name"], "_schema_name": c["_schema_name"]}
         for c in sorted(collections.values(), key=lambda c: c.get("_index", 0))
     ]
+    if schema_names:
+        wanted = set(schema_names)
+        exportable = [c for c in exportable if c["_schema_name"] in wanted]
     out_path = backup_dir / "collections.json"
     out_path.write_text(json.dumps(exportable, indent=2))
     print(f"\nExported {len(exportable)} collection(s) → {out_path}")
 
 
-def _import_collections(db, project_id: str, backup_dir: Path) -> None:
+def _import_collections(
+    db, project_id: str, backup_dir: Path, schema_names: list[str] | None = None
+) -> None:
     in_path = backup_dir / "collections.json"
     if not in_path.exists():
         print("\n  (no collections.json, skipping)")
         return
 
     from_file: list[dict] = json.loads(in_path.read_text())
+    if schema_names:
+        wanted = set(schema_names)
+        from_file = [c for c in from_file if c["_schema_name"] in wanted]
     collections = db.get_collections(project_id)
     live = {c["_collection_name"]: {"id": cid, **c} for cid, c in collections.items()}
     valid_schemas = set(get_schema_names(db.get_schema(project_id)))
@@ -342,17 +389,21 @@ def _import_collections(db, project_id: str, backup_dir: Path) -> None:
 
 
 def cmd_export_http(
-    base_url: str, project_id: str, backup_dir: Path, api_key: str | None = None
+    base_url: str,
+    project_id: str,
+    backup_dir: Path,
+    api_key: str | None = None,
+    schema_names: list[str] | None = None,
 ) -> None:
     schemas_dir = backup_dir / "schemas"
     schemas_dir.mkdir(parents=True, exist_ok=True)
     meta = _get(base_url, f"/api/sdk/projects/{project_id}/schema/", api_key=api_key)
-    schema_names: list[str] = meta.get("_schema_names", [])
+    names = _filter_names(meta.get("_schema_names", []), schema_names, "schema")
     cat_data = _get(base_url, f"/api/sdk/projects/{project_id}/schema-categories/", api_key=api_key)
     categories = {c["id"]: c["name"] for c in cat_data.get("categories", [])}
     category_map: dict = cat_data.get("category_map", {})
-    print(f"Exporting {len(schema_names)} schema(s) → {schemas_dir}/")
-    for name in schema_names:
+    print(f"Exporting {len(names)} schema(s) → {schemas_dir}/")
+    for name in names:
         resp = _get(base_url, f"/api/sdk/projects/{project_id}/schema/{name}/", api_key=api_key)
         raw_fields = resp.get(name, []) if isinstance(resp, dict) else resp
         fields = [{k: v for k, v in f.items() if k not in _SKIP_EXPORT} for f in raw_fields]
@@ -369,19 +420,29 @@ def cmd_export_http(
         {"_collection_name": c["_collection_name"], "_schema_name": c["_schema_name"]}
         for c in cols.get("_schema_collections", [])
     ]
+    if schema_names:
+        wanted = set(names)
+        exportable = [c for c in exportable if c["_schema_name"] in wanted]
     (backup_dir / "collections.json").write_text(json.dumps(exportable, indent=2))
     print(f"\nExported {len(exportable)} collection(s) → collections.json")
     print("Done.")
 
 
 def cmd_import_http(
-    base_url: str, project_id: str, backup_dir: Path, api_key: str | None = None
+    base_url: str,
+    project_id: str,
+    backup_dir: Path,
+    api_key: str | None = None,
+    schema_names: list[str] | None = None,
 ) -> None:
     schemas_dir = backup_dir / "schemas"
     if not schemas_dir.exists():
         print(f"Error: {schemas_dir} not found.", file=sys.stderr)
         sys.exit(1)
     files = sorted(schemas_dir.glob("*.json"))
+    if schema_names:
+        wanted = _filter_names([f.stem for f in files], schema_names, "schema backup file")
+        files = [f for f in files if f.stem in wanted]
     cat_data = _get(base_url, f"/api/sdk/projects/{project_id}/schema-categories/", api_key=api_key)
     live_cats: list[dict] = cat_data.get("categories", [])
     cat_map: dict = cat_data.get("category_map", {})
@@ -483,6 +544,9 @@ def cmd_import_http(
     col_path = backup_dir / "collections.json"
     if col_path.exists():
         from_file = json.loads(col_path.read_text())
+        if schema_names:
+            wanted = set(schema_names)
+            from_file = [c for c in from_file if c["_schema_name"] in wanted]
         cols = _get(base_url, f"/api/sdk/projects/{project_id}/collections/", api_key=api_key)
         live_cols = {c["_collection_name"]: c for c in cols.get("_schema_collections", [])}
         print(f"\nImporting {len(from_file)} collection(s):")
@@ -533,12 +597,19 @@ def cmd_documents_export_http(
     workspace_name: str,
     backup_dir: Path,
     api_key: str | None = None,
+    collections: list[str] | None = None,
+    document_ids: list[str] | None = None,
 ) -> None:
+    _require_single_collection_for_document_ids(collections, document_ids)
     docs_dir = backup_dir / "documents"
     docs_dir.mkdir(parents=True, exist_ok=True)
     cols = _get(base_url, f"/api/sdk/projects/{project_id}/collections/", api_key=api_key)
+    all_cols = cols.get("_schema_collections", [])
+    if collections:
+        wanted = _filter_names([c["_collection_name"] for c in all_cols], collections, "collection")
+        all_cols = [c for c in all_cols if c["_collection_name"] in wanted]
     print(f"Exporting documents [{workspace_name}] via {base_url}")
-    for col in cols.get("_schema_collections", []):
+    for col in all_cols:
         coll_name = col["_collection_name"]
         coll_meta = _get(
             base_url,
@@ -546,6 +617,8 @@ def cmd_documents_export_http(
             api_key=api_key,
         )
         doc_ids = [d for d in coll_meta.get("_document_ids", []) if d]
+        if document_ids:
+            doc_ids = _filter_names(doc_ids, document_ids, f"document in '{coll_name}'")
         if not doc_ids:
             print(f"  - {coll_name}  (no documents)")
             continue
@@ -583,14 +656,21 @@ def cmd_documents_import_http(
     backup_dir: Path,
     merge: bool = False,
     api_key: str | None = None,
+    collections: list[str] | None = None,
+    document_ids: list[str] | None = None,
 ) -> None:
+    _require_single_collection_for_document_ids(collections, document_ids)
     docs_dir = backup_dir / "documents"
     if not docs_dir.exists():
         print(f"Error: {docs_dir} not found.", file=sys.stderr)
         sys.exit(1)
     mode = "merge" if merge else "replace"
     print(f"Importing documents [{workspace_name}] via {base_url}  ({mode} mode)")
-    for coll_dir in sorted(p for p in docs_dir.iterdir() if p.is_dir()):
+    coll_dirs = sorted(p for p in docs_dir.iterdir() if p.is_dir())
+    if collections:
+        wanted = _filter_names([p.name for p in coll_dirs], collections, "collection backup dir")
+        coll_dirs = [p for p in coll_dirs if p.name in wanted]
+    for coll_dir in coll_dirs:
         coll_name = coll_dir.name
         coll_meta = _get(
             base_url,
@@ -599,6 +679,11 @@ def cmd_documents_import_http(
         )
         existing_ids = set(coll_meta.get("_document_ids", []))
         doc_files = sorted(coll_dir.glob("*.json"))
+        if document_ids:
+            wanted_docs = _filter_names(
+                [f.stem for f in doc_files], document_ids, f"document backup in '{coll_name}'"
+            )
+            doc_files = [f for f in doc_files if f.stem in wanted_docs]
         print(f"\n  [{coll_name}]  {len(doc_files)} document(s)")
         for doc_file in doc_files:
             doc_id = doc_file.stem
@@ -643,18 +728,34 @@ def cmd_documents_import_http(
 _DOC_SKIP = {"_id", "_status"}
 
 
-async def _export_docs_async(db, project_id: str, workspace_name: str, docs_dir: Path) -> None:
-    collections = db.get_collections(project_id)
-    if not collections:
+async def _export_docs_async(
+    db,
+    project_id: str,
+    workspace_name: str,
+    docs_dir: Path,
+    collections: list[str] | None = None,
+    document_ids: list[str] | None = None,
+) -> None:
+    all_collections = db.get_collections(project_id)
+    if not all_collections:
         print("  (no collections found)")
         return
-    for collection_id, coll_data in collections.items():
+    items = list(all_collections.items())
+    if collections:
+        wanted = _filter_names(
+            [c.get("_collection_name", "") for _, c in items], collections, "collection"
+        )
+        items = [(cid, c) for cid, c in items if c.get("_collection_name", "") in wanted]
+
+    for collection_id, coll_data in items:
         coll_name = coll_data.get("_collection_name", "")
         if not coll_name:
             continue
         schema_name = coll_data.get("_schema_name", "")
         col_meta = await db.fetch_document(project_id, workspace_name, collection_id, "_meta_data")
         doc_ids = [d for d in (col_meta.get("_document_sequence", []) if col_meta else []) if d]
+        if document_ids:
+            doc_ids = _filter_names(doc_ids, document_ids, f"document in '{coll_name}'")
         if not doc_ids:
             print(f"  - {coll_name}  (no documents)")
             continue
@@ -679,22 +780,42 @@ async def _export_docs_async(db, project_id: str, workspace_name: str, docs_dir:
         print(f"  ✓ {coll_name}  ({len(doc_ids)} document(s))")
 
 
-def cmd_documents_export(project_id: str, workspace_name: str, backup_dir: Path) -> None:
+def cmd_documents_export(
+    project_id: str,
+    workspace_name: str,
+    backup_dir: Path,
+    collections: list[str] | None = None,
+    document_ids: list[str] | None = None,
+) -> None:
+    _require_single_collection_for_document_ids(collections, document_ids)
     db = get_data_client()
     docs_dir = backup_dir / "documents"
     docs_dir.mkdir(parents=True, exist_ok=True)
     print(f"Exporting documents [{workspace_name}] → {docs_dir}/")
-    asyncio.run(_export_docs_async(db, project_id, workspace_name, docs_dir))
+    asyncio.run(
+        _export_docs_async(db, project_id, workspace_name, docs_dir, collections, document_ids)
+    )
     print("Done.")
 
 
 async def _import_docs_async(
-    db, project_id: str, workspace_name: str, docs_dir: Path, merge: bool = False
+    db,
+    project_id: str,
+    workspace_name: str,
+    docs_dir: Path,
+    merge: bool = False,
+    collections: list[str] | None = None,
+    document_ids: list[str] | None = None,
 ) -> None:
-    collections = db.get_collections(project_id)
-    coll_by_name = {v["_collection_name"]: k for k, v in collections.items()}
+    all_collections = db.get_collections(project_id)
+    coll_by_name = {v["_collection_name"]: k for k, v in all_collections.items()}
 
-    for coll_dir in sorted(p for p in docs_dir.iterdir() if p.is_dir()):
+    coll_dirs = sorted(p for p in docs_dir.iterdir() if p.is_dir())
+    if collections:
+        wanted = _filter_names([p.name for p in coll_dirs], collections, "collection backup dir")
+        coll_dirs = [p for p in coll_dirs if p.name in wanted]
+
+    for coll_dir in coll_dirs:
         coll_name = coll_dir.name
         if coll_name not in coll_by_name:
             print(f"  ✗ '{coll_name}' not found in collections — skipping", file=sys.stderr)
@@ -706,6 +827,11 @@ async def _import_docs_async(
         statuses: dict = dict(meta.get("_document_statuses", {}) if meta else {})
 
         doc_files = sorted(coll_dir.glob("*.json"))
+        if document_ids:
+            wanted_docs = _filter_names(
+                [f.stem for f in doc_files], document_ids, f"document backup in '{coll_name}'"
+            )
+            doc_files = [f for f in doc_files if f.stem in wanted_docs]
         print(f"\n  [{coll_name}]  {len(doc_files)} document(s)")
 
         for doc_file in doc_files:
@@ -745,8 +871,14 @@ async def _import_docs_async(
 
 
 def cmd_documents_import(
-    project_id: str, workspace_name: str, backup_dir: Path, merge: bool = False
+    project_id: str,
+    workspace_name: str,
+    backup_dir: Path,
+    merge: bool = False,
+    collections: list[str] | None = None,
+    document_ids: list[str] | None = None,
 ) -> None:
+    _require_single_collection_for_document_ids(collections, document_ids)
     db = get_data_client()
     docs_dir = backup_dir / "documents"
     if not docs_dir.exists():
@@ -754,7 +886,17 @@ def cmd_documents_import(
         sys.exit(1)
     mode = "merge" if merge else "replace"
     print(f"Importing documents [{workspace_name}] from {docs_dir}/  ({mode} mode)")
-    asyncio.run(_import_docs_async(db, project_id, workspace_name, docs_dir, merge=merge))
+    asyncio.run(
+        _import_docs_async(
+            db,
+            project_id,
+            workspace_name,
+            docs_dir,
+            merge=merge,
+            collections=collections,
+            document_ids=document_ids,
+        )
+    )
     print("\nDone.")
 
 
@@ -898,6 +1040,12 @@ _DEFAULT_BACKUP_DIR = _BACKEND_DIR.parent / "backup"
 def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--project-id", required=True, help="Project ID")
     p.add_argument(
+        "--schema-name",
+        action="append",
+        default=None,
+        help="Limit to this schema (repeatable). Default: all schemas.",
+    )
+    p.add_argument(
         "--backup-dir", default=None, help=f"Backup root directory (default: {_DEFAULT_BACKUP_DIR})"
     )
     p.add_argument(
@@ -915,6 +1063,18 @@ def _add_args(p: argparse.ArgumentParser) -> None:
 def _add_doc_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--project-id", required=True, help="Project ID")
     p.add_argument("--workspace", default="production", help="Workspace name (default: production)")
+    p.add_argument(
+        "--collection",
+        action="append",
+        default=None,
+        help="Limit to this collection (repeatable). Default: all collections.",
+    )
+    p.add_argument(
+        "--document-id",
+        action="append",
+        default=None,
+        help="Limit to this document id (repeatable). Requires exactly one --collection.",
+    )
     p.add_argument(
         "--backup-dir", default=None, help=f"Backup root directory (default: {_DEFAULT_BACKUP_DIR})"
     )
@@ -991,6 +1151,15 @@ def main() -> None:
     base_url = args.base_url.rstrip("/") if args.base_url else None
     api_key = args.api_key or os.environ.get("CMS_API_KEY")
 
+    if args.noun == "documents" and getattr(args, "document_id", None):
+        if not args.collection or len(args.collection) != 1:
+            print(
+                "Error: --document-id requires exactly one --collection "
+                "(document ids are only unique within a collection).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     # chdir is only needed for direct DB mode (decouple needs .env, SQLite needs relative path)
     if not base_url:
         os.chdir(_BACKEND_DIR)
@@ -999,16 +1168,34 @@ def main() -> None:
         if args.verb == "export":
             if args.noun == "schema":
                 if base_url:
-                    cmd_export_http(base_url, args.project_id, backup_dir, api_key=api_key)
+                    cmd_export_http(
+                        base_url,
+                        args.project_id,
+                        backup_dir,
+                        api_key=api_key,
+                        schema_names=args.schema_name,
+                    )
                 else:
-                    cmd_export(args.project_id, backup_dir)
+                    cmd_export(args.project_id, backup_dir, schema_names=args.schema_name)
             elif args.noun == "documents":
                 if base_url:
                     cmd_documents_export_http(
-                        base_url, args.project_id, args.workspace, backup_dir, api_key=api_key
+                        base_url,
+                        args.project_id,
+                        args.workspace,
+                        backup_dir,
+                        api_key=api_key,
+                        collections=args.collection,
+                        document_ids=args.document_id,
                     )
                 else:
-                    cmd_documents_export(args.project_id, args.workspace, backup_dir)
+                    cmd_documents_export(
+                        args.project_id,
+                        args.workspace,
+                        backup_dir,
+                        collections=args.collection,
+                        document_ids=args.document_id,
+                    )
             elif args.noun == "media":
                 if base_url:
                     cmd_media_export_http(base_url, backup_dir, api_key=api_key)
@@ -1017,9 +1204,15 @@ def main() -> None:
         elif args.verb == "import":
             if args.noun == "schema":
                 if base_url:
-                    cmd_import_http(base_url, args.project_id, backup_dir, api_key=api_key)
+                    cmd_import_http(
+                        base_url,
+                        args.project_id,
+                        backup_dir,
+                        api_key=api_key,
+                        schema_names=args.schema_name,
+                    )
                 else:
-                    cmd_import(args.project_id, backup_dir)
+                    cmd_import(args.project_id, backup_dir, schema_names=args.schema_name)
             elif args.noun == "documents":
                 if base_url:
                     cmd_documents_import_http(
@@ -1029,10 +1222,17 @@ def main() -> None:
                         backup_dir,
                         merge=args.merge,
                         api_key=api_key,
+                        collections=args.collection,
+                        document_ids=args.document_id,
                     )
                 else:
                     cmd_documents_import(
-                        args.project_id, args.workspace, backup_dir, merge=args.merge
+                        args.project_id,
+                        args.workspace,
+                        backup_dir,
+                        merge=args.merge,
+                        collections=args.collection,
+                        document_ids=args.document_id,
                     )
             elif args.noun == "media":
                 if base_url:

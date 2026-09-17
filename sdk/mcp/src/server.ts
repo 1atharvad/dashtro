@@ -893,7 +893,11 @@ Conditional fields:
   server.registerTool(
     "get_document",
     {
-      description: "Fetch a document. minimal=true (default) skips reference inlining (depth=0).",
+      description:
+        "Fetch a document. minimal=true (default) skips reference inlining (depth=0). " +
+        "RichText fields come back as their raw stored markdown/component tags (e.g. " +
+        "`<HighlightedText>...</HighlightedText>`), not rendered HTML — this is an " +
+        "authoring surface, unlike a deployed project's SDK reads.",
       inputSchema: {
         project_id: z.string().optional(),
         workspace_name: z.string(),
@@ -907,7 +911,10 @@ Conditional fields:
       return dump(
         await get(
           `/projects/${resolveProjectId(project_id)}/workspace/${workspace_name}/collection/${collection_name}/document/${document_id}/`,
-          { depth: minimal ? 0 : depth },
+          // raw=1: MCP is an authoring/import-export surface, not the SDK a
+          // deployed project reads through — RichText fields must come back
+          // with their component tags untouched, not baked to static HTML.
+          { depth: minimal ? 0 : depth, raw: 1 },
         ),
       );
     }),

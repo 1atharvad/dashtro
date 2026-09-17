@@ -3,6 +3,7 @@ uvicorn[standard]>=0.30
 python-multipart>=0.0.9
 python-decouple>=3.8
 PyJWT>=2.8
+Markdown>=3.6
 # postgres
 psycopg2-binary>=2.9
 # lint/format

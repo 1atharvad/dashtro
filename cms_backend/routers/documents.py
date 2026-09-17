@@ -132,7 +132,11 @@ async def _resolve_one_reference(
             if bake_rich_text:
                 # Off the event loop — see bake_rich_text_fields' docstring.
                 resolved = await asyncio.to_thread(
-                    bake_rich_text_fields, resolved, project_id, ref_schema_fields, custom_components
+                    bake_rich_text_fields,
+                    resolved,
+                    project_id,
+                    ref_schema_fields,
+                    custom_components,
                 )
             resolved["_document_id"] = ref_id
             return resolved

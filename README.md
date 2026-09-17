@@ -148,6 +148,17 @@ dashtro import documents --project-id <id> --workspace <name>
 dashtro import media
 ```
 
+Scope to specific schemas, collections, or documents with `--schema-name`,
+`--collection`, and `--document-id` (each repeatable; `--document-id`
+requires exactly one `--collection`, since ids are only unique within a
+collection):
+
+```bash
+dashtro export schema --project-id <id> --schema-name BlogPost
+dashtro export documents --project-id <id> --workspace <name> --collection articles
+dashtro export documents --project-id <id> --workspace <name> --collection articles --document-id abc123
+```
+
 Run against a running container:
 
 ```bash
