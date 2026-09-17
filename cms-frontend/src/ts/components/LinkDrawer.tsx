@@ -46,7 +46,7 @@ export const LinkDrawer = ({
       {footer?.(isOpen)}
       <AsideBtn
         className='avatar-profile-btn'
-        icon={<Avatar src={user?.avatarUrl} sx={{ width: 28, height: 28, fontSize: '0.75rem' }}>{user?.initials}</Avatar>}
+        icon={<Avatar src={user?.avatarUrl} sx={{ width: 28, height: 28, fontSize: '0.75rem', bgcolor: 'var(--cms-gold)', color: 'var(--cms-chrome)' }}>{user?.initials}</Avatar>}
         label={user?.displayName ?? 'Profile'}
         onClick={() => navigate('/settings/profile/')}
       />

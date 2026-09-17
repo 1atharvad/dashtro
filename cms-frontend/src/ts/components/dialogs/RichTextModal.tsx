@@ -4,11 +4,11 @@ import { useParams } from 'react-router-dom';
 import MDEditor from '@uiw/react-md-editor';
 import {
   Box, Dialog, DialogActions, DialogContent,
-  DialogTitle, IconButton, Typography,
+  DialogTitle, IconButton, MenuItem, TextField, Typography,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Button } from 'advi-ui';
-import { Pencil, X } from 'lucide-react';
+import { Pencil, X, Eye } from 'lucide-react';
 import { useRichTextComponentsQuery } from '@ts/api/richTextComponents';
 import { RichTextWrapperRenderer } from '@ts/components/RichTextWrapper';
 
@@ -78,6 +78,8 @@ export const RichTextModal = ({
   wrapperKey?: string;
 }) => {
   const [open, setOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light');
   const { project_id } = useParams<{ project_id: string }>();
   const { data: customComponents = [], isLoading: componentsLoading } = useRichTextComponentsQuery(project_id ?? '');
 
@@ -89,9 +91,19 @@ export const RichTextModal = ({
       <label className="nested-variable-label" style={{ marginBottom: 8 }}>{label}</label>
       <Box className="rich-text-trigger" onClick={() => setOpen(true)}>
         {previewSource ? (
-          <Box className="rich-text-preview">
-            <RichTextWrapperRenderer wrapperKey={wrapperKey} source={previewSource} customComponents={customComponents} componentsLoading={componentsLoading} />
-          </Box>
+          <>
+            <Box className="rich-text-preview">
+              <RichTextWrapperRenderer wrapperKey={wrapperKey} source={previewSource} customComponents={customComponents} componentsLoading={componentsLoading} />
+            </Box>
+            <IconButton
+              size="small"
+              className="rich-text-preview-btn"
+              onClick={e => { e.stopPropagation(); setPreviewOpen(true); }}
+              aria-label="Preview rich text"
+            >
+              <Eye className="h-4 w-4" />
+            </IconButton>
+          </>
         ) : (
           <Typography variant="body2" color="text.disabled" className="rich-text-empty">
             No content — click to edit
@@ -101,10 +113,45 @@ export const RichTextModal = ({
           size="small"
           className="rich-text-edit-btn"
           onClick={e => { e.stopPropagation(); setOpen(true); }}
+          aria-label="Edit rich text"
         >
           <Pencil className="h-4 w-4" />
         </IconButton>
       </Box>
+
+      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle className="rich-text-dialog-title">
+          <Typography fontWeight={600}>Preview</Typography>
+          <Box className="rich-text-preview-header-actions">
+            <TextField
+              select
+              size="small"
+              className="rich-text-preview-mode-select"
+              value={previewMode}
+              onChange={e => setPreviewMode(e.target.value as 'light' | 'dark')}
+            >
+              <MenuItem value="light">Light</MenuItem>
+              <MenuItem value="dark">Dark</MenuItem>
+            </TextField>
+            <IconButton size="small" onClick={() => setPreviewOpen(false)} aria-label="Close preview">
+              <X className="h-4 w-4" />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent className="rich-text-preview-content">
+          <Box
+            className={`rich-text-preview-canvas${previewMode === 'dark' ? ' rich-text-preview-canvas--dark' : ''}`}
+            data-color-mode={previewMode}
+          >
+            <RichTextWrapperRenderer
+              wrapperKey={wrapperKey}
+              source={previewSource}
+              customComponents={customComponents}
+              componentsLoading={componentsLoading}
+            />
+          </Box>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={open}
@@ -115,7 +162,7 @@ export const RichTextModal = ({
       >
         <DialogTitle className="rich-text-dialog-title">
           <Typography fontWeight={600}>{label}</Typography>
-          <IconButton size="small" onClick={() => setOpen(false)}>
+          <IconButton size="small" onClick={() => setOpen(false)} aria-label="Close editor">
             <X className="h-4 w-4" />
           </IconButton>
         </DialogTitle>

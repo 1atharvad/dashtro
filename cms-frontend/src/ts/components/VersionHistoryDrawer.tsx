@@ -1,4 +1,5 @@
 import { Box, Drawer, IconButton, List, ListItem, ListItemButton, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { X } from 'lucide-react';
 import type { DocumentVersion } from '@ts/types/constants';
 
@@ -23,6 +24,9 @@ export const VersionHistoryDrawer = ({
   documentId?: string;
   restoreVersion: (documentId: string, versionId: string) => Promise<unknown>;
 }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+
   const handleRestore = async (versionId: string) => {
     if (!documentId) return;
     await restoreVersion(documentId, versionId);
@@ -34,7 +38,7 @@ export const VersionHistoryDrawer = ({
       PaperProps={{ sx: { width: 320, p: 0 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.5, py: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Typography variant="subtitle1" fontWeight={700}>Version History</Typography>
-        <IconButton size="small" onClick={onClose}>
+        <IconButton size="small" onClick={onClose} aria-label="Close version history">
           <X className="h-4 w-4" />
         </IconButton>
       </Box>
@@ -57,7 +61,7 @@ export const VersionHistoryDrawer = ({
                     {i === 0 ? 'Current version' : `Version ${v.version_number}`}
                   </Typography>
                   {i !== 0 && (
-                    <Typography variant="caption" color="primary" sx={{ fontWeight: 600 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: isDark ? 'var(--cms-text)' : 'var(--cms-chrome)' }}>
                       Restore
                     </Typography>
                   )}

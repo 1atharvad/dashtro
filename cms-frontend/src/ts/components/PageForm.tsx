@@ -1,4 +1,4 @@
-import { Box, Grid, Typography, useTheme } from "@mui/material";
+import { Box, Grid, Typography } from "@mui/material";
 import { Button } from 'advi-ui';
 import { Dispatch, FormEvent, ReactNode, SetStateAction, useRef, KeyboardEvent } from "react";
 
@@ -30,7 +30,6 @@ export const PageForm = ({
   hideSubmitOnMobile?: boolean
   children: ReactNode
 }) => {
-  const theme = useTheme();
   const formRef = useRef<HTMLFormElement>(null);
 
   const handleValidation = () => {
@@ -65,7 +64,7 @@ export const PageForm = ({
             {pageNavigation && <Typography
                 component="p" noWrap
                 className={`${formType}-component-nav-string`}
-                sx={{color: `rgba(${theme.palette.modeComplementColor}, 0.6)`}}>
+                sx={{ color: 'var(--cms-text-muted)' }}>
               {pageNavigation}
             </Typography>}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -79,14 +78,11 @@ export const PageForm = ({
         <Box className={`page-form-actions ${formType}-component-actions`} sx={{ display: 'flex', alignItems: 'center' }}>
           {extraButtons && extraButtons.map((btn, index) => <Box key={`button-${index}`}>{btn}</Box>)}
           {!readOnly && (
-            <Button
-              type="submit"
-              variant="default"
-              onClick={handleValidation}
-              className={hideSubmitOnMobile ? 'hidden md:inline-flex' : undefined}
-            >
-              {submitBtnText}
-            </Button>
+            <span className={hideSubmitOnMobile ? 'hidden md:inline-flex' : undefined}>
+              <Button type="submit" variant="default" onClick={handleValidation}>
+                {submitBtnText}
+              </Button>
+            </span>
           )}
           {afterSubmitButtons && afterSubmitButtons.map((btn, index) => <Box key={`after-${index}`}>{btn}</Box>)}
         </Box>

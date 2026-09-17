@@ -19,6 +19,7 @@ PRODUCTION = "production"
 
 
 def _resolve_collection(project_id: str, collection_name: str):
+    """Resolve a collection by name or schema name, with fallback for ambiguous schema names."""
     collections = db.get_collections(project_id)
     schema = db.get_schema(project_id)
     result = get_schema_for_collection(collection_name, collections, schema)
@@ -39,6 +40,7 @@ def _resolve_collection(project_id: str, collection_name: str):
 
 
 def _normalize(data):
+    """Normalize empty list edge case (['']) to empty list."""
     if isinstance(data, list) and data == [""]:
         return []
     return data
@@ -51,6 +53,7 @@ _SCALAR_TYPE_EMPTY: dict[str, Any] = {
 
 
 def _apply_schema_defaults(data: dict, schema_fields: list[dict]) -> dict:
+    """Apply schema-defined default values to missing/empty fields in document data."""
     for field in schema_fields:
         field_name = field["_name"]
         field_type = field.get("_type", "String")
@@ -221,6 +224,7 @@ async def _resolve_references(
 
 
 def _guard_production_write(workspace_name: str):
+    """Raise 403 if attempting to write to the production workspace."""
     if workspace_name == PRODUCTION:
         raise HTTPException(
             status_code=403,
@@ -229,6 +233,7 @@ def _guard_production_write(workspace_name: str):
 
 
 async def _get_meta(project_id: str, workspace_name: str, collection_id: str) -> tuple[list, dict]:
+    """Fetch collection metadata: document sequence and statuses."""
     meta = await db.fetch_document(project_id, workspace_name, collection_id, "_meta_data")
     document_ids = _normalize(meta["_document_sequence"]) if meta else []
     document_statuses: dict = (meta.get("_document_statuses") or {}) if meta else {}
@@ -240,6 +245,7 @@ async def _get_meta(project_id: str, workspace_name: str, collection_id: str) ->
 
 @router.get("/projects/{project_id}/workspace/{workspace_name}/collection/{collection_name}/")
 async def get_collection(project_id: str, workspace_name: str, collection_name: str):
+    """Get collection metadata, schema, document IDs, statuses, and display labels."""
     collection_id, schema_name, schema_data = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)
 
@@ -279,6 +285,7 @@ async def get_document(
     document_id: str,
     depth: int = 3,
 ):
+    """Get a single document with resolved references and absolutified media URLs."""
     collection_id, _, schema_fields = _resolve_collection(project_id, collection_name)
     document_ids, _ = await _get_meta(project_id, workspace_name, collection_id)
     if document_id not in document_ids:
@@ -323,6 +330,7 @@ async def create_document(
     body: dict[str, Any],
     request: Request,
 ):
+    """Create a new document in the collection with validation and default values."""
     _guard_production_write(workspace_name)
     collection_id, _, schema_data = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)
@@ -385,6 +393,7 @@ async def update_document(
     body: dict[str, Any],
     request: Request,
 ):
+    """Update a document, saving the previous state as a version."""
     _guard_production_write(workspace_name)
     collection_id, _, schema_data = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)
@@ -479,6 +488,7 @@ async def delete_document(
     document_id: str,
     request: Request,
 ):
+    """Delete a document and its metadata."""
     _guard_production_write(workspace_name)
     collection_id, _, _ = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)
@@ -526,6 +536,7 @@ async def push_collection_to_production(
     collection_name: str,
     request: Request,
 ):
+    """Push an entire collection from a workspace to production."""
     _guard_production_write(workspace_name)
     collection_id, _, _ = _resolve_collection(project_id, collection_name)
 
@@ -556,6 +567,7 @@ async def pull_collection_from_production(
     body: dict[str, Any],
     request: Request,
 ):
+    """Pull a collection from production into a workspace with conflict resolutions."""
     _guard_production_write(workspace_name)
     collection_id, _, _ = _resolve_collection(project_id, collection_name)
 
@@ -587,6 +599,7 @@ async def push_document_to_production(
     document_id: str,
     request: Request,
 ):
+    """Push a single document from a workspace to production."""
     _guard_production_write(workspace_name)
     collection_id, _, _ = _resolve_collection(project_id, collection_name)
 
@@ -619,6 +632,7 @@ async def pull_document_from_production(
     document_id: str,
     request: Request,
 ):
+    """Pull a single document from production into a workspace."""
     _guard_production_write(workspace_name)
     collection_id, _, _ = _resolve_collection(project_id, collection_name)
 
@@ -662,6 +676,7 @@ async def list_document_versions(
     collection_name: str,
     document_id: str,
 ):
+    """List all versions of a document."""
     collection_id, _, _ = _resolve_collection(project_id, collection_name)
     return db.get_document_versions(project_id, workspace_name, collection_id, document_id)
 
@@ -677,6 +692,7 @@ async def restore_document_version(
     version_id: str,
     request: Request,
 ):
+    """Restore a document to a previous version, saving current state as a new version."""
     _guard_production_write(workspace_name)
     collection_id, _, _ = _resolve_collection(project_id, collection_name)
 

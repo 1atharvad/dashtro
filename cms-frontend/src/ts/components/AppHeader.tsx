@@ -33,8 +33,11 @@ export const AppHeader = ({ actions, logoUrl }: AppHeaderProps) => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginLeft: 'auto' }}>
           {actions}
           <Tooltip title="Profile">
-            <IconButton onClick={() => navigate('/settings/profile/')} sx={{ p: 0.5 }}>
-              <Avatar src={user?.avatarUrl} sx={{ width: 32, height: 32, fontSize: '0.8rem' }}>
+            <IconButton onClick={() => navigate('/settings/profile/')} sx={{ p: 0.5 }} aria-label="Profile">
+              <Avatar
+                src={user?.avatarUrl}
+                sx={{ width: 32, height: 32, fontSize: '0.8rem', bgcolor: 'var(--cms-gold)', color: 'var(--cms-chrome)' }}
+              >
                 {user?.initials}
               </Avatar>
             </IconButton>

@@ -130,7 +130,6 @@
 
       &:hover { background: transparent !important; }
 
-      // The anchor tag rendered by asChild
       > a {
         display: flex;
         align-items: center;
@@ -195,8 +194,6 @@
     }
   }
 }
-
-// ── Document page ────────────────────────────────────────────────────────────
 
 .document {
   display: flex;
@@ -303,13 +300,6 @@
     display: block;
     width: 100%;
 
-    // advi-ui's Select (used only here, for ReferenceDocument fields) — its
-    // own defaults are sized/spaced for a compact inline control, not a full
-    // document field: 36px trigger height and a 4px label gap read as
-    // noticeably smaller than every other field in this form. It also needs
-    // its own display back — the block above is right for every other field
-    // type here, but it clobbers advi-ui's flex column layout (label above
-    // box), which is what actually lets a gap apply between the two at all.
     &.vi-select-container {
       display: flex;
       flex-direction: column;
@@ -320,7 +310,7 @@
       font-family: inherit;
       font-size: 0.875rem;
       font-weight: 600;
-      opacity: 0.6;
+      color: var(--cms-text-muted);
     }
 
     .vi-select-trigger {
@@ -338,7 +328,7 @@
   .nested-variable-label {
     font-size: 0.875rem;
     font-weight: 600;
-    opacity: 0.6;
+    color: var(--cms-text-muted);
     margin-bottom: 12px;
     display: block;
   }
@@ -374,9 +364,6 @@
   }
 }
 
-// ── Image field ──────────────────────────────────────────────────────────────
-
-// Shared wrapper used by Image, Link, File, and all compound fields
 .compound-field {
   width: 100%;
 
@@ -384,7 +371,7 @@
     display: block;
     font-size: 0.875rem;
     font-weight: 600;
-    opacity: 0.6;
+    color: var(--cms-text-muted);
     margin-bottom: 12px;
   }
 
@@ -408,7 +395,6 @@
   }
 }
 
-// Image-specific sub-elements
 .image-field {
   width: 100%;
 
@@ -450,7 +436,6 @@
     border-radius: 6px;
     overflow: hidden;
     border: 1px solid var(--cms-border);
-    // checkerboard for transparent images — tile color switches per mode
     background-color: colors.$white;
     background-image:
       linear-gradient(45deg, colors.$checker-light 25%, transparent 25%),
@@ -542,8 +527,6 @@
     }
   }
 }
-
-// ── Nested document array (accordion list) ───────────────────────────────────
 
 .nested-array-field {
   width: 100%;
@@ -714,7 +697,7 @@
   gap: 0;
 }
 
-.rich-text-preview {
+.rich-text-preview.rich-text-preview {
   flex: 1;
   overflow: hidden;
   pointer-events: none;
@@ -724,13 +707,13 @@
   line-clamp: 4;
   -webkit-box-orient: vertical;
 
-  // Strip backgrounds injected by @uiw/react-markdown-preview and react-live wrappers
   .wmde-markdown-var,
   .wmde-markdown,
   [class*="wmde-"],
   [data-color-mode] {
     background: none !important;
     background-color: transparent !important;
+    color: var(--cms-text) !important;
   }
 }
 
@@ -769,16 +752,14 @@
   opacity: 0.45;
 }
 
-// ── Rich text modal ──────────────────────────────────────────────────────────
-
 .rich-text-dialog-content {
   padding: 0;
   overflow: hidden;
 }
 
 .rich-text-body--flat {
-  border: none;
-  border-radius: 0;
+  border: 1px solid var(--cms-border);
+  border-radius: 8px;
 }
 
 .rich-text-dialog-actions {
@@ -806,24 +787,30 @@
   }
 }
 
-.rich-text-preview-canvas {
-  background: var(--cms-surface);
+.rich-text-preview-canvas.rich-text-preview-canvas {
+  color-scheme: light;
   border: 1px solid var(--cms-border);
   border-radius: 10px;
   padding: 32px 40px;
   min-height: 160px;
   font-size: 1rem;
   line-height: 1.7;
-  color: var(--cms-text);
+  background: #ffffff !important;
+  color: #1a1a1a !important;
 
-  h1, h2, h3, h4, h5, h6 {
-    margin: 0 0 12px;
-    line-height: 1.3;
-    color: var(--cms-text);
+  .wmde-markdown-var,
+  .wmde-markdown,
+  [class*="wmde-"] {
+    background: none !important;
   }
 
   p { margin: 0 0 12px; }
   p:last-child { margin-bottom: 0; }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0 0 12px;
+    line-height: 1.3;
+  }
 
   ul, ol {
     padding-left: 1.5em;
@@ -831,17 +818,34 @@
   }
 
   a {
-    color: var(--cms-text);
     text-decoration: underline;
     text-underline-offset: 3px;
   }
+}
 
-  .wmde-markdown-var,
-  .wmde-markdown,
-  [class*="wmde-"],
-  [data-color-mode] {
-    background: none !important;
-    background-color: transparent !important;
+.rich-text-preview-canvas.rich-text-preview-canvas--dark {
+  color-scheme: dark;
+  background: #000000 !important;
+  color: #f0f0f0 !important;
+}
+
+.rich-text-preview-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rich-text-preview-mode-select {
+  width: 90px;
+  flex-shrink: 0;
+
+  .MuiInputBase-root {
+    min-height: 0;
+  }
+
+  .MuiSelect-select {
+    padding: 4px 28px 4px 10px !important;
+    font-size: 0.8rem;
   }
 }
 
@@ -877,5 +881,10 @@
 
 .rich-text-edit-btn {
   flex-shrink: 0;
-  opacity: 0.5;
+  color: var(--cms-icon-muted);
+}
+
+.rich-text-preview-btn {
+  flex-shrink: 0;
+  color: var(--cms-icon-muted);
 }
