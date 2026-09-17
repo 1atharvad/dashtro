@@ -333,7 +333,13 @@ export const RtdbTreeNode = ({
               onChange={e => setKeyDraft(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') commitEditKey(); if (e.key === 'Escape') setEditingKey(false); }} />
           ) : (
-            <span className={`rtdb-node-key${keyEditable ? '' : ' rtdb-node-key--fixed'}`} onClick={startEditKey}>
+            <span
+              className={`rtdb-node-key${keyEditable ? '' : ' rtdb-node-key--fixed'}`}
+              onClick={startEditKey}
+              role="button"
+              tabIndex={keyEditable ? 0 : -1}
+              onKeyDown={e => { if (keyEditable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); startEditKey(); } }}
+            >
               {isList ? `[${nodeKey}]` : nodeKey}
             </span>
           )}
@@ -355,7 +361,13 @@ export const RtdbTreeNode = ({
               <ValueEntryFields type={type} draft={draft} setDraft={setDraft} onSubmit={commitEditValue} error={isValueInvalid} />
             </Box>
           ) : (
-            <span className={`rtdb-node-value ${valueTypeClass(value)}`} onClick={startEditValue}>{displayValue(value)}</span>
+            <span
+              className={`rtdb-node-value ${valueTypeClass(value)}`}
+              onClick={startEditValue}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEditValue(); } }}
+            >{displayValue(value)}</span>
           )
         )}
 
