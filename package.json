@@ -1,6 +1,6 @@
 {
   "name": "dashtro",
-  "version": "0.26.0",
+  "version": "0.26.1",
   "private": true,
   "description": "Self-hosted headless CMS platform with a unified Studio for managing content, collections, and documents across multiple projects.",
   "keywords": [
