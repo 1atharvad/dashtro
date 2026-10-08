@@ -1,6 +1,7 @@
 # Dashtro
 
 [![CI](https://github.com/1atharvad/dashtro/actions/workflows/build-image.yml/badge.svg)](https://github.com/1atharvad/dashtro/actions/workflows/build-image.yml)
+[![Version](https://img.shields.io/github/package-json/v/1atharvad/dashtro?label=version)](CHANGELOG.md)
 [![Docker image](https://img.shields.io/docker/v/atharvad216/dashtro?label=docker.io%2Fatharvad216%2Fdashtro&logo=docker&logoColor=white)](https://hub.docker.com/r/atharvad216/dashtro)
 [![npm @dashtro/client](https://img.shields.io/npm/v/%40dashtro%2Fclient?label=%40dashtro%2Fclient)](https://www.npmjs.com/package/@dashtro/client)
 [![npm @dashtro/mcp](https://img.shields.io/npm/v/%40dashtro%2Fmcp?label=%40dashtro%2Fmcp)](https://www.npmjs.com/package/@dashtro/mcp)

@@ -11,6 +11,8 @@ COPY cms-frontend/package.json cms-frontend/package-lock.json ./
 # `npm ci` enforces strict peer resolution where `npm install` doesn't.
 RUN npm ci --legacy-peer-deps
 COPY cms-frontend/ .
+ARG APP_VERSION=dev
+ENV VITE_APP_VERSION=$APP_VERSION
 RUN npm run build
 
 # Renders the password-reset email (a React Email component) to the static

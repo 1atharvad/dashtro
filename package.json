@@ -1,6 +1,6 @@
 {
   "name": "dashtro",
-  "version": "0.23.1",
+  "version": "0.25.0",
   "private": true,
   "description": "Self-hosted headless CMS platform with a unified Studio for managing content, collections, and documents across multiple projects.",
   "keywords": [
@@ -35,6 +35,8 @@
     "test:mcp": "npm --prefix sdk/mcp test",
     "test:live": "pytest -m live cms_backend/tests/test_live_instance.py cms_mcp/tests/test_live_mcp.py",
     "precommit": "npm run lint && npm run test && npm run precommit:changesets",
+    "changeset": "npx --yes @changesets/cli@2.31.0 add",
+    "version-packages": "npx --yes @changesets/cli@2.31.0 version",
     "precommit:changesets": "node scripts/check-changesets.mjs",
     "ci": "act -j lint -j build-and-push -j merge-manifest --secret-file .secrets",
     "ci:lint": "act -j lint",

@@ -14,6 +14,9 @@ import { SettingsAuditLog } from '@ts/components/settings/SettingsAuditLog';
 import '@/scss/DocCollection.scss';
 import '@/scss/Settings.scss';
 
+/** App version baked in at image build time from the root package.json ("dev" locally). */
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
+
 export const SettingsPage = () => {
   const navigate = useNavigate();
   const { setting_type } = useParams();
@@ -48,14 +51,17 @@ export const SettingsPage = () => {
         items={navItems}
 
         footer={(isOpen) => isOpen ? (
-          <AsideText
-            label="Dark Mode"
-            icon={<Switch
-              labelPosition="right"
-              checked={checked}
-              onChange={toggleColorMode}
-            />}
-          />
+          <>
+            <AsideText
+              label="Dark Mode"
+              icon={<Switch
+                labelPosition="right"
+                checked={checked}
+                onChange={toggleColorMode}
+              />}
+            />
+            <AsideText label={`Version ${APP_VERSION}`} />
+          </>
         ) : null}
       />
       <Box className="settings-content">
