@@ -1,6 +1,6 @@
 {
   "name": "@dashtro/client",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "JS/TS client SDK for the Dashtro CMS API",
   "license": "MIT",
   "author": "Atharva Devasthali",
