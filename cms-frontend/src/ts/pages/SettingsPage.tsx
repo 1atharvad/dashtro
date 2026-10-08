@@ -50,8 +50,9 @@ export const SettingsPage = () => {
         className="settings-drawer"
         items={navItems}
 
-        footer={(isOpen) => isOpen ? (
+        footer={() => (
           <>
+            <AsideText label={`Version ${APP_VERSION}`} />
             <AsideText
               label="Dark Mode"
               icon={<Switch
@@ -60,9 +61,8 @@ export const SettingsPage = () => {
                 onChange={toggleColorMode}
               />}
             />
-            <AsideText label={`Version ${APP_VERSION}`} />
           </>
-        ) : null}
+        )}
       />
       <Box className="settings-content">
         {renderContent()}
