@@ -13,7 +13,7 @@ from api.utils.schema import (
     next_schema_index,
     schema_jsonify,
 )
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from models.collection import SchemaCollectionIn
 from models.project import ProjectIn, WorkspaceIn
@@ -651,15 +651,19 @@ def download_media_file(
 
 
 @router.put("/media/files/{filename}")
-def upload_media_file(
+async def upload_media_file(
     filename: str,
-    body: bytes,
     request: Request,
+    file: UploadFile = File(...),
     key_info: dict = Depends(require_api_key("write")),
 ):
-    """Upload a media file."""
+    """Upload a media file (multipart `file` field) under an exact filename."""
     import os
     from pathlib import Path
+
+    if "/" in filename or "\\" in filename or filename in (".", ".."):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    body = await file.read()
 
     upload_dir = Path(os.environ.get("CMS_UPLOAD_DIR", "/app/uploads"))
     upload_dir.mkdir(parents=True, exist_ok=True)

@@ -688,14 +688,12 @@ def cmd_documents_import_http(
         for doc_file in doc_files:
             doc_id = doc_file.stem
             doc_data = json.loads(doc_file.read_text())
-            doc_meta = doc_data.pop(_META_KEY, None)
+            doc_data.pop(_META_KEY, None)
             doc_data.pop("_id", None)
-            # New-format files carry status in _meta_data; legacy files still
-            # have a flat _status left in doc_data — either way it ends up set.
-            if doc_meta is not None:
-                doc_data["_status"] = doc_meta.get("status", "draft")
-            else:
-                doc_data.setdefault("_status", "draft")
+            # The API treats _status as system-owned and rejects it in the body,
+            # so it is dropped here (legacy flat files included); the server
+            # assigns it.
+            doc_data.pop("_status", None)
             if doc_id in existing_ids:
                 try:
                     # HTTP PUT always merges (backend only updates keys present in body)
