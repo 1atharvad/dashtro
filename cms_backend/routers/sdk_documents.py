@@ -19,6 +19,7 @@ from routers.documents import (
     _apply_schema_defaults,
     _get_meta,
     _guard_production_write,
+    _relativize_media,
     _resolve_collection,
     _resolve_references,
 )
@@ -159,7 +160,7 @@ async def create_document(
     collection_id, _, schema_data = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)
 
-    field_data = {k: v for k, v in body.items() if k != "_id"}
+    field_data = _relativize_media({k: v for k, v in body.items() if k != "_id"})
     try:
         validate_document_data(
             field_data, schema_data or [], schema_jsonify(db.get_schema(project_id))
@@ -243,7 +244,7 @@ async def update_document(
 
     current_status = existing.get("_status", "draft")
 
-    for key, value in body.items():
+    for key, value in _relativize_media(body).items():
         existing[key] = value
     existing["_id"] = document_id
 

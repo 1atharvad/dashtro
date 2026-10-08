@@ -1,4 +1,5 @@
 import asyncio
+import re
 import uuid
 from typing import Any
 
@@ -80,6 +81,22 @@ def _absolutify_media(obj: any, base_url: str) -> any:
         return {k: _absolutify_media(v, base_url) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_absolutify_media(i, base_url) for i in obj]
+    return obj
+
+
+_ABSOLUTE_MEDIA_RE = re.compile(r"^https?://[^/\s]+(/api/(?:cms|sdk)/media/files/\S+)$")
+
+
+def _relativize_media(obj: any) -> any:
+    """Recursively strip scheme+host from absolute media URLs so documents are stored with
+    the relative /api/<cms|sdk>/media/files/... path (reads re-absolutify it per request)."""
+    if isinstance(obj, str):
+        match = _ABSOLUTE_MEDIA_RE.match(obj)
+        return match.group(1) if match else obj
+    if isinstance(obj, dict):
+        return {k: _relativize_media(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_relativize_media(i) for i in obj]
     return obj
 
 
@@ -335,7 +352,7 @@ async def create_document(
     collection_id, _, schema_data = _resolve_collection(project_id, collection_name)
     document_ids, document_statuses = await _get_meta(project_id, workspace_name, collection_id)
 
-    field_data = {k: v for k, v in body.items() if k != "_id"}
+    field_data = _relativize_media({k: v for k, v in body.items() if k != "_id"})
     try:
         validate_document_data(
             field_data, schema_data or [], schema_jsonify(db.get_schema(project_id))
@@ -426,7 +443,7 @@ async def update_document(
 
     current_status = existing.get("_status", "draft")
 
-    for key, value in body.items():
+    for key, value in _relativize_media(body).items():
         existing[key] = value
     existing["_id"] = document_id
 
