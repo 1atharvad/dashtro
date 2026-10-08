@@ -91,4 +91,5 @@ if STATIC_DIR.is_dir():
     # it never shadows the API routers above.
     @app.get("/{full_path:path}")
     async def spa_fallback(full_path: str):
-        return FileResponse(STATIC_DIR / "index.html")
+        """Serve the SPA shell uncached so it always picks up the latest build's hashed asset filenames."""
+        return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
