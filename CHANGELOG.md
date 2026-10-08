@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.26.1
+
+### Patch Changes
+
+- 3489a23: Settings sidebar: show the version above the Dark Mode toggle instead of between the toggle and the profile row, and keep the Dark Mode and Version rows mounted when the sidebar is collapsed so their labels animate smoothly instead of popping in.
+
 ## 0.26.0
 
 ### Minor Changes
