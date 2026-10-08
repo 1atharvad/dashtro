@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.26.0
+
+### Minor Changes
+
+- 3afae55: Show the app version in the Settings sidebar, now driven by Changesets (root `package.json` and the `dashtro` PyPI package are kept in lockstep). Fix backup import over HTTP: document bodies no longer include the system-owned `_status` key, and the SDK media upload route now accepts the multipart upload the CLI sends.
+
 All notable changes to **Dashtro** are documented here. Versions follow
 [Semantic Versioning](https://semver.org/): minor for new features, patch for
 fixes/chores/docs — pre-1.0, so breaking changes may still land as minor.
@@ -48,7 +54,7 @@ fixes/chores/docs — pre-1.0, so breaking changes may still land as minor.
 - Sets up publishing for both SDKs: `sdk/js` (`@dashtro/client`) gets
   Changesets (`.changeset/`, `changeset`/`version-packages`/`release`
   scripts) for version bumps and changelog generation; `sdk/scripts/
-  sync-python-version.mjs` mirrors each bump into `sdk/python`'s
+sync-python-version.mjs` mirrors each bump into `sdk/python`'s
   `pyproject.toml` and `CHANGELOG.md` so both SDKs stay in lockstep.
 - Adds a `sdk-release` job to `build-image.yml`: on a pending changeset, it
   versions, publishes `@dashtro/client` to npm and `dashtro-client` to PyPI
