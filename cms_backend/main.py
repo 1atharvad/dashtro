@@ -26,6 +26,7 @@ from routers import (
     sdk_documents,
     sdk_realtime_db,
     sdk_schema,
+    stats,
 )
 
 # The Postgres clients hold one connection per thread (see PostgresClient), and
@@ -98,6 +99,10 @@ app.include_router(realtime_db.router, prefix="/api/cms")
 app.include_router(sdk_documents.router, prefix="/api/sdk")
 app.include_router(sdk_realtime_db.router, prefix="/api/sdk")
 app.include_router(sdk_schema.router, prefix="/api/sdk")
+
+# Public server status for the /stats page — outside /api/cms/ so the auth
+# middleware never touches it, and no API key is required either.
+app.include_router(stats.router, prefix="/api")
 
 # Built frontend (cms-frontend/dist), copied to /app/static by the combined
 # Dockerfile at repo root. Absent in local/dev-container runs where the

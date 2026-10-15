@@ -27,6 +27,7 @@ const ProjectPage = lazy(() => import('@ts/pages/ProjectPage').then(m => ({ defa
 const ProjectSettingsPage = lazy(() => import('@ts/pages/ProjectSettingsPage').then(m => ({ default: m.ProjectSettingsPage })));
 const RealtimeDatabase = lazy(() => import('@ts/pages/RealtimeDatabase').then(m => ({ default: m.RealtimeDatabase })));
 const SettingsPage = lazy(() => import('@ts/pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const StatsPage = lazy(() => import('@ts/pages/StatsPage').then(m => ({ default: m.StatsPage })));
 
 const PageFallback = () => (
   <>
@@ -63,6 +64,7 @@ export const App = () => {
               <Route path="/reset-password/" element={<ResetPassword />} />
 
               <Route path="/" element={<MarketingPage />} />
+              <Route path="/stats/" element={<StatsPage />} />
               <Route path="/projects/" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
               <Route path="/settings/:setting_type/" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 

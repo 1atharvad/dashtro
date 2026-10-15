@@ -11,3 +11,7 @@ CORS_ORIGINS = config("CORS_ORIGINS", default="http://localhost:7312").split(","
 # container-internal address (e.g. host.docker.internal).
 # Example: CMS_PUBLIC_URL=http://localhost:7312
 CMS_PUBLIC_URL = config("CMS_PUBLIC_URL", default="")
+
+# Release version reported on the public /api/stats/ page. Baked into the image
+# at build time (Dockerfile.dashtro's APP_VERSION build arg); "dev" outside it.
+APP_VERSION = config("APP_VERSION", default="dev")
