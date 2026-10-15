@@ -393,6 +393,11 @@ def _check_rate_limit(key: str) -> None:
     bucket["last_refill"] = now
 
 
+# A real <script tag, or an on*= event-handler attribute inside a tag. Deliberately not
+# a substring match on "script": that rejected TypeScript, JavaScript, "description", etc.
+_XSS_PATTERN = re.compile(r"<\s*script\b|<[^>]*\son[a-z]+\s*=", re.IGNORECASE)
+
+
 def _sanitize_input(obj: Any, path: str = "") -> Any:
     """Sanitize input: trim strings, limit size, reject suspicious patterns."""
     if obj is None:
@@ -401,11 +406,7 @@ def _sanitize_input(obj: Any, path: str = "") -> Any:
         trimmed = obj.strip()
         if len(trimmed) > 10000:
             raise ValueError(f"{path}: string too long (max 10000 chars)")
-        if (
-            "<" in trimmed
-            and ">" in trimmed
-            and ("script" in trimmed.lower() or "onerror" in trimmed.lower())
-        ):
+        if _XSS_PATTERN.search(trimmed):
             raise ValueError(f"{path}: suspicious content rejected")
         return trimmed
     if isinstance(obj, bool):

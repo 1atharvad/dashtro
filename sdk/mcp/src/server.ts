@@ -291,15 +291,20 @@ function checkRateLimit(key: string): void {
   rateLimitBuckets.set(key, bucket);
 }
 
+/**
+ * A real <script tag, or an on*= event-handler attribute inside a tag (matches the Python
+ * server). Deliberately not a substring match on "script": that rejected TypeScript,
+ * JavaScript, "description", etc.
+ */
+const XSS_PATTERN = /<\s*script\b|<[^>]*\son[a-z]+\s*=/i;
+
 /** Sanitize input: trim strings, limit size, reject suspicious patterns. */
-function sanitizeInput(obj: unknown, path = ""): unknown {
+export function sanitizeInput(obj: unknown, path = ""): unknown {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {
     const trimmed = obj.trim();
     if (trimmed.length > 10000) throw new Error(`${path}: string too long (max 10000 chars)`);
-    // Case-insensitive XSS detection (match Python behavior)
-    const lower = trimmed.toLowerCase();
-    if (trimmed.includes("<") && trimmed.includes(">") && (lower.includes("script") || lower.includes("onerror"))) {
+    if (XSS_PATTERN.test(trimmed)) {
       throw new Error(`${path}: suspicious content rejected`);
     }
     return trimmed;

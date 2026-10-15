@@ -532,3 +532,21 @@ def test_create_schema_field_display_name_uniqueness(mcp_env):
         run(server.create_schema_field(pid, "Test", "field_two", "String", display_name=True))
     assert exc.value.response.status_code == 400
     assert "already has a display_name field" in str(exc.value)
+
+
+def test_sanitize_allows_script_substrings_in_prose_and_tags():
+    """Words containing 'script' stay valid, even alongside angle-bracket component tags."""
+    text = "<HighlightedText>TypeScript and JavaScript description</HighlightedText> subscriptions"
+    assert server._sanitize_input(text) == text
+
+
+def test_sanitize_rejects_script_tags_and_event_handlers():
+    """A real <script> tag or an on*= handler attribute is still rejected."""
+    for payload in (
+        "<script>alert(1)</script>",
+        "<SCRIPT src=x>",
+        '<img src=x onerror="alert(1)">',
+        "<div onClick = 'x()'>hi</div>",
+    ):
+        with pytest.raises(ValueError, match="suspicious content rejected"):
+            server._sanitize_input(payload)
