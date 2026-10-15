@@ -45,6 +45,26 @@ There is no `ReferenceCollection` type. Model many-to-many relationships with a 
 - **Timestamps as `Number` (unix) or `DateTime`** — pick one and be consistent within a schema
   - Avoid storing timestamps as `String`; harder for queries/sorting
 
+### Reuse One Schema Across Many Documents — Don't Clone Schemas Per Instance
+"Different content sections/items need different schemas" does **not** mean one schema per
+instance of similar content. If several pieces of content share the same shape (same fields,
+same types), they share **one** schema — create multiple *documents* against it, not multiple
+near-identical schemas.
+- **Wrong**: a landing page has 5 sections that are each just `eyebrow` + `title` + `body` → do
+  not create `Organize`, `Publish`, `Flexible`, `Trust`, `Ownership` as five separate schemas.
+  That's schema duplication, not modeling — five copies of the same shape drift out of sync the
+  first time one gets an extra field.
+- **Right**: one shared schema (e.g. `Section`) with those 3 fields, one collection (e.g.
+  `Sections`), and 5 documents in it — one per section. A parent document (e.g. `LandingPage`)
+  references each specific document by id via a `ReferenceDocument` field.
+- Only split out a distinct schema when the shape actually differs (extra/different fields) —
+  e.g. a `Contact` section with `links`/`dev_note` or an `Agent` section with a `conversation`
+  list genuinely need their own schema; a plain `eyebrow`/`title`/`body` section does not.
+- **Naming matters** precisely because a schema is now shared across dissimilar-sounding
+  content: name it after the shape/role it plays (`Section`, `Testimonial`, `FaqItem`), not after
+  any one instance's specific content — a schema named after a single section stops making sense
+  the moment a second, differently-named section reuses it.
+
 ### Schema Boundaries (When to Split)
 **Split into separate schemas if:**
 - The data is reused across multiple contexts (e.g., Media used by Post, Product, Event → separate Media schema)
