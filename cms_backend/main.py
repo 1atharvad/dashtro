@@ -1,5 +1,9 @@
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anyio.to_thread
 from api.middleware.auth_middleware import CMSAuthMiddleware
 from config import CORS_ORIGINS
 from fastapi import FastAPI, Request
@@ -24,7 +28,23 @@ from routers import (
     sdk_schema,
 )
 
-app = FastAPI(title="DashTro CMS API", redirect_slashes=False)
+# The Postgres clients hold one connection per thread (see PostgresClient), and
+# FastAPI's sync-endpoint threadpool plus asyncio.to_thread would otherwise spawn
+# up to ~40 threads each, exhausting Postgres's max_connections.
+_MAX_WORKER_THREADS = 8
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Cap the threadpools that sync endpoints and asyncio.to_thread run on at startup."""
+    anyio.to_thread.current_default_thread_limiter().total_tokens = _MAX_WORKER_THREADS
+    asyncio.get_running_loop().set_default_executor(
+        ThreadPoolExecutor(max_workers=_MAX_WORKER_THREADS)
+    )
+    yield
+
+
+app = FastAPI(title="DashTro CMS API", redirect_slashes=False, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
