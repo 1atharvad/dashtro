@@ -41,3 +41,6 @@ backup/
 # Added by code-review-graph
 .code-review-graph/
 .mcp.json
+
+# Local dev SQLite database
+db.sqlite3
