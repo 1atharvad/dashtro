@@ -1,5 +1,12 @@
 # @dashtro/mcp
 
+## 0.4.2
+
+### Patch Changes
+
+- b86d870: The input sanitizer no longer rejects any string that merely contains "script" next to `<` and `>`, which blocked ordinary content such as TypeScript, JavaScript, "description" or "subscriptions" inside RichText component tags. It now rejects only a real `<script` tag or an `on*=` event-handler attribute inside a tag, matching the Python `cms_mcp` server.
+- 7a34f80: The `schema-design-patterns` skill gains a rule to reuse one schema across many documents of the same shape instead of cloning a schema per content instance, and to name shared schemas after their role (`Section`, `Testimonial`) rather than any one instance's content.
+
 ## 0.4.1
 
 ### Patch Changes
