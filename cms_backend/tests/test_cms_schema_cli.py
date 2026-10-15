@@ -63,7 +63,7 @@ def db(cms_schema):
 
 
 def _seed_post_schema(db, project_id: str) -> str:
-    """A 'Post' schema with a single 'title' field, plus a 'posts' collection. Returns the collection id."""
+    """A 'Post' schema with a single 'title' field, plus a 'Posts' collection. Returns the collection id."""
     db.upsert_project(project_id, {"name": project_id})
     db.upsert_schema_field(
         project_id,
@@ -84,11 +84,11 @@ def _seed_post_schema(db, project_id: str) -> str:
             "_schema_name": "Post",
         },
     )
-    collection_id = "coll-posts"
+    collection_id = "coll-Posts"
     db.upsert_collection(
         project_id,
         collection_id,
-        {"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+        {"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
     )
     db.upsert_document(
         project_id, PRODUCTION, collection_id, "_meta_data", {"_document_sequence": []}
@@ -99,7 +99,7 @@ def _seed_post_schema(db, project_id: str) -> str:
 def test_schema_export_import_round_trip(cms_schema, db, tmp_path):
     """
     Baseline round-trip for `dashtro export schema` / `dashtro import schema`
-    in direct-DB mode: export the seeded 'Post' schema + 'posts' collection
+    in direct-DB mode: export the seeded 'Post' schema + 'Posts' collection
     to a backup dir, then import that backup into a second, completely
     empty project.
 
@@ -126,7 +126,7 @@ def test_schema_export_import_round_trip(cms_schema, db, tmp_path):
     assert get_schema_names(db.get_schema("proj-dst")) == ["Post"]
     collections = db.get_collections("proj-dst")
     assert {c["_collection_name"]: c["_schema_name"] for c in collections.values()} == {
-        "posts": "Post"
+        "Posts": "Post"
     }
 
 
@@ -213,14 +213,14 @@ def test_documents_export_import_round_trip(cms_schema, db, tmp_path):
     cms_schema.cmd_export("proj-src", backup_dir)
     cms_schema.cmd_documents_export("proj-src", PRODUCTION, backup_dir)
 
-    assert (backup_dir / "documents" / "posts" / "doc-1.json").exists()
+    assert (backup_dir / "documents" / "Posts" / "doc-1.json").exists()
 
     _seed_post_schema(db, "proj-dst")
     cms_schema.cmd_import("proj-dst", backup_dir)
     cms_schema.cmd_documents_import("proj-dst", PRODUCTION, backup_dir)
 
     coll_id_dst = next(
-        cid for cid, c in db.get_collections("proj-dst").items() if c["_collection_name"] == "posts"
+        cid for cid, c in db.get_collections("proj-dst").items() if c["_collection_name"] == "Posts"
     )
     import asyncio
 

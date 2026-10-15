@@ -34,7 +34,7 @@ def _create_api_key(client, auth_headers, **overrides):
 
 def _seed_post_schema_and_collection(client, auth_headers, project_id, extra_fields=()):
     """Create a 'Post' schema (title: required String) plus any extra_fields
-    (each a dict of schema-field kwargs), and a 'posts' collection backed by
+    (each a dict of schema-field kwargs), and a 'Posts' collection backed by
     it. Returns nothing — callers use fixed names."""
     client.post(
         f"/api/cms/projects/{project_id}/schema/",
@@ -55,7 +55,7 @@ def _seed_post_schema_and_collection(client, auth_headers, project_id, extra_fie
         assert resp.status_code == 201, resp.text
     coll = client.post(
         f"/api/cms/projects/{project_id}/collections/",
-        json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+        json={"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
         headers=auth_headers,
     )
     assert coll.status_code == 201, coll.text
@@ -80,19 +80,19 @@ def _setup(client, auth_headers, extra_fields=()):
     return project_id, {"X-API-Key": api_key}
 
 
-DOC_URL = "/api/sdk/projects/{project_id}/workspace/staging/collection/posts/"
+DOC_URL = "/api/sdk/projects/{project_id}/workspace/staging/collection/Posts/"
 DOC_ITEM_URL = (
-    "/api/sdk/projects/{project_id}/workspace/staging/collection/posts/document/{document_id}/"
+    "/api/sdk/projects/{project_id}/workspace/staging/collection/Posts/document/{document_id}/"
 )
-STATUS_URL = "/api/sdk/projects/{project_id}/workspace/staging/collection/posts/document/{document_id}/status/"
+STATUS_URL = "/api/sdk/projects/{project_id}/workspace/staging/collection/Posts/document/{document_id}/status/"
 # Push-to-production and reading a workspace's raw document state are
 # JWT-only (routers/documents.py) — there's no /api/sdk equivalent, so these
 # use auth_headers, not the API-key headers _setup returns.
-CMS_DOC_ITEM_URL = "/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/posts/document/{document_id}/"
-CMS_COLLECTION_URL = "/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/posts/"
-PUSH_DOC_URL = "/api/cms/projects/{project_id}/workspace/staging/collection/posts/document/{document_id}/push-to-prod/"
+CMS_DOC_ITEM_URL = "/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/Posts/document/{document_id}/"
+CMS_COLLECTION_URL = "/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/Posts/"
+PUSH_DOC_URL = "/api/cms/projects/{project_id}/workspace/staging/collection/Posts/document/{document_id}/push-to-prod/"
 PUSH_COLLECTION_URL = (
-    "/api/cms/projects/{project_id}/workspace/staging/collection/posts/push-to-prod/"
+    "/api/cms/projects/{project_id}/workspace/staging/collection/Posts/push-to-prod/"
 )
 
 
@@ -481,7 +481,7 @@ def test_cms_create_document_rejects_unknown_field(client, auth_headers):
     _create_workspace(client, auth_headers, project_id)
 
     resp = client.post(
-        f"/api/cms/projects/{project_id}/workspace/staging/collection/posts/",
+        f"/api/cms/projects/{project_id}/workspace/staging/collection/Posts/",
         json={"title": "Hi", "bogus_field": "x"},
         headers=auth_headers,
     )
@@ -494,7 +494,7 @@ def test_cms_create_document_rejects_missing_required_field(client, auth_headers
     _create_workspace(client, auth_headers, project_id)
 
     resp = client.post(
-        f"/api/cms/projects/{project_id}/workspace/staging/collection/posts/",
+        f"/api/cms/projects/{project_id}/workspace/staging/collection/Posts/",
         json={},
         headers=auth_headers,
     )
@@ -507,14 +507,14 @@ def test_cms_update_document_rejects_id_change(client, auth_headers):
     _create_workspace(client, auth_headers, project_id)
 
     create_resp = client.post(
-        f"/api/cms/projects/{project_id}/workspace/staging/collection/posts/",
+        f"/api/cms/projects/{project_id}/workspace/staging/collection/Posts/",
         json={"title": "Hi"},
         headers=auth_headers,
     )
     doc_id = create_resp.json()["_id"]
 
     resp = client.put(
-        f"/api/cms/projects/{project_id}/workspace/staging/collection/posts/document/{doc_id}/",
+        f"/api/cms/projects/{project_id}/workspace/staging/collection/Posts/document/{doc_id}/",
         json={"_id": "different-id"},
         headers=auth_headers,
     )

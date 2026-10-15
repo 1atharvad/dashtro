@@ -132,7 +132,7 @@ def mcp_env(tmp_path, monkeypatch):
 
 
 async def _create_project_fixture_data(jwt_token: str) -> dict:
-    """Create a project with a 'staging' workspace, a 'Post' schema, and a 'posts' collection."""
+    """Create a project with a 'staging' workspace, a 'Post' schema, and a 'Posts' collection."""
     async with httpx.AsyncClient(
         base_url="http://testserver", cookies={"idToken": jwt_token}
     ) as client:
@@ -160,11 +160,11 @@ async def _create_project_fixture_data(jwt_token: str) -> dict:
 
         coll = await client.post(
             f"/api/cms/projects/{project_id}/collections/",
-            json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+            json={"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
         )
         assert coll.status_code == 201, coll.text
 
-    return {"project_id": project_id, "workspace_name": "staging", "collection_name": "posts"}
+    return {"project_id": project_id, "workspace_name": "staging", "collection_name": "Posts"}
 
 
 def _free_port() -> int:
@@ -257,7 +257,7 @@ async def _signup_and_provision_api_key_http(base_url: str) -> dict:
 
 @pytest.fixture
 def project(mcp_env):
-    """A project with a 'staging' workspace, a 'Post' schema, and a 'posts' collection.
+    """A project with a 'staging' workspace, a 'Post' schema, and a 'Posts' collection.
 
     Note: `mcp_env`'s httpx.AsyncClient patch injects the ASGI transport
     regardless of base_url, so plain `httpx.AsyncClient(base_url=...)` calls

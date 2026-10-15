@@ -57,13 +57,13 @@ def test_project_and_authoring_lifecycle(mcp_env):
     schema_names = json.loads(run(server.list_schema(project_id)))
     assert "Post" in schema_names["schema_names"]
 
-    collection = json.loads(run(server.create_collection(project_id, "posts", "Post")))
-    assert collection["_collection_name"] == "posts"
+    collection = json.loads(run(server.create_collection(project_id, "Posts", "Post")))
+    assert collection["_collection_name"] == "Posts"
 
     doc = json.loads(
         run(
             server.create_document(
-                project_id, "staging", "posts", data={"title": "Hello", "body": "World"}
+                project_id, "staging", "Posts", data={"title": "Hello", "body": "World"}
             )
         )
     )
@@ -102,13 +102,13 @@ def test_list_and_get_schema(project):
 
 def test_list_collections(project):
     """
-    list_collections should return the 'posts' collection the `project`
+    list_collections should return the 'Posts' collection the `project`
     fixture seeded, correctly associated with its 'Post' schema — the tool
     unwraps the backend's {"_schema_collections": [...]} envelope into a
     bare list, so this also guards against that unwrapping breaking.
     """
     result = json.loads(run(server.list_collections(project["project_id"], minimal=False)))
-    assert any(c["_collection_name"] == "posts" and c["_schema_name"] == "Post" for c in result)
+    assert any(c["_collection_name"] == "Posts" and c["_schema_name"] == "Post" for c in result)
 
 
 def test_document_lifecycle(project):

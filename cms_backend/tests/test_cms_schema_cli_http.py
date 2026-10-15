@@ -116,7 +116,7 @@ def live_server(tmp_path, monkeypatch):
 
 
 def _seed_post_schema_via_api(base_url: str, jwt_cookies: dict, project_id: str) -> None:
-    """Create a project (name=project_id) with a 'Post' schema and 'posts' collection over the JWT-authenticated API. Returns the real project id."""
+    """Create a project (name=project_id) with a 'Post' schema and 'Posts' collection over the JWT-authenticated API. Returns the real project id."""
     with httpx.Client(base_url=base_url) as client:
         proj = client.post(
             "/api/cms/projects/",
@@ -141,7 +141,7 @@ def _seed_post_schema_via_api(base_url: str, jwt_cookies: dict, project_id: str)
 
         coll = client.post(
             f"/api/cms/projects/{real_project_id}/collections/",
-            json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+            json={"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
             cookies=jwt_cookies,
         )
         assert coll.status_code == 201, coll.text
@@ -206,10 +206,10 @@ def test_schema_export_import_http_round_trip(live_server, tmp_path):
             c["_collection_name"]: c["_schema_name"]
             for c in collections_resp.json()["_schema_collections"]
         }
-        assert names == {"posts": "Post"}
+        assert names == {"Posts": "Post"}
 
     # Re-import the same backup into the same project: collections.py's
-    # _import_collections now finds "posts" already exists and takes the PUT
+    # _import_collections now finds "Posts" already exists and takes the PUT
     # (update_collection) branch instead of POST (create_collection) — proving
     # the update path works too, not just create.
     cms_schema.cmd_import_http(base_url, dst_id, backup_dir, api_key=api_key)
@@ -223,7 +223,7 @@ def test_schema_export_import_http_round_trip(live_server, tmp_path):
         assert (
             len(collections) == 1
         ), "re-import should update the existing collection, not duplicate it"
-        assert collections[0]["_collection_name"] == "posts"
+        assert collections[0]["_collection_name"] == "Posts"
         assert collections[0]["_schema_name"] == "Post"
 
 
@@ -270,7 +270,7 @@ def test_documents_and_media_export_import_http_round_trip(live_server, tmp_path
         assert image_field.status_code == 201, image_field.text
 
         doc = client.post(
-            f"/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/posts/",
+            f"/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/Posts/",
             json={"title": "Hello", "image": "/api/sdk/media/files/photo.png"},
             cookies=jwt_cookies,
         )
@@ -281,7 +281,7 @@ def test_documents_and_media_export_import_http_round_trip(live_server, tmp_path
     cms_schema.cmd_documents_export_http(
         base_url, project_id, workspace_name, backup_dir, api_key=api_key
     )
-    assert (backup_dir / "documents" / "posts" / f"{doc_id}.json").exists()
+    assert (backup_dir / "documents" / "Posts" / f"{doc_id}.json").exists()
 
     upload_dir = cms_schema._UPLOAD_DIR
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -298,7 +298,7 @@ def test_documents_and_media_export_import_http_round_trip(live_server, tmp_path
 
     with httpx.Client(base_url=base_url) as client:
         resp = client.get(
-            f"/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/posts/document/{doc_id}/",
+            f"/api/cms/projects/{project_id}/workspace/{workspace_name}/collection/Posts/document/{doc_id}/",
             cookies=jwt_cookies,
         )
         assert resp.status_code == 200, resp.text

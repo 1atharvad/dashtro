@@ -159,15 +159,15 @@ def test_live_mcp_full_lifecycle(live_mcp_env):
         schema_names = json.loads(run(server.list_schema(project_id)))
         assert "Post" in schema_names["schema_names"]
 
-        collection = json.loads(run(server.create_collection(project_id, "posts", "Post")))
-        assert collection["_collection_name"] == "posts"
+        collection = json.loads(run(server.create_collection(project_id, "Posts", "Post")))
+        assert collection["_collection_name"] == "Posts"
 
         doc = json.loads(
             run(
                 server.create_document(
                     project_id,
                     "staging",
-                    "posts",
+                    "Posts",
                     data={"title": "Hello from the live MCP suite", "body": "First draft"},
                 )
             )
@@ -176,16 +176,16 @@ def test_live_mcp_full_lifecycle(live_mcp_env):
         assert doc["title"] == "Hello from the live MCP suite"
         assert doc["_status"] == "draft"
 
-        fetched = json.loads(run(server.get_document(project_id, "staging", "posts", doc_id)))
+        fetched = json.loads(run(server.get_document(project_id, "staging", "Posts", doc_id)))
         assert fetched["title"] == "Hello from the live MCP suite"
 
-        listed = json.loads(run(server.list_documents(project_id, "staging", "posts")))
+        listed = json.loads(run(server.list_documents(project_id, "staging", "Posts")))
         assert doc_id in listed["document_ids"]
 
         updated = json.loads(
             run(
                 server.update_document(
-                    project_id, "staging", "posts", doc_id, data={"body": "Revised draft"}
+                    project_id, "staging", "Posts", doc_id, data={"body": "Revised draft"}
                 )
             )
         )
@@ -198,7 +198,7 @@ def test_live_mcp_full_lifecycle(live_mcp_env):
         reverted = json.loads(
             run(
                 server.update_document_status(
-                    project_id, "staging", "posts", doc_id, status="draft"
+                    project_id, "staging", "Posts", doc_id, status="draft"
                 )
             )
         )
@@ -209,12 +209,12 @@ def test_live_mcp_full_lifecycle(live_mcp_env):
         with pytest.raises(ValueError):
             run(
                 server.update_document_status(
-                    project_id, "staging", "posts", doc_id, status="published"
+                    project_id, "staging", "Posts", doc_id, status="published"
                 )
             )
 
-        run(server.delete_document(project_id, "staging", "posts", doc_id))
-        listed_after_delete = json.loads(run(server.list_documents(project_id, "staging", "posts")))
+        run(server.delete_document(project_id, "staging", "Posts", doc_id))
+        listed_after_delete = json.loads(run(server.list_documents(project_id, "staging", "Posts")))
         assert doc_id not in listed_after_delete["document_ids"]
 
         run(server.delete_schema_field(project_id, body_field["_id"]))
@@ -242,34 +242,34 @@ def test_live_mcp_rejects_ai_slop_document_writes(live_mcp_project):
             live_mcp_project, "Post", "title", "String", display_name=True, required=True
         )
     )
-    run(server.create_collection(live_mcp_project, "posts", "Post"))
+    run(server.create_collection(live_mcp_project, "Posts", "Post"))
 
     # Unknown field not defined on the schema.
     with pytest.raises(httpx.HTTPStatusError) as exc:
         run(
             server.create_document(
-                live_mcp_project, "staging", "posts", data={"title": "ok", "not_a_field": "x"}
+                live_mcp_project, "staging", "Posts", data={"title": "ok", "not_a_field": "x"}
             )
         )
     assert exc.value.response.status_code == 400
 
     # Missing a required field.
     with pytest.raises(httpx.HTTPStatusError) as exc:
-        run(server.create_document(live_mcp_project, "staging", "posts", data={}))
+        run(server.create_document(live_mcp_project, "staging", "Posts", data={}))
     assert exc.value.response.status_code == 400
 
     # System-owned key smuggled into data.
     with pytest.raises(httpx.HTTPStatusError) as exc:
         run(
             server.create_document(
-                live_mcp_project, "staging", "posts", data={"title": "ok", "_status": "published"}
+                live_mcp_project, "staging", "Posts", data={"title": "ok", "_status": "published"}
             )
         )
     assert exc.value.response.status_code == 400
 
     # Wrong type for a String field.
     with pytest.raises(httpx.HTTPStatusError) as exc:
-        run(server.create_document(live_mcp_project, "staging", "posts", data={"title": 12345}))
+        run(server.create_document(live_mcp_project, "staging", "Posts", data={"title": 12345}))
     assert exc.value.response.status_code == 400
 
 

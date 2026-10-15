@@ -171,7 +171,7 @@ def test_collection_create_requires_existing_schema(client, auth_headers):
 
     resp = client.post(
         f"/api/sdk/projects/{project_id}/collections/",
-        json={"_index": 1, "_collection_name": "posts", "_schema_name": "NoSuchSchema"},
+        json={"_index": 1, "_collection_name": "Posts", "_schema_name": "NoSuchSchema"},
         headers={"X-API-Key": api_key},
     )
     assert resp.status_code == 400, resp.text
@@ -191,7 +191,7 @@ def test_collection_update_404s_on_unknown_id(client, auth_headers):
 
     resp = client.put(
         f"/api/sdk/projects/{project_id}/collections/does-not-exist/",
-        json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+        json={"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
         headers={"X-API-Key": api_key},
     )
     assert resp.status_code == 404, resp.text
@@ -218,7 +218,7 @@ def test_collection_create_and_update_and_audit_log(client, auth_headers):
 
     create_resp = client.post(
         f"/api/sdk/projects/{project_id}/collections/",
-        json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+        json={"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
         headers=headers,
     )
     assert create_resp.status_code == 200, create_resp.text
@@ -226,16 +226,16 @@ def test_collection_create_and_update_and_audit_log(client, auth_headers):
 
     update_resp = client.put(
         f"/api/sdk/projects/{project_id}/collections/{collection_id}/",
-        json={"_index": 1, "_collection_name": "blog-posts", "_schema_name": "Post"},
+        json={"_index": 1, "_collection_name": "BlogPosts", "_schema_name": "Post"},
         headers=headers,
     )
     assert update_resp.status_code == 200, update_resp.text
-    assert update_resp.json()["_collection_name"] == "blog-posts"
+    assert update_resp.json()["_collection_name"] == "BlogPosts"
 
     list_resp = client.get(f"/api/sdk/projects/{project_id}/collections/", headers=headers)
     collections = list_resp.json()["_schema_collections"]
     assert len(collections) == 1
-    assert collections[0]["_collection_name"] == "blog-posts"
+    assert collections[0]["_collection_name"] == "BlogPosts"
 
     action_names = [a for a, _ in _audit_actions(client, auth_headers, project_id)]
     assert "create_collection" in action_names
@@ -264,7 +264,7 @@ def test_collection_delete_removes_it_and_its_documents(client, auth_headers):
     )
     create_resp = client.post(
         f"/api/sdk/projects/{project_id}/collections/",
-        json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+        json={"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
         headers=headers,
     )
     collection_id = create_resp.json()["_id"]
@@ -277,7 +277,7 @@ def test_collection_delete_removes_it_and_its_documents(client, auth_headers):
     assert ws_resp.status_code == 201, ws_resp.text
 
     doc_resp = client.post(
-        f"/api/sdk/projects/{project_id}/workspace/staging/collection/posts/",
+        f"/api/sdk/projects/{project_id}/workspace/staging/collection/Posts/",
         json={"title": "Hello"},
         headers=headers,
     )

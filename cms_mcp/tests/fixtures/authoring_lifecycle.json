@@ -14,7 +14,7 @@
     "display_name": true
   },
   "collection": {
-    "collection_name": "posts",
+    "collection_name": "Posts",
     "schema_name": "Post"
   },
   "document": {

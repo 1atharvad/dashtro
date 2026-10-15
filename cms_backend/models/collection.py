@@ -10,6 +10,15 @@ class SchemaCollectionIn(BaseModel):
     collection_name: str = Field(alias="_collection_name", max_length=50)
     schema_name: str = Field(alias="_schema_name")
 
+    @field_validator("collection_name", mode="before")
+    @classmethod
+    def validate_collection_name(cls, v):
+        """Collection names are PascalCase, same convention as schema_name (e.g. 'HeroSections',
+        not 'hero_sections' or 'hero-sections')."""
+        if not re.match(r"^[A-Z][a-zA-Z]*$", str(v)):
+            raise ValueError("Must be PascalCase without numbers (e.g. 'HeroSections')")
+        return v
+
     @field_validator("schema_name", mode="before")
     @classmethod
     def validate_schema_name(cls, v):

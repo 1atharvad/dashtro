@@ -20,17 +20,17 @@ from tests.test_sdk_documents import CMS_DOC_ITEM_URL, DOC_URL, _setup
 
 def _seed_self_referencing_post_schema(client, auth_headers):
     """Post schema (title: required String) + two ReferenceDocument fields
-    ('related', 'related_other') pointing at the 'posts' collection itself.
+    ('related', 'related_other') pointing at the 'Posts' collection itself.
     Returns (project_id, api_key_headers), same contract as _setup."""
     return _setup(
         client,
         auth_headers,
         extra_fields=[
-            {"_name": "related", "_type": "ReferenceDocument", "_reference_schema": ["posts"]},
+            {"_name": "related", "_type": "ReferenceDocument", "_reference_schema": ["Posts"]},
             {
                 "_name": "related_other",
                 "_type": "ReferenceDocument",
-                "_reference_schema": ["posts"],
+                "_reference_schema": ["Posts"],
             },
         ],
     )
@@ -50,7 +50,7 @@ def test_get_document_detects_reference_cycle(client, auth_headers):
     ).json()
 
     update_resp = client.put(
-        f"/api/sdk/projects/{project_id}/workspace/staging/collection/posts/document/{doc_a['_id']}/",
+        f"/api/sdk/projects/{project_id}/workspace/staging/collection/Posts/document/{doc_a['_id']}/",
         json={"related": doc_b["_id"]},
         headers=headers,
     )

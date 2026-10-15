@@ -51,7 +51,7 @@ def test_duplicate_project_copies_schema_collections_and_documents(client, auth_
 
     coll_resp = client.post(
         f"/api/cms/projects/{project_id}/collections/",
-        json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+        json={"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
         headers=auth_headers,
     )
     assert coll_resp.status_code == 201, coll_resp.text
@@ -65,7 +65,7 @@ def test_duplicate_project_copies_schema_collections_and_documents(client, auth_
         assert ws_resp.status_code == 201, ws_resp.text
 
     staging_doc = client.post(
-        f"/api/cms/projects/{project_id}/workspace/staging/collection/posts/",
+        f"/api/cms/projects/{project_id}/workspace/staging/collection/Posts/",
         json={"title": "Hello staging"},
         headers=auth_headers,
     )
@@ -73,7 +73,7 @@ def test_duplicate_project_copies_schema_collections_and_documents(client, auth_
     staging_doc_id = staging_doc.json()["_id"]
 
     qa_doc = client.post(
-        f"/api/cms/projects/{project_id}/workspace/qa/collection/posts/",
+        f"/api/cms/projects/{project_id}/workspace/qa/collection/Posts/",
         json={"title": "Hello qa"},
         headers=auth_headers,
     )
@@ -97,21 +97,21 @@ def test_duplicate_project_copies_schema_collections_and_documents(client, auth_
     coll_list = client.get(f"/api/cms/projects/{new_project_id}/collections/", headers=auth_headers)
     collections = coll_list.json()["_schema_collections"]
     assert len(collections) == 1
-    assert collections[0]["_collection_name"] == "posts"
+    assert collections[0]["_collection_name"] == "Posts"
 
     ws_list = client.get(f"/api/cms/projects/{new_project_id}/workspaces/", headers=auth_headers)
     ws_names = {w["workspace_name"] for w in ws_list.json()}
     assert ws_names == {"production", "staging", "qa"}
 
     staging_doc_copy = client.get(
-        f"/api/cms/projects/{new_project_id}/workspace/staging/collection/posts/document/{staging_doc_id}/",
+        f"/api/cms/projects/{new_project_id}/workspace/staging/collection/Posts/document/{staging_doc_id}/",
         headers=auth_headers,
     )
     assert staging_doc_copy.status_code == 200, staging_doc_copy.text
     assert staging_doc_copy.json()["title"] == "Hello staging"
 
     qa_doc_copy = client.get(
-        f"/api/cms/projects/{new_project_id}/workspace/qa/collection/posts/document/{qa_doc_id}/",
+        f"/api/cms/projects/{new_project_id}/workspace/qa/collection/Posts/document/{qa_doc_id}/",
         headers=auth_headers,
     )
     assert qa_doc_copy.status_code == 200, qa_doc_copy.text
@@ -132,7 +132,7 @@ def test_duplicate_project_is_independent_of_source(client, auth_headers):
     )
     client.post(
         f"/api/cms/projects/{project_id}/collections/",
-        json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+        json={"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
         headers=auth_headers,
     )
 

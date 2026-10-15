@@ -176,26 +176,26 @@ def test_live_collection_and_document_crud(live_client, live_project):
 
     create_coll_resp = live_client.post(
         f"/projects/{live_project}/collections/",
-        json={"_index": 1, "_collection_name": "posts", "_schema_name": "Post"},
+        json={"_index": 1, "_collection_name": "Posts", "_schema_name": "Post"},
     )
     assert create_coll_resp.status_code == 200, create_coll_resp.text
     collection_id = create_coll_resp.json()["_id"]
 
     create_doc_resp = live_client.post(
-        f"/projects/{live_project}/workspace/staging/collection/posts/",
+        f"/projects/{live_project}/workspace/staging/collection/Posts/",
         json={"title": "Hello from the live suite"},
     )
     assert create_doc_resp.status_code == 201, create_doc_resp.text
     doc_id = create_doc_resp.json()["_id"]
 
     get_doc_resp = live_client.get(
-        f"/projects/{live_project}/workspace/staging/collection/posts/document/{doc_id}/"
+        f"/projects/{live_project}/workspace/staging/collection/Posts/document/{doc_id}/"
     )
     assert get_doc_resp.status_code == 200, get_doc_resp.text
     assert get_doc_resp.json()["title"] == "Hello from the live suite"
 
     update_doc_resp = live_client.put(
-        f"/projects/{live_project}/workspace/staging/collection/posts/document/{doc_id}/",
+        f"/projects/{live_project}/workspace/staging/collection/Posts/document/{doc_id}/",
         json={"title": "Updated"},
     )
     assert update_doc_resp.status_code == 200, update_doc_resp.text
